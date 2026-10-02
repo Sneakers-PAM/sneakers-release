@@ -20,3 +20,6 @@ charts/*/tmpcharts*/
 # Local module links (see AGENTS.md); never committed.
 go.work
 go.work.sum
+
+# callee protos fetched by scripts/proto-generate.sh
+/.protos/

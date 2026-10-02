@@ -5,12 +5,17 @@ name: checks
 # PR title or body changes.
 #
 # proto-sync checks on each PR that go.mod has no replace directive and no
-# owner package at a pseudo-version.
+# owner package at a pseudo-version, and the callee proto pins in
+# proto-refs.env; proto-refresh opens a PR on the schedule that bumps stale
+# pins, and only that job can write.
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
   push:
     branches: [main]
+  schedule:
+    - cron: "41 10 * * 1-5"
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -18,7 +23,9 @@ concurrency:
   cancel-in-progress: true
 jobs:
   checks:
-    if: github.event.pull_request.draft != true
+    if: >-
+      (github.event_name == 'pull_request' || github.event_name == 'push')
+      && github.event.pull_request.draft != true
     uses: Sneakers-PAM/.github/.github/workflows/scrub.yml@main
     with:
       # valkey.io: the public Helm repository of the bundled Valkey chart.
@@ -28,6 +35,14 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
     permissions:
       contents: read
+    uses: Sneakers-PAM/.github/.github/workflows/proto-sync.yml@77dd2ac5815c0adb982872341813ada8511a3ab5
+    with:
+      tools-ref: 77dd2ac5815c0adb982872341813ada8511a3ab5
+  proto-refresh:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+      pull-requests: write
     uses: Sneakers-PAM/.github/.github/workflows/proto-sync.yml@77dd2ac5815c0adb982872341813ada8511a3ab5
     with:
       tools-ref: 77dd2ac5815c0adb982872341813ada8511a3ab5
