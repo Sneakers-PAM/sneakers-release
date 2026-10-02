@@ -1,0 +1,8 @@
+apiVersion: v2
+name: sneakers-lib
+description: Shared templates for the Sneakers service charts.
+type: library
+version: 0.1.0
+home: https://github.com/Sneakers-PAM/sneakers-release
+sources:
+  - https://github.com/Sneakers-PAM/sneakers-release

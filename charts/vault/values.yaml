@@ -1,0 +1,179 @@
+# Values for the vault chart. See docs/values.md in this repository.
+
+global:
+  # The public host name users reach Sneakers on.
+  host: sneakers.example.org
+  # ENVIRONMENT for the services. prod or production turn on the production
+  # checks (no dev worker token, no dev keys).
+  environment: production
+  logLevel: error
+  logFormat: json
+  # OTLP gRPC collector (host:port) for traces and metrics. Empty: unset.
+  otlpEndpoint: ""
+
+image:
+  repository: ghcr.io/sneakers-pam/sneakers-vault
+  # Empty: the chart's appVersion. A digest, when set, wins over the tag.
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+fullnameOverride: ""
+
+replicas: 2
+strategy: RollingUpdate
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+  maxUnavailable: ""
+
+# Empty: global.logLevel and global.logFormat.
+logLevel: ""
+logFormat: ""
+
+service:
+  port: 9091
+  portName: grpc
+  extraPorts: []
+
+probes:
+  type: grpc
+  port: 9091
+  path: /health
+  startupFailureThreshold: 60
+
+# Non-secret settings, rendered into the ConfigMap. Values go through tpl.
+# An empty value is left out, so the service uses its own default.
+env:
+  ENVIRONMENT: "{{ .Values.global.environment }}"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.global.otlpEndpoint }}"
+  GRPC_PORT: "9091"
+  DATABASE_DSN: ""
+  AUDIT_ADDR: sneakers-audit:9194
+  NOTIFY_ADDR: sneakers-notify:9195
+  VAULT_DISABLE_DEV_STATIC_KEK: "true"
+  # Connector worker identity: projected ServiceAccount tokens checked against
+  # the cluster's issuer. Read the issuer with
+  # `kubectl get --raw /.well-known/openid-configuration`.
+  WORKLOAD_OIDC_ISSUER: https://kubernetes.default.svc.cluster.local
+  WORKLOAD_OIDC_JWKS_URL: https://kubernetes.default.svc/openid/v1/jwks
+  WORKLOAD_OIDC_CA_FILE: /var/run/secrets/tokens/ca.crt
+  WORKLOAD_OIDC_BEARER_FILE: /var/run/secrets/tokens/token
+  WORKLOAD_ALLOWED_SERVICEACCOUNTS: "{{ .Release.Namespace }}/sneakers-connector"
+requiredEnv: [DATABASE_DSN]
+
+# Secret-backed settings, by variable name. Each one reads key from the
+# Secret secretName. generate: true (with no secretName) makes the chart create
+# the value once, in <name>-generated, kept on upgrade and uninstall.
+secretEnv:
+  PGPASSWORD:
+    secretName: ""
+    key: password
+    required: true
+  # The root key (32 bytes, base64). It is permanent for the database: without
+  # it no stored secret can be opened. Keep it in your secret store and back it
+  # up with the database.
+  VAULT_ROOT_KEK:
+    secretName: ""
+    key: VAULT_ROOT_KEK
+    required: true
+    generate: false
+    bytes: 32
+  # Cache invalidation between replicas. Unset runs single-replica reads.
+  REDIS_URL:
+    secretName: ""
+    key: redis-url
+    required: false
+# Secrets loaded whole as environment variables.
+envFromSecrets: []
+# Extra container env, Kubernetes format.
+extraEnv: []
+args: []
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: [ALL]
+
+serviceAccount:
+  create: true
+  name: ""
+  automountToken: false
+
+projectedToken:
+  enabled: true
+  audience: ""
+  expirationSeconds: 3600
+  mountPath: /var/run/secrets/tokens
+  path: token
+  clusterCA: true
+  envName: ""
+
+# One key of a ConfigMap holding a PEM bundle, pointed to by envName. Go's
+# SSL_CERT_FILE replaces the system roots, so the bundle must carry every root
+# the service needs.
+caBundle:
+  configMap: ""
+  key: ca-bundle.crt
+  mountPath: /etc/ssl/custom
+  envName: SSL_CERT_FILE
+
+extraVolumes: []
+extraVolumeMounts: []
+
+networkPolicy:
+  enabled: true
+  ingressFrom: []
+  ingressPorts: []
+  egress: []
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  annotations: {}
+  tlsSecretName: ""
+  paths: []
+
+migrations:
+  job:
+    enabled: false
+    args: [migrate]
+    activeDeadlineSeconds: 600
+
+podLabels: {}
+podAnnotations: {}
+priorityClassName: ""
+terminationGracePeriodSeconds: 30
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: '{{ include "sneakers.fullname" . }}'

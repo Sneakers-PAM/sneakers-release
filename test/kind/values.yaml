@@ -1,0 +1,75 @@
+# Values for the kind install test. The service images are built in the job
+# from each service repository and loaded into the cluster; nothing is pulled
+# from or pushed to a registry for them.
+
+global:
+  host: sneakers.example.org
+  logLevel: debug
+
+postgres:
+  persistence:
+    size: 1Gi
+
+valkey:
+  dataStorage:
+    requestedSize: 256Mi
+
+identity:
+  image:
+    repository: ci.example.org/sneakers-identity
+    tag: ci
+    pullPolicy: Never
+  secretEnv:
+    TOTP_ENC_KEY:
+      generate: true
+
+vault:
+  image:
+    repository: ci.example.org/sneakers-vault
+    tag: ci
+    pullPolicy: Never
+  secretEnv:
+    VAULT_ROOT_KEK:
+      generate: true
+
+workflow:
+  image:
+    repository: ci.example.org/sneakers-workflow
+    tag: ci
+    pullPolicy: Never
+
+audit:
+  image:
+    repository: ci.example.org/sneakers-audit
+    tag: ci
+    pullPolicy: Never
+
+notify:
+  image:
+    repository: ci.example.org/sneakers-notify
+    tag: ci
+    pullPolicy: Never
+
+connector:
+  image:
+    repository: ci.example.org/sneakers-connector
+    tag: ci
+    pullPolicy: Never
+
+sshbroker:
+  image:
+    repository: ci.example.org/sneakers-sshbroker
+    tag: ci
+    pullPolicy: Never
+
+gateway:
+  image:
+    repository: ci.example.org/sneakers-gateway
+    tag: ci
+    pullPolicy: Never
+
+mcp:
+  image:
+    repository: ci.example.org/sneakers-mcp
+    tag: ci
+    pullPolicy: Never

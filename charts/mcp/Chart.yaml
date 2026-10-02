@@ -1,0 +1,13 @@
+apiVersion: v2
+name: mcp
+description: "The Sneakers MCP server: the agent surface over the gateway machine API."
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/Sneakers-PAM/sneakers-release
+sources:
+  - https://github.com/Sneakers-PAM/sneakers-mcp
+dependencies:
+  - name: sneakers-lib
+    version: 0.1.0
+    repository: file://../sneakers-lib

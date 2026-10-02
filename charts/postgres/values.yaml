@@ -1,0 +1,68 @@
+# Values for the bundled PostgreSQL. See docs/values.md in this repository.
+
+fullnameOverride: sneakers-postgres
+
+image:
+  repository: docker.io/library/postgres
+  tag: "18.6"
+  digest: sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+auth:
+  # Secret holding both passwords. Required.
+  existingSecret: ""
+  # The application role that owns every database below.
+  username: sneakers
+  passwordKey: password
+  # The postgres superuser.
+  superuserPasswordKey: postgres-password
+
+# Created on the first start only (an empty data directory). Later additions
+# have to be created by hand.
+databases:
+  - sneakers_identity
+  - sneakers_vault
+  - sneakers_workflow
+  - sneakers_audit
+  - sneakers_kratos
+  - sneakers_hydra
+
+persistence:
+  size: 10Gi
+  # Empty: the cluster's default StorageClass.
+  storageClass: ""
+  accessModes: [ReadWriteOnce]
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "2"
+    memory: 1Gi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 999
+  runAsGroup: 999
+  fsGroup: 999
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: [ALL]
+
+# Only pods labelled app.kubernetes.io/part-of: sneakers in this namespace may
+# connect.
+networkPolicy:
+  enabled: true
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

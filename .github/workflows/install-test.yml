@@ -1,0 +1,60 @@
+name: Install Test
+# Installs the umbrella chart on a throwaway kind cluster, with every service
+# image built in the job from its repository (never pushed). Runs on pull
+# requests that touch the charts, and by hand. It is kept out of Build & Test
+# because building nine images takes most of its run time.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'charts/**'
+      - 'manifest/**'
+      - 'scripts/**'
+      - 'test/kind/**'
+      - '.github/workflows/install-test.yml'
+  workflow_dispatch:
+    inputs:
+      services-from-main:
+        description: Build every service from its main branch instead of the refs in test/kind/services.txt
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: install-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  install:
+    name: 🚢 Install on kind
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      KIND_CLUSTER: sneakers
+      KIND_NODE_IMAGE: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Install tools
+        run: |
+          scripts/install-tools.sh "$RUNNER_TEMP/bin" helm kind kubectl
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Create the cluster
+        run: kind create cluster --name "$KIND_CLUSTER" --image "$KIND_NODE_IMAGE" --wait 180s
+      - name: Build the service images
+        env:
+          SERVICES_FROM_MAIN: ${{ inputs.services-from-main || false }}
+        run: test/kind/build-images.sh
+      - name: Install, upgrade and test
+        run: test/kind/run.sh
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl -n sneakers get pods,events -o wide || true
+          for p in $(kubectl -n sneakers get pods -o name 2>/dev/null); do
+            echo "::group::$p"
+            kubectl -n sneakers describe "$p" | tail -30 || true
+            kubectl -n sneakers logs "$p" --all-containers --tail=80 || true
+            echo "::endgroup::"
+          done

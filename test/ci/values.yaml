@@ -1,0 +1,6 @@
+# Values for rendering the umbrella in CI with its production defaults. Only
+# the one value without a default is set.
+vault:
+  secretEnv:
+    VAULT_ROOT_KEK:
+      secretName: sneakers-vault-root-key

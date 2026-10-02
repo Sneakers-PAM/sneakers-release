@@ -1,0 +1,13 @@
+# The service images the install test builds, one per line:
+#   <image name> <repository> <git ref> <Dockerfile target, or - for the default>
+# Until the service ports merge, the refs are their open pull request heads;
+# once merged, they move to the merge commits on main.
+sneakers-identity  Sneakers-PAM/sneakers-identity   f11ac8f2da0225719edddc681f42db52a5f52442  -
+sneakers-vault     Sneakers-PAM/sneakers-vault      feb00b877344d979daae395b7baedc3b2037f7d3  vault
+sneakers-workflow  Sneakers-PAM/sneakers-vault      feb00b877344d979daae395b7baedc3b2037f7d3  workflow
+sneakers-audit     Sneakers-PAM/sneakers-audit      31fe7af87c0213cd6a7c86d4e77edffe0ca47c8f  -
+sneakers-notify    Sneakers-PAM/sneakers-notify     9db7455c5e49632ae11121ebe07f4c4b23423eeb  -
+sneakers-connector Sneakers-PAM/sneakers-connector  b6eaafa9876363cfee5abe5e498eb088fa307f90  -
+sneakers-sshbroker Sneakers-PAM/sneakers-sshbroker  d60a2f225f7646d825bf29352484017d7f876520  -
+sneakers-gateway   Sneakers-PAM/sneakers-gateway    130ecbd61b2f5d0102dba24dfc31e41b334da724  -
+sneakers-mcp       Sneakers-PAM/sneakers-mcp        6adb4500fbe75be9f92c7f50b48d86616f804134  -

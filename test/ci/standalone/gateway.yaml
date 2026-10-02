@@ -1,0 +1,3 @@
+secretEnv:
+  REDIS_URL:
+    secretName: sneakers-redis

@@ -1,0 +1,316 @@
+# Values for the sneakers umbrella chart. Every key is described in
+# docs/values.md in this repository.
+#
+# The defaults install everything in one namespace: the Sneakers services plus
+# a bundled PostgreSQL, Valkey and Ory Kratos. Two values have no safe default
+# and must be set: global.host, and the vault root key (see vault below).
+
+global:
+  # The public host name users reach Sneakers on.
+  host: sneakers.example.org
+  # ENVIRONMENT for the services. prod or production turn on the production
+  # checks (no dev worker token, no dev keys).
+  environment: production
+  logLevel: error
+  logFormat: json
+  # OTLP gRPC collector (host:port) for traces and metrics. Empty: unset.
+  otlpEndpoint: ""
+
+# Secrets shared by the bundled pieces: the PostgreSQL passwords, the Valkey
+# password and the REDIS_URL built from it, and the Kratos and Hydra DSNs and
+# keys. Each value is generated once and kept on upgrade and uninstall. Turn
+# it off when you bring your own PostgreSQL, Valkey and Kratos.
+bundledSecrets:
+  enabled: true
+
+# ---------------------------------------------------------------------------
+# Sneakers services. Each block is the values of that service's chart; see
+# charts/<service>/values.yaml for every key.
+# ---------------------------------------------------------------------------
+
+identity:
+  enabled: true
+  env:
+    DATABASE_DSN: postgres://sneakers@sneakers-postgres:5432/sneakers_identity?sslmode=disable
+  secretEnv:
+    PGPASSWORD:
+      secretName: sneakers-bundled
+
+vault:
+  enabled: true
+  env:
+    DATABASE_DSN: postgres://sneakers@sneakers-postgres:5432/sneakers_vault?sslmode=disable
+  secretEnv:
+    PGPASSWORD:
+      secretName: sneakers-bundled
+    # Required. Name the Secret holding the root key (32 bytes, base64; make
+    # one with `openssl rand -base64 32`), or set generate: true to have the
+    # chart create it. Either way, back it up with the database.
+    VAULT_ROOT_KEK:
+      secretName: ""
+      generate: false
+    REDIS_URL:
+      secretName: sneakers-bundled
+
+workflow:
+  enabled: true
+  env:
+    DATABASE_DSN: postgres://sneakers@sneakers-postgres:5432/sneakers_workflow?sslmode=disable
+  secretEnv:
+    PGPASSWORD:
+      secretName: sneakers-bundled
+
+audit:
+  enabled: true
+  env:
+    DATABASE_DSN: postgres://sneakers@sneakers-postgres:5432/sneakers_audit?sslmode=disable
+  secretEnv:
+    PGPASSWORD:
+      secretName: sneakers-bundled
+
+notify:
+  enabled: true
+  secretEnv:
+    REDIS_URL:
+      secretName: sneakers-bundled
+
+connector:
+  enabled: true
+
+sshbroker:
+  enabled: true
+  secretEnv:
+    REDIS_URL:
+      secretName: sneakers-bundled
+
+gateway:
+  enabled: true
+  secretEnv:
+    REDIS_URL:
+      secretName: sneakers-bundled
+
+mcp:
+  enabled: true
+
+# ---------------------------------------------------------------------------
+# Bundled third-party pieces. Turn any of them off and point the services at
+# your own instead (docs/install.md, "Bring your own").
+# ---------------------------------------------------------------------------
+
+# One PostgreSQL instance with a database per service (charts/postgres).
+postgres:
+  enabled: true
+  auth:
+    existingSecret: sneakers-bundled
+
+# Valkey, for sessions, inboxes, SSH tickets and cache invalidation
+# (https://github.com/valkey-io/valkey-helm).
+valkey:
+  enabled: true
+  fullnameOverride: sneakers-valkey
+  # Lets the chart's own helm test pod past the NetworkPolicy below.
+  commonLabels:
+    app.kubernetes.io/part-of: sneakers
+  image:
+    tag: 9.1.2@sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd
+  auth:
+    enabled: true
+    usersExistingSecret: sneakers-bundled
+    aclUsers:
+      default:
+        permissions: "~* &* +@all"
+        passwordKey: valkey-password
+  dataStorage:
+    enabled: true
+    requestedSize: 2Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  readinessProbe:
+    enabled: true
+  networkPolicy:
+    ingress:
+      - from:
+          - podSelector:
+              matchLabels:
+                app.kubernetes.io/part-of: sneakers
+        ports:
+          - port: 6379
+
+# Ory Kratos holds the passwords (https://github.com/ory/k8s). Headless: the
+# gateway drives the flows, so no Kratos UI is deployed.
+kratos:
+  enabled: true
+  fullnameOverride: sneakers-kratos
+  image:
+    tag: v1.3.1@sha256:fe2428f103a6240c064b6ea77d3088610865c55fcebccb30355857eccdc25b4b
+  secret:
+    enabled: false
+    nameOverride: sneakers-kratos
+  # The identity service sends the mail, so the Kratos courier isn't run.
+  courier:
+    enabled: false
+  deployment:
+    podMetadata:
+      labels:
+        app.kubernetes.io/part-of: sneakers
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+    automigration:
+      extraEnv: []
+  kratos:
+    automigration:
+      enabled: true
+      type: initContainer
+    identitySchemas:
+      identity.default.schema.json: |
+        {
+          "$id": "https://schemas.example.org/sneakers/identity.default.schema.json",
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "title": "Sneakers identity",
+          "type": "object",
+          "properties": {
+            "traits": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string",
+                  "format": "email",
+                  "title": "Email",
+                  "minLength": 3,
+                  "ory.sh/kratos": {
+                    "credentials": { "password": { "identifier": true } },
+                    "recovery": { "via": "email" }
+                  }
+                },
+                "first_name": { "type": "string", "title": "First name" },
+                "last_name": { "type": "string", "title": "Last name" }
+              },
+              "required": ["email"],
+              "additionalProperties": false
+            }
+          }
+        }
+    config:
+      serve:
+        public:
+          base_url: http://sneakers-kratos-public/
+          port: 4433
+          cors:
+            enabled: false
+        admin:
+          base_url: http://sneakers-kratos-admin/
+          port: 4434
+      log:
+        level: error
+        format: json
+        leak_sensitive_values: false
+      identity:
+        default_schema_id: default
+        schemas:
+          - id: default
+            url: file:///etc/config/identity.default.schema.json
+      session:
+        lifespan: 24h
+        cookie:
+          same_site: Lax
+          path: /
+      # Kratos sends no mail in Sneakers (the identity service does), but its
+      # configuration needs an SMTP URI.
+      courier:
+        smtp:
+          connection_uri: smtp://smtp.example.org:25/?disable_starttls=true
+          from_address: "no-reply@{{ .Values.global.host }}"
+          from_name: Sneakers
+      # Second factors belong to the identity service, so Kratos's own TOTP
+      # and WebAuthn stay off. Recovery codes are minted through the admin API.
+      selfservice:
+        default_browser_return_url: "https://{{ .Values.global.host }}/"
+        allowed_return_urls:
+          - "https://{{ .Values.global.host }}/"
+        methods:
+          password:
+            enabled: true
+          code:
+            enabled: true
+          totp:
+            enabled: false
+          webauthn:
+            enabled: false
+        flows:
+          settings:
+            ui_url: "https://{{ .Values.global.host }}/settings"
+            privileged_session_max_age: 15m
+          recovery:
+            enabled: true
+            use: code
+            ui_url: "https://{{ .Values.global.host }}/recovery"
+          login:
+            ui_url: "https://{{ .Values.global.host }}/login"
+            lifespan: 10m
+
+# Ory Hydra issues client-credentials tokens for machine callers of the MCP
+# server (https://github.com/ory/k8s). Off by default; to use it, enable it,
+# set hydra.hydra.config.urls.self.issuer, and set HYDRA_ENABLED and
+# HYDRA_ISSUER on the gateway and HYDRA_ISSUER and MCP_RESOURCE_URL on mcp.
+hydra:
+  enabled: false
+  fullnameOverride: sneakers-hydra
+  image:
+    tag: v2.3.0@sha256:b94007e19a1f7f78157e7f4ea340da8a55b5f104a0f1198755c256f38ef32b4b
+  maester:
+    enabled: false
+  secret:
+    enabled: false
+    nameOverride: sneakers-hydra
+  deployment:
+    podMetadata:
+      labels:
+        app.kubernetes.io/part-of: sneakers
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+  hydra:
+    automigration:
+      enabled: true
+      type: initContainer
+    config:
+      serve:
+        public:
+          port: 4444
+        admin:
+          port: 4445
+      log:
+        level: error
+        format: json
+        leak_sensitive_values: false
+      oauth2:
+        expose_internal_errors: false
+      strategies:
+        access_token: jwt
+        jwt:
+          scope_claim: both
+      ttl:
+        access_token: 10m
+      urls:
+        self:
+          issuer: "https://hydra.{{ .Values.global.host }}/"
+
+tests:
+  image:
+    repository: docker.io/curlimages/curl
+    tag: "8.22.0"
+    digest: sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777

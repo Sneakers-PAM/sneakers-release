@@ -1,0 +1,63 @@
+apiVersion: v2
+name: sneakers
+description: "Sneakers privileged access management: every service, plus optional PostgreSQL, Valkey and Ory Kratos and Hydra."
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/Sneakers-PAM/sneakers-release
+sources:
+  - https://github.com/Sneakers-PAM/sneakers-release
+keywords: [pam, secrets, vault, privileged-access]
+dependencies:
+  - name: identity
+    version: 0.1.0
+    repository: file://../identity
+    condition: identity.enabled
+  - name: vault
+    version: 0.1.0
+    repository: file://../vault
+    condition: vault.enabled
+  - name: workflow
+    version: 0.1.0
+    repository: file://../workflow
+    condition: workflow.enabled
+  - name: audit
+    version: 0.1.0
+    repository: file://../audit
+    condition: audit.enabled
+  - name: notify
+    version: 0.1.0
+    repository: file://../notify
+    condition: notify.enabled
+  - name: connector
+    version: 0.1.0
+    repository: file://../connector
+    condition: connector.enabled
+  - name: sshbroker
+    version: 0.1.0
+    repository: file://../sshbroker
+    condition: sshbroker.enabled
+  - name: gateway
+    version: 0.1.0
+    repository: file://../gateway
+    condition: gateway.enabled
+  - name: mcp
+    version: 0.1.0
+    repository: file://../mcp
+    condition: mcp.enabled
+  - name: postgres
+    version: 0.1.0
+    repository: file://../postgres
+    condition: postgres.enabled
+  - name: valkey
+    version: 0.12.0
+    repository: https://valkey.io/valkey-helm/
+    condition: valkey.enabled
+  - name: kratos
+    version: 0.59.0
+    repository: https://k8s.ory.sh/helm/charts
+    condition: kratos.enabled
+  - name: hydra
+    version: 0.59.0
+    repository: https://k8s.ory.sh/helm/charts
+    condition: hydra.enabled

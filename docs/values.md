@@ -1,0 +1,107 @@
+# Values
+
+Every chart validates its values against its `values.schema.json`, so a misspelt key or a value of
+the wrong type stops `helm install` and `helm template` with the path that's wrong. The service
+charts share one schema, kept in `charts/sneakers-lib/service.schema.json` and copied into each
+chart by `scripts/sync-schemas.sh`.
+
+## The umbrella (`charts/sneakers`)
+
+| Value | Default | Meaning |
+|---|---|---|
+| `global.host` | `sneakers.example.org` | The public host name. Feeds the passkey relying party, the OAuth and MCP URLs, the SSH WebSocket URL, the Kratos return URLs and the Ingress hosts. |
+| `global.environment` | `production` | `ENVIRONMENT` for every service. `prod` or `production` turn on the production checks: no dev worker token and no dev keys. |
+| `global.logLevel` | `error` | `LOG_LEVEL` for every service: `trace`, `debug`, `info`, `warn`, `error`. |
+| `global.logFormat` | `json` | `LOG_FORMAT` for every service. Clusters log `json`. |
+| `global.otlpEndpoint` | (empty) | OTLP gRPC collector (`host:port`) for traces and metrics. |
+| `bundledSecrets.enabled` | `true` | Create the Secrets the bundled pieces share (below). |
+| `<service>.enabled` | `true` | Install that service: `identity`, `vault`, `workflow`, `audit`, `notify`, `connector`, `sshbroker`, `gateway`, `mcp`. |
+| `<service>.*` | | That service chart's values (next section). The umbrella sets each database DSN and points each `secretEnv` at the bundled Secrets. |
+| `postgres.enabled` | `true` | The bundled PostgreSQL (`charts/postgres`). |
+| `valkey.enabled` | `true` | The bundled Valkey ([valkey-helm](https://github.com/valkey-io/valkey-helm)); its values pass through. |
+| `kratos.enabled` | `true` | The bundled Ory Kratos ([ory/k8s](https://github.com/ory/k8s)); its values pass through. |
+| `hydra.enabled` | `false` | The bundled Ory Hydra ([ory/k8s](https://github.com/ory/k8s)); its values pass through. |
+| `tests.image` | curl, pinned | The image of the `helm test` pod. |
+
+The one value with no default is the vault root key:
+`vault.secretEnv.VAULT_ROOT_KEK.secretName` (or `generate: true`). See [install.md](install.md).
+
+### The bundled Secrets
+
+Created when `bundledSecrets.enabled` is true. Every value is generated on the first install, read
+back on every upgrade, and kept on uninstall.
+
+| Secret | Keys | Used by |
+|---|---|---|
+| `sneakers-bundled` | `password`, `postgres-password` | PostgreSQL (the `sneakers` role and the superuser); `PGPASSWORD` for the services |
+| `sneakers-bundled` | `valkey-password`, `redis-url` | Valkey; `REDIS_URL` for the vault, notify, sshbroker and gateway |
+| `sneakers-kratos` | `dsn`, `secretsDefault`, `secretsCookie`, `secretsCipher`, `smtpConnectionURI` | Kratos, when Kratos and PostgreSQL are both bundled |
+| `sneakers-hydra` | `dsn`, `secretsSystem`, `secretsCookie` | Hydra, when Hydra and PostgreSQL are both bundled |
+
+## A service chart (`charts/<service>`)
+
+All nine service charts take the same values. Each one also works on its own, outside the umbrella.
+
+| Value | Default | Meaning |
+|---|---|---|
+| `image.repository` | `ghcr.io/sneakers-pam/sneakers-<service>` | The image. |
+| `image.tag` | (the chart's appVersion) | The tag. |
+| `image.digest` | (empty) | `sha256:...`. When set it wins over the tag. |
+| `image.pullPolicy` | `IfNotPresent` | |
+| `imagePullSecrets` | `[]` | |
+| `fullnameOverride` | (empty: `sneakers-<service>`) | The name of every resource. The other services' defaults expect the fixed names. |
+| `replicas` | `2` (`1` for audit) | Pods, when autoscaling is off. The audit service is the single writer of its hash chain: keep it at one. |
+| `strategy` | `RollingUpdate` (`Recreate` for audit) | The Deployment strategy. |
+| `autoscaling.*` | off | A CPU HorizontalPodAutoscaler: `enabled`, `minReplicas`, `maxReplicas`, `targetCPUUtilizationPercentage`. |
+| `podDisruptionBudget.enabled` | `true` | A budget for services with more than one pod. |
+| `podDisruptionBudget.minAvailable` | `1` | Or set `maxUnavailable`. |
+| `logLevel`, `logFormat` | (empty: the global values) | Per-service overrides. |
+| `service.port`, `service.portName` | the service's port, `grpc` or `http` | The main port. |
+| `service.extraPorts` | `[]` (`http` 9097 for sshbroker) | More ports, each `{name, port}`. |
+| `probes.*` | gRPC health, or HTTP `/health` | Startup, liveness and readiness probes: `type`, `port`, `path`, `startupFailureThreshold`. |
+| `env` | per service | Non-secret settings, rendered into the ConfigMap. Values go through `tpl` (so `{{ .Values.global.host }}` works); an empty value is left out so the service uses its own default. The settings are in each service's `docs/configuration.md`. |
+| `requiredEnv` | `[DATABASE_DSN]` where there is a database | Keys of `env` that must not be empty. |
+| `secretEnv.<VAR>` | per service | A setting read from a Secret: `secretName`, `key` (default: the variable name), `required`. With `generate: true` and no `secretName` the chart creates the value once (`bytes` random bytes, base64) in `sneakers-<service>-generated`, kept on upgrade and uninstall. |
+| `envFromSecrets` | `[]` | Secrets loaded whole as environment variables. |
+| `extraEnv` | `[]` | More container env, in Kubernetes form. |
+| `resources` | 50m and 64Mi requested, 1 CPU and 512Mi limit | Requests and limits; both are required. |
+| `podSecurityContext` | non-root (65532), `RuntimeDefault` seccomp | `runAsNonRoot` must stay true. |
+| `securityContext` | read-only root filesystem, no privilege escalation, all capabilities dropped | `readOnlyRootFilesystem` must stay true and `allowPrivilegeEscalation` false. |
+| `serviceAccount.*` | one per service, no token mounted | `create`, `name`, `automountToken`. |
+| `projectedToken.*` | on for vault and connector | A kubelet-rotated ServiceAccount token: `audience`, `expirationSeconds`, `mountPath`, `path`, `clusterCA` (also mount the cluster CA), `envName` (a variable set to the token's path). |
+| `caBundle.*` | off | One key of a ConfigMap with a PEM bundle, pointed to by `envName` (`SSL_CERT_FILE`). The bundle replaces the system roots, so it must hold every root the service needs. |
+| `extraVolumes`, `extraVolumeMounts` | `[]` | |
+| `networkPolicy.enabled` | `true` | Ingress only from this release's pods (`app.kubernetes.io/part-of: sneakers`). |
+| `networkPolicy.ingressFrom`, `networkPolicy.ingressPorts` | any pod in the cluster, on `http`, for gateway, mcp and sshbroker; none for the rest | More peers, for the ingress controller. |
+| `networkPolicy.egress` | `[]` | Egress rules. Empty means no egress policy. |
+| `ingress.*` | off | `enabled`, `className`, `host` (default `global.host` for the edge services), `annotations`, `tlsSecretName`, `paths` (each `{path, pathType, portName}`). |
+| `migrations.job.*` | off | A pre-upgrade Job running the image with `args`. Off until the services have a migrate-only command; they migrate at start today. |
+| `podLabels`, `podAnnotations`, `priorityClassName`, `terminationGracePeriodSeconds`, `nodeSelector`, `tolerations`, `affinity` | | Pod placement and metadata. |
+| `topologySpreadConstraints` | spread over nodes, best effort | Values go through `tpl`. |
+
+### Per-service settings the umbrella and the defaults set
+
+| Service | Port | Database | Secrets (`secretEnv`) | Notes |
+|---|---|---|---|---|
+| identity | 9192 | `sneakers_identity` | `PGPASSWORD`, `TOTP_ENC_KEY` (optional), `SMTP_PASS` (optional) | `AUTH_BACKEND=kratos`; set `SMTP_HOST` to send email. Without `TOTP_ENC_KEY` the TOTP second factor is unavailable; changing it makes stored TOTP secrets unreadable. |
+| vault | 9091 | `sneakers_vault` | `PGPASSWORD`, `VAULT_ROOT_KEK` (required), `REDIS_URL` | Checks the connector's projected token against the cluster's ServiceAccount issuer, `https://kubernetes.default.svc.cluster.local` by default. Read yours with `kubectl get --raw /.well-known/openid-configuration` and set `env.WORKLOAD_OIDC_ISSUER`. |
+| workflow | 9193 | `sneakers_workflow` | `PGPASSWORD` | |
+| audit | 9194 | `sneakers_audit` | `PGPASSWORD` | One replica, `Recreate`. |
+| notify | 9195 | | `REDIS_URL` (required) | The inboxes live in Valkey or Redis. |
+| connector | 9196 (health) | | | Sends a projected token with audience `sneakers-vault`. Mount a CA bundle with `caBundle` for LDAPS to a private CA. |
+| sshbroker | 9096, 9097 | | `REDIS_URL` | Without Redis the tickets stay in memory: run one replica. |
+| gateway | 9100 | | `REDIS_URL` (required), `SETUP_TOKEN`, `POLIS_API_KEY` | `AUTH_MODE=real`, secure cookies, MFA enforced. |
+| mcp | 9101 | | | Accepts service-account and personal tokens; Hydra JWTs once `HYDRA_ISSUER` is set. |
+
+## The bundled PostgreSQL (`charts/postgres`)
+
+| Value | Default | Meaning |
+|---|---|---|
+| `image.*` | `postgres:18.6`, pinned by digest | |
+| `auth.existingSecret` | (required; the umbrella sets `sneakers-bundled`) | The Secret with both passwords. |
+| `auth.username` | `sneakers` | The role that owns the databases. |
+| `auth.passwordKey`, `auth.superuserPasswordKey` | `password`, `postgres-password` | Keys in that Secret. |
+| `databases` | one per service, plus Kratos and Hydra | Created on the first start only. |
+| `persistence.size`, `persistence.storageClass`, `persistence.accessModes` | `10Gi`, the default class, `ReadWriteOnce` | The data volume, kept when the release is deleted. |
+| `resources` | 100m and 256Mi requested, 2 CPUs and 1Gi limit | |
+| `networkPolicy.enabled` | `true` | Only this release's pods may connect. |
