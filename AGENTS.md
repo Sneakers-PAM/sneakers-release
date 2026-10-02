@@ -19,7 +19,10 @@ Two things to know before changing it:
   `scripts/sync-schemas.sh`.
 - The call graph lives in each chart's `workloadIdentity.callers`, which drives both the
   NetworkPolicy and the callee's allowed service accounts. `scripts/check-edges.py` and
-  `test/kind/run.sh` hold the same table; change all three together, with docs/install.md.
+  `test/kind/run.sh` hold the same table; change all three together, with docs/install.md. The
+  bundled pieces' callers live in `charts/sneakers/values.yaml` (Valkey),
+  `charts/postgres/values.yaml` and `charts/sneakers/templates/bundled-networkpolicies.yaml`
+  (Kratos and Hydra), and the same two checks.
 
 ## Layout
 

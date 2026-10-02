@@ -57,7 +57,7 @@ env:
   MCP_ACCEPT_API_TOKENS: "true"
   MCP_AUTHORIZATION_SERVER: "https://{{ .Values.global.host }}"
   HYDRA_ISSUER: ""
-  HYDRA_JWKS_URL: http://sneakers-hydra-public/.well-known/jwks.json
+  HYDRA_JWKS_URL: http://sneakers-hydra-public:4444/.well-known/jwks.json
   HYDRA_AUDIENCE: sneakers-mcp
   MCP_RESOURCE_URL: ""
 requiredEnv: []

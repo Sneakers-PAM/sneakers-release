@@ -21,6 +21,9 @@ chart by `scripts/sync-schemas.sh`.
 | `valkey.enabled` | `true` | The bundled Valkey ([valkey-helm](https://github.com/valkey-io/valkey-helm)); its values pass through. |
 | `kratos.enabled` | `true` | The bundled Ory Kratos ([ory/k8s](https://github.com/ory/k8s)); its values pass through. |
 | `hydra.enabled` | `false` | The bundled Ory Hydra ([ory/k8s](https://github.com/ory/k8s)); its values pass through. |
+| `bundledNetworkPolicies.enabled` | `true` | NetworkPolicies for the bundled Kratos and Hydra, whose charts ship none. See [install.md](install.md#service-to-service-traffic). |
+| `bundledNetworkPolicies.kratosPublicFrom` | `[]` | More peers for Kratos's public port, besides the gateway. |
+| `bundledNetworkPolicies.hydraPublicFrom` | any pod | More peers for Hydra's public port, besides the gateway and mcp: the edge OAuth clients come through. |
 | `tests.image` | curl, pinned | The image of the `helm test` pod. |
 
 The one value with no default is the vault root key:

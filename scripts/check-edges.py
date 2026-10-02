@@ -5,7 +5,8 @@ Reads `helm template` output on stdin. For every service the NetworkPolicy on
 its main port must admit exactly the callers in EDGES, the callee must verify
 workload tokens from exactly those callers' service accounts, and every caller
 must mount a projected token with audience `sneakers`. The MCP server's egress
-must stop at the gateway.
+must stop at the gateway. The bundled Kratos, Hydra, Valkey and PostgreSQL
+must admit only the pieces that use them, on the ports they use.
 """
 import sys
 
@@ -163,6 +164,65 @@ if mcp is not None:
         errors.append("mcp: egress does not reach the gateway")
     if targets - {"gateway", "hydra"}:
         errors.append(f"mcp: egress reaches {sorted(targets - {'gateway', 'hydra'})}")
+
+# The bundled pieces: (app.kubernetes.io/name, container port): callers, by
+# component (a Sneakers service) or by name (another bundled piece). "edge"
+# means any pod in the cluster. A piece's own pods reach its admin port for
+# the chart's helm test pod.
+BUNDLED = {
+    ("kratos", 4433): {"gateway"},
+    ("kratos", 4434): {"identity", "gateway", "kratos"},
+    ("hydra", 4444): {"gateway", "mcp", "edge"},
+    ("hydra", 4445): {"hydra"},
+    ("valkey", 6379): {"gateway", "vault", "notify", "sshbroker"},
+    ("postgres", 5432): {"identity", "vault", "workflow", "audit", "kratos", "hydra"},
+}
+workloads = {}
+for d in docs:
+    if d["kind"] in ("Deployment", "StatefulSet"):
+        pod = d["spec"]["template"]
+        name = (pod["metadata"].get("labels") or {}).get("app.kubernetes.io/name", "")
+        for key in {n for n, _ in BUNDLED}:
+            if name == key or name == f"sneakers-{key}":
+                workloads[key] = pod
+
+
+def selects(selector, pod_labels):
+    return all(pod_labels.get(k) == v for k, v in (selector.get("matchLabels") or {}).items())
+
+
+for key, pod in sorted(workloads.items()):
+    pod_labels = pod["metadata"]["labels"]
+    named = {p["name"]: p["containerPort"] for c in pod["spec"]["containers"] for p in c.get("ports") or [] if "name" in p}
+    selecting = [p for p in policies.values() if selects(p["spec"]["podSelector"], pod_labels)]
+    if not selecting:
+        errors.append(f"{key}: no NetworkPolicy selects its pods")
+        continue
+    admitted = {}
+    for policy in selecting:
+        for rule in policy["spec"].get("ingress") or []:
+            ports = {named.get(p, p) for p in port_names(rule)} or {"*"}
+            for peer in rule.get("from") or []:
+                sel = (peer.get("podSelector") or {}).get("matchLabels") or {}
+                if "namespaceSelector" in peer and not sel:
+                    who = "edge"
+                elif sel.get("app.kubernetes.io/component"):
+                    who = sel["app.kubernetes.io/component"]
+                elif sel.get("app.kubernetes.io/name"):
+                    who = sel["app.kubernetes.io/name"]
+                else:
+                    errors.append(f"{key}: a peer selects every pod of the release {sel or peer}")
+                    continue
+                for port in ports:
+                    admitted.setdefault(port, set()).add(who)
+    if "*" in admitted:
+        errors.append(f"{key}: {sorted(admitted['*'])} admitted on every port")
+    for (k, port), want in BUNDLED.items():
+        if k == key and admitted.get(port, set()) != want:
+            errors.append(f"{key}:{port} admits {sorted(admitted.get(port, set()))}, want {sorted(want)}")
+    extra = set(admitted) - {port for k, port in BUNDLED if k == key} - {"*"}
+    if extra:
+        errors.append(f"{key}: unexpected ports {sorted(extra, key=str)}")
 
 for e in errors:
     print(f"edges: {e}", file=sys.stderr)

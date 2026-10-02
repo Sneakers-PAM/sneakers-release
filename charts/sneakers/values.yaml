@@ -132,12 +132,26 @@ valkey:
       memory: 512Mi
   readinessProbe:
     enabled: true
+  # Only the services that use Valkey (REDIS_URL) may connect.
   networkPolicy:
     ingress:
       - from:
           - podSelector:
               matchLabels:
                 app.kubernetes.io/part-of: sneakers
+                app.kubernetes.io/component: gateway
+          - podSelector:
+              matchLabels:
+                app.kubernetes.io/part-of: sneakers
+                app.kubernetes.io/component: vault
+          - podSelector:
+              matchLabels:
+                app.kubernetes.io/part-of: sneakers
+                app.kubernetes.io/component: notify
+          - podSelector:
+              matchLabels:
+                app.kubernetes.io/part-of: sneakers
+                app.kubernetes.io/component: sshbroker
         ports:
           - port: 6379
 
@@ -308,6 +322,19 @@ hydra:
       urls:
         self:
           issuer: "https://hydra.{{ .Values.global.host }}/"
+
+# NetworkPolicies for the bundled Kratos and Hydra, whose charts have none.
+# Kratos public takes only the gateway (it drives the flows), Kratos admin the
+# identity service and the gateway. Hydra public takes the gateway, the MCP
+# server and hydraPublicFrom (OAuth clients reach the issuer through the
+# edge; narrow it to your ingress controller's namespace). Hydra admin takes
+# only Hydra's own pods (the chart's helm test): manage its clients with
+# kubectl port-forward. Kratos admin also takes Kratos's own pods.
+bundledNetworkPolicies:
+  enabled: true
+  kratosPublicFrom: []
+  hydraPublicFrom:
+    - namespaceSelector: {}
 
 tests:
   image:

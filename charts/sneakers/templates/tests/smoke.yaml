@@ -1,4 +1,8 @@
-{{- /* helm test: the edge services and Kratos answer their health checks. */ -}}
+{{- /*
+helm test: the edge services answer their health checks. Kratos isn't
+checked here: its NetworkPolicy admits only the identity service and the
+gateway, and helm install --wait already waits for it to be ready.
+*/ -}}
 apiVersion: v1
 kind: Pod
 metadata:
@@ -35,9 +39,6 @@ spec:
           {{- end }}
           {{- if .Values.sshbroker.enabled }}
           check http://sneakers-sshbroker:9097/health
-          {{- end }}
-          {{- if .Values.kratos.enabled }}
-          check http://{{ .Values.kratos.fullnameOverride }}-admin/health/ready
           {{- end }}
           echo ok
       resources:

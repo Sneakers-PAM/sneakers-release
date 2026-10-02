@@ -14,6 +14,10 @@ valkey:
   dataStorage:
     requestedSize: 256Mi
 
+# On, so the install test covers its NetworkPolicy.
+hydra:
+  enabled: true
+
 identity:
   image:
     repository: ci.example.org/sneakers-identity
