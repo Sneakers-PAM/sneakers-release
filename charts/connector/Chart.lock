@@ -1,0 +1,6 @@
+dependencies:
+- name: sneakers-lib
+  repository: file://../sneakers-lib
+  version: 0.1.0
+digest: sha256:be70b998c4f8354d4562f89d27a921a4ec23ebc1be8fe589ca1e8af0cafd3b6f
+generated: "2026-10-02T02:28:50.649794404-04:00"

@@ -1,0 +1,178 @@
+# Values for the identity chart. See docs/values.md in this repository.
+
+global:
+  # The public host name users reach Sneakers on.
+  host: sneakers.example.org
+  # ENVIRONMENT for the services. prod or production turn on the production
+  # checks (no dev worker token, no dev keys).
+  environment: production
+  logLevel: error
+  logFormat: json
+  # OTLP gRPC collector (host:port) for traces and metrics. Empty: unset.
+  otlpEndpoint: ""
+
+image:
+  repository: ghcr.io/sneakers-pam/sneakers-identity
+  # Empty: the chart's appVersion. A digest, when set, wins over the tag.
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+fullnameOverride: ""
+
+replicas: 2
+strategy: RollingUpdate
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+  maxUnavailable: ""
+
+# Empty: global.logLevel and global.logFormat.
+logLevel: ""
+logFormat: ""
+
+service:
+  port: 9192
+  portName: grpc
+  extraPorts: []
+
+probes:
+  type: grpc
+  port: 9192
+  path: /health
+  startupFailureThreshold: 60
+
+# Non-secret settings, rendered into the ConfigMap. Values go through tpl.
+# An empty value is left out, so the service uses its own default.
+env:
+  ENVIRONMENT: "{{ .Values.global.environment }}"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.global.otlpEndpoint }}"
+  GRPC_PORT: "9192"
+  DATABASE_DSN: ""
+  AUTH_BACKEND: kratos
+  KRATOS_ADMIN_URL: http://sneakers-kratos-admin
+  TOTP_ISSUER: Sneakers
+  WEBAUTHN_RP_ID: "{{ .Values.global.host }}"
+  WEBAUTHN_RP_ORIGINS: "https://{{ .Values.global.host }}"
+  WEBAUTHN_RP_NAME: Sneakers
+  # Email for one-time codes and notices. Unset SMTP_HOST sends nothing.
+  SMTP_HOST: ""
+  SMTP_PORT: "587"
+  SMTP_TLS: "true"
+  SMTP_FROM: "no-reply@{{ .Values.global.host }}"
+  SMTP_USER: ""
+requiredEnv: [DATABASE_DSN]
+
+# Secret-backed settings, by variable name. Each one reads key from the
+# Secret secretName. generate: true (with no secretName) makes the chart create
+# the value once, in <name>-generated, kept on upgrade and uninstall.
+secretEnv:
+  PGPASSWORD:
+    secretName: ""
+    key: password
+    required: true
+  # Encrypts TOTP secrets at rest. Without it the TOTP calls answer Unavailable.
+  # Changing it makes every stored TOTP secret unreadable.
+  TOTP_ENC_KEY:
+    secretName: ""
+    key: TOTP_ENC_KEY
+    required: false
+    generate: false
+    bytes: 32
+  SMTP_PASS:
+    secretName: ""
+    key: SMTP_PASS
+    required: false
+# Secrets loaded whole as environment variables.
+envFromSecrets: []
+# Extra container env, Kubernetes format.
+extraEnv: []
+args: []
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: [ALL]
+
+serviceAccount:
+  create: true
+  name: ""
+  automountToken: false
+
+projectedToken:
+  enabled: false
+  audience: ""
+  expirationSeconds: 3600
+  mountPath: /var/run/secrets/tokens
+  path: token
+  clusterCA: false
+  envName: ""
+
+# One key of a ConfigMap holding a PEM bundle, pointed to by envName. Go's
+# SSL_CERT_FILE replaces the system roots, so the bundle must carry every root
+# the service needs.
+caBundle:
+  configMap: ""
+  key: ca-bundle.crt
+  mountPath: /etc/ssl/custom
+  envName: SSL_CERT_FILE
+
+extraVolumes: []
+extraVolumeMounts: []
+
+networkPolicy:
+  enabled: true
+  ingressFrom: []
+  ingressPorts: []
+  egress: []
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  annotations: {}
+  tlsSecretName: ""
+  paths: []
+
+migrations:
+  job:
+    enabled: false
+    args: [migrate]
+    activeDeadlineSeconds: 600
+
+podLabels: {}
+podAnnotations: {}
+priorityClassName: ""
+terminationGracePeriodSeconds: 30
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: '{{ include "sneakers.fullname" . }}'

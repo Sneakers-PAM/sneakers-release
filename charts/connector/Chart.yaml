@@ -1,0 +1,13 @@
+apiVersion: v2
+name: connector
+description: "The Sneakers connector: heartbeats and password rotation against targets."
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/Sneakers-PAM/sneakers-release
+sources:
+  - https://github.com/Sneakers-PAM/sneakers-connector
+dependencies:
+  - name: sneakers-lib
+    version: 0.1.0
+    repository: file://../sneakers-lib

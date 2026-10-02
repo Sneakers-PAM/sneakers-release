@@ -1,0 +1,13 @@
+apiVersion: v2
+name: notify
+description: "The Sneakers notify service: in-app inboxes for users and groups."
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/Sneakers-PAM/sneakers-release
+sources:
+  - https://github.com/Sneakers-PAM/sneakers-notify
+dependencies:
+  - name: sneakers-lib
+    version: 0.1.0
+    repository: file://../sneakers-lib
