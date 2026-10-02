@@ -1,0 +1,198 @@
+# Values for the web-admin chart. See docs/values.md in this repository.
+
+global:
+  # The public host name users reach Sneakers on.
+  host: sneakers.example.org
+  # ENVIRONMENT for the services. prod or production turn on the production
+  # checks (no dev worker token, no dev keys).
+  environment: production
+  logLevel: error
+  logFormat: json
+  # OTLP gRPC collector (host:port) for traces and metrics. Empty: unset.
+  otlpEndpoint: ""
+  # Single sign-on. Sets the web apps' SSO_ENABLED; turn it on with the
+  # gateway's SSO settings.
+  sso:
+    enabled: false
+
+image:
+  repository: ghcr.io/sneakers-pam/sneakers-web-admin
+  # Empty: the chart's appVersion. A digest, when set, wins over the tag.
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+fullnameOverride: ""
+
+replicas: 2
+strategy: RollingUpdate
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+  maxUnavailable: ""
+
+# Empty: global.logLevel and global.logFormat.
+logLevel: ""
+logFormat: ""
+
+service:
+  port: 3000
+  portName: http
+  extraPorts: []
+
+# The app answers its health check without calling the gateway.
+probes:
+  type: http
+  port: 3000
+  path: /admin/healthz
+  startupFailureThreshold: 60
+
+# Non-secret settings, rendered into the ConfigMap. Values go through tpl.
+# An empty value is left out, so the service uses its own default.
+env:
+  PORT: "3000"
+  # The gateway, in the cluster. Every gateway call runs on the app server.
+  GATEWAY_URL: http://sneakers-gateway:9100
+  # dev, qa or prod.
+  APP_ENV: prod
+  SSO_ENABLED: "{{ ((.Values.global).sso).enabled | default false }}"
+  # Where each app lives on the public host. The admin app's base is fixed
+  # when its image is built.
+  STAFF_URL: /
+  ADMIN_URL: /admin/
+  # The proxies whose X-Forwarded-* headers the app trusts: a hop count or the
+  # ingress's address range. One ingress hop sits in front. Leave it empty
+  # wherever clients reach the pod directly.
+  TRUST_PROXY: "1"
+requiredEnv: [GATEWAY_URL]
+
+# Secret-backed settings, by variable name. Each one reads key from the
+# Secret secretName. generate: true (with no secretName) makes the chart create
+# the value once, in <name>-generated, kept on upgrade and uninstall.
+secretEnv:
+  {}
+# Secrets loaded whole as environment variables.
+envFromSecrets: []
+# Extra container env, Kubernetes format.
+extraEnv: []
+args: []
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  # The image's node user.
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: [ALL]
+
+serviceAccount:
+  create: true
+  name: ""
+  automountToken: false
+
+projectedToken:
+  enabled: false
+  audience: ""
+  expirationSeconds: 3600
+  mountPath: /var/run/secrets/tokens
+  path: token
+  clusterCA: false
+  envName: ""
+
+# The app calls only the gateway, over HTTP, so it neither sends nor checks
+# service-to-service tokens.
+workloadIdentity:
+  caller: false
+  verify: false
+  callers: []
+  audience: sneakers
+  expirationSeconds: 3600
+  issuer: https://kubernetes.default.svc.cluster.local
+  jwksURL: https://kubernetes.default.svc/openid/v1/jwks
+
+# One key of a ConfigMap holding a PEM bundle, pointed to by envName. Node
+# adds NODE_EXTRA_CA_CERTS to its own roots.
+caBundle:
+  configMap: ""
+  key: ca-bundle.crt
+  mountPath: /etc/ssl/custom
+  envName: NODE_EXTRA_CA_CERTS
+
+extraVolumes: []
+extraVolumeMounts: []
+
+networkPolicy:
+  enabled: true
+  # Peers allowed on ingressPorts besides this release's own pods: the
+  # ingress controller. The default is any pod in the cluster; narrow it to
+  # your controller's namespace.
+  ingressFrom:
+    - namespaceSelector: {}
+  ingressPorts: [http]
+  # The app calls only the gateway, plus DNS.
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: sneakers
+              app.kubernetes.io/component: gateway
+      ports:
+        - port: http
+
+ingress:
+  enabled: false
+  className: ""
+  host: "{{ .Values.global.host }}"
+  annotations: {}
+  tlsSecretName: ""
+  # The path isn't stripped: the app's base is fixed when its image is built.
+  paths:
+    - path: /admin
+
+migrations:
+  job:
+    enabled: false
+    args: [migrate]
+    activeDeadlineSeconds: 600
+
+podLabels: {}
+podAnnotations: {}
+priorityClassName: ""
+terminationGracePeriodSeconds: 30
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: '{{ include "sneakers.fullname" . }}'

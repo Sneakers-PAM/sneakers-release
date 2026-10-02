@@ -10,7 +10,7 @@ from_main="${SERVICES_FROM_MAIN:-false}"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-grep -v -E '^\s*(#|$)' "$here/services.txt" | while read -r image repo ref target; do
+grep -v -E '^\s*(#|$)' "$here/services.txt" | while read -r image repo ref target buildargs; do
   [ "$from_main" = true ] && ref=main
   src="$work/${image}"
   echo "::group::${image} from ${repo}@${ref}"
@@ -20,6 +20,10 @@ grep -v -E '^\s*(#|$)' "$here/services.txt" | while read -r image repo ref targe
   echo "commit $(git -C "$src" rev-parse HEAD)"
   args=(-t "ci.example.org/${image}:ci")
   [ "$target" = - ] || args+=(--target "$target")
+  if [ -n "${buildargs:-}" ]; then
+    IFS=, read -r -a pairs <<<"$buildargs"
+    for kv in "${pairs[@]}"; do args+=(--build-arg "$kv"); done
+  fi
   docker build -q "${args[@]}" "$src"
   kind load docker-image "ci.example.org/${image}:ci" --name "$cluster"
   docker rmi -f "ci.example.org/${image}:ci" >/dev/null

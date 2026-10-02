@@ -18,7 +18,8 @@ fails when the two disagree.
 ## ✨ Highlights
 
 - 🧩 **One chart per service:** identity, vault, workflow, audit, notify, connector, sshbroker,
-  gateway and mcp, each usable alone, plus the `sneakers` umbrella that installs them together.
+  gateway, mcp and the two web apps (web-staff, web-admin), each usable alone, plus the `sneakers`
+  umbrella that installs them together.
 - 🔌 **Bundled or bring your own:** PostgreSQL, Valkey and Ory Kratos come bundled and on by
   default; Ory Hydra is bundled and off. Turn any of them off and point the services at your own.
 - 🛡️ **Production-safe defaults:** JSON logs at error level, requests and limits, non-root pods on a

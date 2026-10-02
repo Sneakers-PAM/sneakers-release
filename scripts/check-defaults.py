@@ -10,7 +10,7 @@ import sys
 
 import yaml
 
-SERVICES = {"identity", "vault", "workflow", "audit", "notify", "connector", "sshbroker", "gateway", "mcp"}
+SERVICES = {"identity", "vault", "workflow", "audit", "notify", "connector", "sshbroker", "gateway", "mcp", "web-staff", "web-admin"}
 docs = [d for d in yaml.safe_load_all(sys.stdin) if d]
 errors = []
 

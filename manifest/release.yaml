@@ -60,6 +60,16 @@ spec:
       source: https://github.com/Sneakers-PAM/sneakers-mcp
       version: 0.1.0
       digest: sha256:TBD-at-release
+    web-staff:
+      image: ghcr.io/sneakers-pam/sneakers-web-staff
+      source: https://github.com/Sneakers-PAM/sneakers-web
+      version: 0.1.0
+      digest: sha256:TBD-at-release
+    web-admin:
+      image: ghcr.io/sneakers-pam/sneakers-web-admin
+      source: https://github.com/Sneakers-PAM/sneakers-web
+      version: 0.1.0
+      digest: sha256:TBD-at-release
   kubernetes:
     k0s:
       version: v1.36.4+k0s.1
