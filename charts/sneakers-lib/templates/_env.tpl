@@ -21,6 +21,14 @@ LOG_FORMAT: {{ include "sneakers.logFormat" . | quote }}
 {{- fail (printf "%s: env.%s must be set" (include "sneakers.fullname" $) .) }}
 {{- end }}
 {{- end }}
+{{- with .Values.workloadIdentity }}
+{{- if and .verify (not .callers) }}
+{{- fail (printf "%s: workloadIdentity.verify needs workloadIdentity.callers" (include "sneakers.fullname" $)) }}
+{{- end }}
+{{- if and $.Values.projectedToken.enabled (has (trimSuffix "/" $.Values.projectedToken.mountPath) (list (include "sneakers.callerTokenDir" $) (include "sneakers.verifierDir" $))) (or .caller .verify) }}
+{{- fail (printf "%s: projectedToken.mountPath %s is taken by the workload identity tokens" (include "sneakers.fullname" $) $.Values.projectedToken.mountPath) }}
+{{- end }}
+{{- end }}
 {{- range $name, $s := .Values.secretEnv }}
 {{- if and $s $s.required (not $s.secretName) (not $s.generate) }}
 {{- fail (printf "%s: secretEnv.%s needs secretName (an existing Secret) or generate: true" (include "sneakers.fullname" $) $name) }}
@@ -38,8 +46,8 @@ LOG_FORMAT: {{ include "sneakers.logFormat" . | quote }}
 {{- end -}}
 
 {{/*
-Container env: secret-backed settings (secretEnv), the projected token and CA
-bundle paths, then extraEnv. Used by the Deployment and the migration Job.
+Container env: secret-backed settings (secretEnv), the projected token, the
+workload identity settings and the CA bundle paths, then extraEnv. Used by the Deployment and the migration Job.
 */}}
 {{- define "sneakers.env" -}}
 {{- $env := list }}
@@ -57,6 +65,22 @@ bundle paths, then extraEnv. Used by the Deployment and the migration Job.
 {{- with .Values.projectedToken }}
 {{- if and .enabled .envName }}
 {{- $env = append $env (dict "name" .envName "value" (printf "%s/%s" .mountPath .path)) }}
+{{- end }}
+{{- end }}
+{{- with .Values.workloadIdentity }}
+{{- if .caller }}
+{{- $env = append $env (dict "name" "WORKLOAD_TOKEN_FILE" "value" (printf "%s/token" (include "sneakers.callerTokenDir" $))) }}
+{{- end }}
+{{- if .verify }}
+{{- $dir := include "sneakers.verifierDir" $ }}
+{{- $allowed := list }}
+{{- range .callers }}{{ $allowed = append $allowed (printf "%s/sneakers-%s" $.Release.Namespace .) }}{{ end }}
+{{- $env = append $env (dict "name" "WORKLOAD_OIDC_ISSUER" "value" .issuer) }}
+{{- $env = append $env (dict "name" "WORKLOAD_OIDC_JWKS_URL" "value" .jwksURL) }}
+{{- $env = append $env (dict "name" "WORKLOAD_OIDC_CA_FILE" "value" (printf "%s/ca.crt" $dir)) }}
+{{- $env = append $env (dict "name" "WORKLOAD_OIDC_BEARER_FILE" "value" (printf "%s/token" $dir)) }}
+{{- $env = append $env (dict "name" "WORKLOAD_AUDIENCE" "value" .audience) }}
+{{- $env = append $env (dict "name" "WORKLOAD_ALLOWED_SERVICEACCOUNTS" "value" (join "," $allowed)) }}
 {{- end }}
 {{- end }}
 {{- with .Values.caBundle }}

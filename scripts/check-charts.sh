@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Lint and render every chart, check the values schemas, the production-safe
-# defaults and the release manifest. Needs helm, kubeconform and python3 with
-# PyYAML. KUBE_VERSION is the Kubernetes version manifests are checked against.
+# defaults, the service-to-service edges and the release manifest. Needs helm,
+# kubeconform and python3 with PyYAML. KUBE_VERSION is the Kubernetes version
+# manifests are checked against.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 KUBE_VERSION="${KUBE_VERSION:-1.36.4}"
@@ -52,12 +53,19 @@ must_fail "a writable root filesystem" helm template ci charts/sneakers -n sneak
 must_fail "a misspelt service key" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set gateway.replica=3
 must_fail "an ingress with no host" helm template ci charts/mcp -n sneakers -f test/ci/standalone/mcp.yaml --set ingress.enabled=true --set global.host=
 must_fail "postgres without its Secret" helm template ci charts/postgres -n sneakers
+must_fail "a token check with no callers" helm template ci charts/connector -n sneakers -f test/ci/standalone/connector.yaml --set workloadIdentity.verify=true
+must_fail "an unknown caller" helm template ci charts/vault -n sneakers -f test/ci/standalone/vault.yaml --set 'workloadIdentity.callers={gateway,admin}'
+must_fail "a projected token over the workload tokens" helm template ci charts/vault -n sneakers -f test/ci/standalone/vault.yaml --set projectedToken.enabled=true
 
 step "kubeconform (Kubernetes ${KUBE_VERSION})"
 kubeconform -strict -summary -kubernetes-version "${KUBE_VERSION}" "$out"/*.yaml
 
 step "production-safe defaults"
 python3 scripts/check-defaults.py <"$out/sneakers.yaml"
+
+step "service-to-service edges"
+python3 scripts/check-edges.py <"$out/sneakers.yaml"
+python3 scripts/check-edges.py <"$out/sneakers-hydra.yaml"
 
 step "release manifest"
 python3 scripts/check-manifest.py

@@ -106,6 +106,23 @@ projectedToken:
   clusterCA: false
   envName: ""
 
+# Service-to-service authentication. caller mounts a projected token with
+# audience `audience` at /var/run/secrets/sneakers/token (WORKLOAD_TOKEN_FILE),
+# sent on every gRPC call this service makes. callers are the services allowed
+# to reach this service's main port: the NetworkPolicy admits only them, and
+# with verify the service checks their tokens against the cluster's issuer
+# (WORKLOAD_OIDC_* and WORKLOAD_ALLOWED_SERVICEACCOUNTS, with an API token and
+# the cluster CA at /var/run/secrets/tokens). Read the issuer with
+# `kubectl get --raw /.well-known/openid-configuration`.
+workloadIdentity:
+  caller: true
+  verify: true
+  callers: [vault, gateway]
+  audience: sneakers
+  expirationSeconds: 3600
+  issuer: https://kubernetes.default.svc.cluster.local
+  jwksURL: https://kubernetes.default.svc/openid/v1/jwks
+
 # One key of a ConfigMap holding a PEM bundle, pointed to by envName. Go's
 # SSL_CERT_FILE replaces the system roots, so the bundle must carry every root
 # the service needs.
