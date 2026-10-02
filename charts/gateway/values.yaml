@@ -54,7 +54,6 @@ env:
   OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.global.otlpEndpoint }}"
   HTTP_PORT: "9100"
   AUTH_MODE: real
-  AUTH_BACKEND: kratos
   KRATOS_PUBLIC_URL: http://sneakers-kratos-public
   KRATOS_ADMIN_URL: http://sneakers-kratos-admin
   VAULT_ADDR: sneakers-vault:9091

@@ -54,7 +54,6 @@ env:
   OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.global.otlpEndpoint }}"
   GRPC_PORT: "9192"
   DATABASE_DSN: ""
-  AUTH_BACKEND: kratos
   KRATOS_ADMIN_URL: http://sneakers-kratos-admin
   TOTP_ISSUER: Sneakers
   WEBAUTHN_RP_ID: "{{ .Values.global.host }}"

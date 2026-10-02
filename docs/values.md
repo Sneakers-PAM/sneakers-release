@@ -83,7 +83,7 @@ All nine service charts take the same values. Each one also works on its own, ou
 
 | Service | Port | Database | Secrets (`secretEnv`) | Notes |
 |---|---|---|---|---|
-| identity | 9192 | `sneakers_identity` | `PGPASSWORD`, `TOTP_ENC_KEY` (optional), `SMTP_PASS` (optional) | `AUTH_BACKEND=kratos`; set `SMTP_HOST` to send email. Without `TOTP_ENC_KEY` the TOTP second factor is unavailable; changing it makes stored TOTP secrets unreadable. |
+| identity | 9192 | `sneakers_identity` | `PGPASSWORD`, `TOTP_ENC_KEY` (optional), `SMTP_PASS` (optional) | Set `SMTP_HOST` to send email. Without `TOTP_ENC_KEY` the TOTP second factor is unavailable; changing it makes stored TOTP secrets unreadable. |
 | vault | 9091 | `sneakers_vault` | `PGPASSWORD`, `VAULT_ROOT_KEK` (required), `REDIS_URL` | Checks the connector's projected token against the cluster's ServiceAccount issuer, `https://kubernetes.default.svc.cluster.local` by default. Read yours with `kubectl get --raw /.well-known/openid-configuration` and set `env.WORKLOAD_OIDC_ISSUER`. |
 | workflow | 9193 | `sneakers_workflow` | `PGPASSWORD` | |
 | audit | 9194 | `sneakers_audit` | `PGPASSWORD` | One replica, `Recreate`. |

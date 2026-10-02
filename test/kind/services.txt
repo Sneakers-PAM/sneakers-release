@@ -1,12 +1,12 @@
 # The service images the install test builds, one per line:
 #   <image name> <repository> <git ref> <Dockerfile target, or - for the default>
 # The refs are each service repository's merge commit on main.
-sneakers-identity  Sneakers-PAM/sneakers-identity   595f7e9b18e9145dcd567090da6f14c7f6ca4c9a  -
+sneakers-identity  Sneakers-PAM/sneakers-identity   7ac772dfffbdba7bc2863474dae60087bef13288  -
 sneakers-vault     Sneakers-PAM/sneakers-vault      c2d87db06f588d42fa812a24231213f667b97d8d  vault
 sneakers-workflow  Sneakers-PAM/sneakers-vault      c2d87db06f588d42fa812a24231213f667b97d8d  workflow
 sneakers-audit     Sneakers-PAM/sneakers-audit      34ef781b48d76886d896c2a55fae112fc20ffa1e  -
-sneakers-notify    Sneakers-PAM/sneakers-notify     669ff4e54b46c3c4593cd5afe8ae730a84ac4ec5  -
+sneakers-notify    Sneakers-PAM/sneakers-notify     d46eca252a209284760240d5e4d4307ae24f45c5  -
 sneakers-connector Sneakers-PAM/sneakers-connector  47b05ea6f66d1d7dee821a70c3c93ed091a7193d  -
 sneakers-sshbroker Sneakers-PAM/sneakers-sshbroker  1a81c7d8da969ee8e9612aee8a21feddd7603067  -
-sneakers-gateway   Sneakers-PAM/sneakers-gateway    7faaa77216f647961c2cd0c0334908c750b0a6b1  -
+sneakers-gateway   Sneakers-PAM/sneakers-gateway    7af72cd6cf36464b3e0d7436da617c71a4e4794b  -
 sneakers-mcp       Sneakers-PAM/sneakers-mcp        01a6fa650cd42f1dd7309d63feb34e610b274991  -
