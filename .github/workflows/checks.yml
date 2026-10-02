@@ -29,8 +29,16 @@ jobs:
     uses: Sneakers-PAM/.github/.github/workflows/scrub.yml@main
     with:
       # valkey.io: the public Helm repository of the bundled Valkey chart.
+      # filippo.io, c2sp.org, gonum.org: Go module paths (age and its test
+      # vectors, gonum through the OpenTelemetry deps). The last one is not a
+      # host: protoc's descriptor bytes in gen/go/thirdparty/vault run a message
+      # name into the go_package path.
       allowed-domains: >-
         valkey.io
+        filippo.io
+        c2sp.org
+        gonum.org
+        x1a9.sneakers.vault.v1.getheartbeatstatusforprincipalresponsebmzkgithub.com
   proto-sync:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
     permissions:
