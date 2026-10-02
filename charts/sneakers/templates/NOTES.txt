@@ -1,0 +1,21 @@
+Sneakers {{ .Chart.AppVersion }} is installed in namespace {{ .Release.Namespace }}.
+
+Public host: {{ .Values.global.host }}
+{{- if not .Values.gateway.ingress.enabled }}
+The gateway has no Ingress yet. Set gateway.ingress.enabled=true (and the same
+for mcp and sshbroker), or route your own edge to sneakers-gateway:9100.
+{{- end }}
+{{- if .Values.bundledSecrets.enabled }}
+
+Back up these Secrets with the PostgreSQL volume; they are kept on uninstall:
+  sneakers-bundled{{ if .Values.kratos.enabled }}, {{ .Values.kratos.secret.nameOverride }}{{ end }}{{ if .Values.hydra.enabled }}, {{ .Values.hydra.secret.nameOverride }}{{ end }}
+{{- end }}
+Any sneakers-<service>-generated Secret holds a key the chart generated (for
+example the vault root key). They are kept on uninstall; back them up too.
+{{- if .Values.vault.secretEnv.VAULT_ROOT_KEK.generate }}
+
+The vault root key was generated in sneakers-vault-generated. Without it no
+stored secret can be opened: copy it to your secret store now.
+{{- end }}
+
+Check the install with: helm test {{ .Release.Name }} -n {{ .Release.Namespace }}

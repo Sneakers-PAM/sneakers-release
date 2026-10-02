@@ -1,0 +1,133 @@
+{{- if not .Values.auth.existingSecret }}
+{{- fail "postgres: auth.existingSecret must name the Secret holding the passwords" }}
+{{- end }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "postgres.fullname" . }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "postgres.fullname" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "postgres.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "postgres.labels" . | nindent 8 }}
+      annotations:
+        checksum/init: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: postgres
+          image: {{ include "postgres.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.existingSecret }}
+                  key: {{ .Values.auth.superuserPasswordKey }}
+            - name: APP_USER
+              value: {{ .Values.auth.username | quote }}
+            - name: APP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.existingSecret }}
+                  key: {{ .Values.auth.passwordKey }}
+            - name: APP_DATABASES
+              value: {{ join " " .Values.databases | quote }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          startupProbe:
+            exec:
+              command: [pg_isready, -U, postgres, -h, 127.0.0.1]
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            exec:
+              command: [pg_isready, -U, postgres, -h, 127.0.0.1]
+            periodSeconds: 10
+            failureThreshold: 6
+          readinessProbe:
+            exec:
+              command: [pg_isready, -U, postgres, -h, 127.0.0.1]
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+            - name: shm
+              mountPath: /dev/shm
+      volumes:
+        - name: init
+          configMap:
+            name: {{ include "postgres.fullname" . }}-init
+            defaultMode: 0555
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "postgres.selectorLabels" . | nindent 10 }}
+      spec:
+        accessModes:
+          {{- toYaml .Values.persistence.accessModes | nindent 10 }}
+        {{- with .Values.persistence.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}

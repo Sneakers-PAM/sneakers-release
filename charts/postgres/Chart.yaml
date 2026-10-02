@@ -1,0 +1,9 @@
+apiVersion: v2
+name: postgres
+description: "A single PostgreSQL instance with one database per Sneakers service, for installs that don't bring their own."
+type: application
+version: 0.1.0
+appVersion: "18.6"
+home: https://github.com/Sneakers-PAM/sneakers-release
+sources:
+  - https://github.com/docker-library/postgres

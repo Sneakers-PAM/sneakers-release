@@ -1,0 +1,42 @@
+dependencies:
+- name: identity
+  repository: file://../identity
+  version: 0.1.0
+- name: vault
+  repository: file://../vault
+  version: 0.1.0
+- name: workflow
+  repository: file://../workflow
+  version: 0.1.0
+- name: audit
+  repository: file://../audit
+  version: 0.1.0
+- name: notify
+  repository: file://../notify
+  version: 0.1.0
+- name: connector
+  repository: file://../connector
+  version: 0.1.0
+- name: sshbroker
+  repository: file://../sshbroker
+  version: 0.1.0
+- name: gateway
+  repository: file://../gateway
+  version: 0.1.0
+- name: mcp
+  repository: file://../mcp
+  version: 0.1.0
+- name: postgres
+  repository: file://../postgres
+  version: 0.1.0
+- name: valkey
+  repository: https://valkey.io/valkey-helm/
+  version: 0.12.0
+- name: kratos
+  repository: https://k8s.ory.sh/helm/charts
+  version: 0.59.0
+- name: hydra
+  repository: https://k8s.ory.sh/helm/charts
+  version: 0.59.0
+digest: sha256:bedecfd6e5b5ddbe069caaffc0cf7a8c7cebd7e7d8fa56daeffb87afd55b0e8a
+generated: "2026-10-02T02:28:51.507620112-04:00"
