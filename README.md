@@ -51,6 +51,8 @@ Secret with the database: without it no stored secret can be opened.
 - [docs/install.md](docs/install.md): requirements, installing, ingress, bringing your own
   PostgreSQL, Valkey or Kratos, upgrades and uninstalling.
 - [docs/values.md](docs/values.md): every value of the umbrella and the service charts.
+- [docs/release-checks.md](docs/release-checks.md): the manual checks run on a release candidate
+  before it's tagged.
 - [manifest/release.yaml](manifest/release.yaml): the pinned release.
 
 ## 🛠️ Develop

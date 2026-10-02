@@ -29,7 +29,7 @@ Two things to know before changing it:
 - `scripts/` - `install-tools.sh` (pinned, checksum-checked tools), `check-charts.sh`, the
   manifest and defaults checks, `sync-schemas.sh`
 - `test/ci/` - values for rendering in CI; `test/kind/` - the install test
-- `docs/` - install and values
+- `docs/` - install, values, and the manual release checks
 
 ## Build, test, lint
 
