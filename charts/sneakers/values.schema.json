@@ -48,6 +48,15 @@
         "hydraPublicFrom": { "type": "array", "items": { "type": "object" } }
       }
     },
+    "rehearsal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "dnsNamespace": { "type": "string", "minLength": 1 }
+      }
+    },
     "identity": { "$ref": "#/definitions/toggle" },
     "vault": { "$ref": "#/definitions/toggle" },
     "workflow": { "$ref": "#/definitions/toggle" },

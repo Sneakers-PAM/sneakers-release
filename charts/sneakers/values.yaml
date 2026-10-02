@@ -20,6 +20,15 @@ global:
   sso:
     enabled: false
 
+# Rehearsal mode, for a migration rehearsal (docs/migrate.md). Every pod in
+# the namespace may reach only the other pods and the cluster DNS, and the chart
+# refuses to render while the connector, the SSH broker or the MCP server is
+# on. Never turn it on for a production install.
+rehearsal:
+  enabled: false
+  # The namespace the cluster DNS runs in.
+  dnsNamespace: kube-system
+
 # Secrets shared by the bundled pieces: the PostgreSQL passwords, the Valkey
 # password and the REDIS_URL built from it, and the Kratos and Hydra DSNs and
 # keys. Each value is generated once and kept on upgrade and uninstall. Turn

@@ -1,0 +1,81 @@
+name: Migrate Rehearsal
+# The synthetic migration rehearsal (docs/migrate.md): a seeded source in the
+# original schema, the umbrella chart in rehearsal mode on a throwaway kind
+# cluster, then sneakers-migrate export, import and verify, and the negative
+# tests. Every service image and the sneakers-migrate image are built in the
+# job and never pushed. Runs on pull requests that touch the tool, its pins or
+# the charts, and by hand. Kept out of Build & Test because it builds ten
+# images.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'migrate/**'
+      - 'gen/**'
+      - 'proto-refs.env'
+      - 'go.mod'
+      - 'go.sum'
+      - 'charts/**'
+      - 'test/kind/**'
+      - 'test/migrate/**'
+      - '.github/workflows/migrate-rehearsal.yml'
+  workflow_dispatch:
+    inputs:
+      services-from-main:
+        description: Build every service from its main branch instead of the refs in test/kind/services.txt
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: migrate-rehearsal-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  rehearsal:
+    name: 🔁 Migration rehearsal on kind
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      KIND_CLUSTER: sneakers
+      KIND_NODE_IMAGE: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+      MIGRATE_IMAGE: ci.example.org/sneakers-migrate:ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install tools
+        run: |
+          scripts/install-tools.sh "$RUNNER_TEMP/bin" helm kind kubectl
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Create the cluster
+        run: kind create cluster --name "$KIND_CLUSTER" --image "$KIND_NODE_IMAGE" --wait 180s
+      - name: Build the service images
+        env:
+          SERVICES_FROM_MAIN: ${{ inputs.services-from-main || false }}
+        run: test/kind/build-images.sh
+      - name: Build the sneakers-migrate image
+        run: |
+          docker build -q -f migrate/Dockerfile -t "$MIGRATE_IMAGE" .
+          kind load docker-image "$MIGRATE_IMAGE" --name "$KIND_CLUSTER"
+      - name: Rehearse
+        env:
+          WORK_DIR: ${{ runner.temp }}/rehearsal
+        run: test/migrate/rehearsal.sh
+      - name: Results
+        if: always()
+        run: cat "$RUNNER_TEMP/rehearsal/results.txt" 2>/dev/null || true
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl -n sneakers get pods,jobs,events -o wide || true
+          for p in $(kubectl -n sneakers get pods -o name 2>/dev/null); do
+            echo "::group::$p"
+            kubectl -n sneakers describe "$p" | tail -30 || true
+            kubectl -n sneakers logs "$p" --all-containers --tail=80 | grep -v "(shown once)" || true
+            echo "::endgroup::"
+          done

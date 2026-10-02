@@ -1,0 +1,39 @@
+{{- /*
+Rehearsal mode, for a migration rehearsal (docs/migrate.md): no automation and
+no way out of the namespace. The chart refuses to render with the connector
+(rotation, heartbeats), the SSH broker (brokered sessions) or the MCP server
+(agent access) turned on, and every pod in the namespace may only reach other
+pods in the namespace and the cluster DNS, so nothing can reach a directory, a
+target or a mail server.
+*/ -}}
+{{- if .Values.rehearsal.enabled }}
+{{- range $svc := list "connector" "sshbroker" "mcp" }}
+{{- if (index $.Values $svc).enabled }}
+{{- fail (printf "rehearsal.enabled needs %s.enabled=false: a rehearsal runs no automation" $svc) }}
+{{- end }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sneakers-rehearsal-egress
+  labels:
+    app.kubernetes.io/part-of: sneakers
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector: {}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.rehearsal.dnsNamespace }}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+{{- end }}

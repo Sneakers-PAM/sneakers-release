@@ -45,6 +45,23 @@ helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml >"$out/sneak
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f test/kind/values.yaml >/dev/null
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set hydra.enabled=true >"$out/sneakers-hydra.yaml"
 
+helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f test/migrate/rehearsal-values.yaml >"$out/sneakers-rehearsal.yaml"
+python3 - "$out/sneakers-rehearsal.yaml" <<'PY'
+import sys, yaml
+docs = [d for d in yaml.safe_load_all(open(sys.argv[1])) if d]
+np = [d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "sneakers-rehearsal-egress"]
+assert np, "rehearsal mode renders no egress policy"
+spec = np[0]["spec"]
+assert spec["podSelector"] == {} and spec["policyTypes"] == ["Egress"], spec
+assert all("ipBlock" not in t for rule in spec["egress"] for t in rule.get("to", [])), "rehearsal egress must not allow an address block"
+for kind in ("Deployment",):
+    names = {d["metadata"]["name"] for d in docs if d["kind"] == kind}
+    for svc in ("connector", "sshbroker", "mcp"):
+        assert not any(svc in n for n in names), f"rehearsal mode renders the {svc}"
+print("ok: rehearsal mode denies egress and runs no automation")
+PY
+if grep -q sneakers-rehearsal-egress "$out/sneakers.yaml"; then fail "the default install renders the rehearsal egress policy"; fi
+
 step "guards and schema refusals"
 must_fail "the umbrella without a vault root key" helm template ci charts/sneakers -n sneakers
 must_fail "a service without its database DSN" helm template ci charts/vault -n sneakers
@@ -72,6 +89,18 @@ helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml \
   --set gateway.ingress.enabled=true --set web-staff.ingress.enabled=true \
   --set web-admin.ingress.enabled=true --set global.sso.enabled=true >"$out/sneakers-web.yaml"
 python3 scripts/check-web.py "$out/sneakers.yaml" "$out/sneakers-web.yaml"
+for svc in connector sshbroker mcp; do
+  must_fail "rehearsal mode with the ${svc} on" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f test/migrate/rehearsal-values.yaml --set "${svc}.enabled=true"
+done
+
+step "sneakers-migrate Job manifests"
+NAMESPACE=sneakers JOB_NAME=sneakers-migrate-import MIGRATE_IMAGE=ci.example.org/sneakers-migrate:ci \
+  COMMAND_ARGS='["import", "--bundle", "/bundle/bundle.age", "--identity", "/key/import.key"]' \
+  envsubst <migrate/deploy/import-job.yaml >"$out/migrate-import.yaml"
+SOURCE_NAMESPACE=sneakers-old MIGRATE_IMAGE=ci.example.org/sneakers-migrate:ci HOLDER_IMAGE=ci.example.org/holder:ci \
+  RECIPIENT=age1example envsubst <migrate/deploy/export-job.yaml >"$out/migrate-export.yaml"
+NAMESPACE=sneakers envsubst <migrate/deploy/rehearsal-egress.yaml >"$out/migrate-egress.yaml"
+if grep -h -v '^[[:space:]]*#' "$out"/migrate-*.yaml | grep -q '\${'; then fail "a Job manifest placeholder was not filled"; fi
 
 step "kubeconform (Kubernetes ${KUBE_VERSION})"
 kubeconform -strict -summary -kubernetes-version "${KUBE_VERSION}" "$out"/*.yaml

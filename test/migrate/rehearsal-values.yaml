@@ -1,0 +1,18 @@
+# Rehearsal mode for a migration rehearsal: no automation, no egress out of
+# the namespace, and the vault accepts sneakers-migrate's import principal.
+# Layer it over the install's own values (test/kind/values.yaml here).
+rehearsal:
+  enabled: true
+
+connector:
+  enabled: false
+
+sshbroker:
+  enabled: false
+
+mcp:
+  enabled: false
+
+vault:
+  env:
+    VAULT_IMPORT_PRINCIPALS: system:sneakers-migrate
