@@ -10,11 +10,17 @@ spec:
     matchLabels:
       {{- include "postgres.selectorLabels" . | nindent 6 }}
   policyTypes: [Ingress]
+  {{- if .Values.networkPolicy.from }}
   ingress:
     - from:
+        {{- range .Values.networkPolicy.from }}
         - podSelector:
             matchLabels:
-              app.kubernetes.io/part-of: sneakers
+              {{- toYaml . | nindent 14 }}
+        {{- end }}
       ports:
         - port: postgres
+  {{- else }}
+  ingress: []
+  {{- end }}
 {{- end }}

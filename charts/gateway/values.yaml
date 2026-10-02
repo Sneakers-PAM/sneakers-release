@@ -69,7 +69,7 @@ env:
   # Hydra) is configured.
   HYDRA_ENABLED: "false"
   HYDRA_ISSUER: ""
-  HYDRA_JWKS_URL: http://sneakers-hydra-public/.well-known/jwks.json
+  HYDRA_JWKS_URL: http://sneakers-hydra-public:4444/.well-known/jwks.json
   HYDRA_AUDIENCE: sneakers-mcp
 requiredEnv: []
 

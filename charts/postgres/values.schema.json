@@ -61,7 +61,13 @@
     "networkPolicy": {
       "type": "object",
       "additionalProperties": false,
-      "properties": { "enabled": { "type": "boolean" } }
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "from": {
+          "type": "array",
+          "items": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string" } }
+        }
+      }
     },
     "podAnnotations": { "type": "object" },
     "nodeSelector": { "type": "object" },

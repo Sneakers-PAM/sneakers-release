@@ -57,10 +57,23 @@ securityContext:
   capabilities:
     drop: [ALL]
 
-# Only pods labelled app.kubernetes.io/part-of: sneakers in this namespace may
-# connect.
+# Only the pods matching one of these label sets, in this namespace, may
+# connect: the services with a database, and the bundled Kratos and Hydra.
 networkPolicy:
   enabled: true
+  from:
+    - app.kubernetes.io/part-of: sneakers
+      app.kubernetes.io/component: identity
+    - app.kubernetes.io/part-of: sneakers
+      app.kubernetes.io/component: vault
+    - app.kubernetes.io/part-of: sneakers
+      app.kubernetes.io/component: workflow
+    - app.kubernetes.io/part-of: sneakers
+      app.kubernetes.io/component: audit
+    - app.kubernetes.io/part-of: sneakers
+      app.kubernetes.io/name: kratos
+    - app.kubernetes.io/part-of: sneakers
+      app.kubernetes.io/name: hydra
 
 podAnnotations: {}
 nodeSelector: {}

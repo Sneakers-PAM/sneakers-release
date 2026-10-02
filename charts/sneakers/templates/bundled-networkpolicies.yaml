@@ -1,0 +1,80 @@
+{{- /*
+NetworkPolicies for the bundled Kratos and Hydra; their charts ship none. Each
+port admits only the pieces that call it. Ports are the container ports. The
+admin ports also admit the piece's own pods, for the chart's helm test pod,
+which carries the same labels and can't be turned off.
+*/ -}}
+{{- define "sneakers.bundledPeer" -}}
+- podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: sneakers
+      app.kubernetes.io/component: {{ .component }}
+      app.kubernetes.io/instance: {{ .release }}
+{{- end -}}
+{{- $np := .Values.bundledNetworkPolicies }}
+{{- if and $np.enabled .Values.kratos.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Values.kratos.fullnameOverride }}
+  labels:
+    app.kubernetes.io/part-of: sneakers
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kratos
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- include "sneakers.bundledPeer" (dict "component" "gateway" "release" .Release.Name) | nindent 8 }}
+        {{- with $np.kratosPublicFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        - port: {{ .Values.kratos.kratos.config.serve.public.port }}
+    - from:
+        {{- include "sneakers.bundledPeer" (dict "component" "identity" "release" .Release.Name) | nindent 8 }}
+        {{- include "sneakers.bundledPeer" (dict "component" "gateway" "release" .Release.Name) | nindent 8 }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kratos
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - port: {{ .Values.kratos.kratos.config.serve.admin.port }}
+{{- end }}
+{{- if and $np.enabled .Values.hydra.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Values.hydra.fullnameOverride }}
+  labels:
+    app.kubernetes.io/part-of: sneakers
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: hydra
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- include "sneakers.bundledPeer" (dict "component" "gateway" "release" .Release.Name) | nindent 8 }}
+        {{- include "sneakers.bundledPeer" (dict "component" "mcp" "release" .Release.Name) | nindent 8 }}
+        {{- with $np.hydraPublicFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        - port: {{ .Values.hydra.hydra.config.serve.public.port }}
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: hydra
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - port: {{ .Values.hydra.hydra.config.serve.admin.port }}
+{{- end }}

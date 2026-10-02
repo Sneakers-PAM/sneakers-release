@@ -123,6 +123,20 @@ The MCP server's own egress allows only DNS, the gateway's HTTP port and the bun
 public port. With an external Hydra or an OTLP collector, add a rule to
 `mcp.networkPolicy.egress`.
 
+The bundled pieces take only the services that use them:
+
+| Piece | Port | Callers |
+|---|---|---|
+| Kratos public | 4433 | gateway, plus `bundledNetworkPolicies.kratosPublicFrom` |
+| Kratos admin | 4434 | identity, gateway, and Kratos's own pods (its chart's `helm test` pod) |
+| Hydra public | 4444 | gateway, mcp, plus `bundledNetworkPolicies.hydraPublicFrom` (default: any pod, for OAuth clients coming through the edge) |
+| Hydra admin | 4445 | only Hydra's own pods (its chart's `helm test` pod). No service calls it; manage its clients with `kubectl port-forward`. |
+| Valkey | 6379 | gateway, vault, notify, sshbroker |
+| PostgreSQL | 5432 | identity, vault, workflow, audit, Kratos, Hydra |
+
+If you expose Kratos's public API through your ingress, add the ingress controller to
+`bundledNetworkPolicies.kratosPublicFrom`.
+
 The callees fetch the cluster's signing keys from `https://kubernetes.default.svc/openid/v1/jwks`
 with their own API token. If your cluster's issuer differs (check with
 `kubectl get --raw /.well-known/openid-configuration`), set

@@ -57,9 +57,19 @@ declare -A callers=(
   [connector]=""
 )
 declare -A grpc_port=([vault]=9091 [workflow]=9193 [sshbroker]=9096 [audit]=9194 [notify]=9195 [identity]=9192 [connector]=9196)
-edge_targets="sneakers-gateway:9100 sneakers-sshbroker:9097"
+# The bundled pieces, by Service address: the services allowed to connect
+# (scripts/check-edges.py has the same table).
+declare -A bundled=(
+  [sneakers-kratos-public:80]="gateway"
+  [sneakers-kratos-admin:80]="identity gateway"
+  [sneakers-hydra-admin:4445]=""
+  [sneakers-valkey:6379]="gateway vault notify sshbroker"
+  [sneakers-postgres:5432]="identity vault workflow audit"
+)
+edge_targets="sneakers-gateway:9100 sneakers-sshbroker:9097 sneakers-hydra-public:4444"
 targets="$edge_targets"
 for svc in "${!grpc_port[@]}"; do targets+=" sneakers-${svc}:${grpc_port[$svc]}"; done
+for t in "${!bundled[@]}"; do targets+=" $t"; done
 
 # pod <name> <component or -> <service account> <image> <script>: a one-shot
 # pod. With a component it carries that service's component labels, which its
@@ -116,10 +126,14 @@ want() { # <probe> <host:port>: open or refused
   local probe="$1" target="$2" svc port
   svc="${target%%:*}"; svc="${svc#sneakers-}"; port="${target#*:}"
   if [ "$probe" = mcp ]; then
-    [ "$target" = sneakers-gateway:9100 ] && echo open || echo refused
+    case "$target" in sneakers-gateway:9100 | sneakers-hydra-public:4444) echo open ;; *) echo refused ;; esac
     return
   fi
   case " $edge_targets " in *" $target "*) echo open; return ;; esac
+  if [ -n "${bundled[$target]+set}" ]; then
+    case " ${bundled[$target]} " in *" $probe "*) echo open ;; *) echo refused ;; esac
+    return
+  fi
   if [ "$port" = "${grpc_port[$svc]:-}" ]; then
     case " ${callers[$svc]} " in *" $probe "*) echo open; return ;; esac
   fi
