@@ -57,14 +57,6 @@ env:
   AUDIT_ADDR: sneakers-audit:9194
   NOTIFY_ADDR: sneakers-notify:9195
   VAULT_DISABLE_DEV_STATIC_KEK: "true"
-  # Connector worker identity: projected ServiceAccount tokens checked against
-  # the cluster's issuer. Read the issuer with
-  # `kubectl get --raw /.well-known/openid-configuration`.
-  WORKLOAD_OIDC_ISSUER: https://kubernetes.default.svc.cluster.local
-  WORKLOAD_OIDC_JWKS_URL: https://kubernetes.default.svc/openid/v1/jwks
-  WORKLOAD_OIDC_CA_FILE: /var/run/secrets/tokens/ca.crt
-  WORKLOAD_OIDC_BEARER_FILE: /var/run/secrets/tokens/token
-  WORKLOAD_ALLOWED_SERVICEACCOUNTS: "{{ .Release.Namespace }}/sneakers-connector"
 requiredEnv: [DATABASE_DSN]
 
 # Secret-backed settings, by variable name. Each one reads key from the
@@ -123,13 +115,30 @@ serviceAccount:
   automountToken: false
 
 projectedToken:
-  enabled: true
+  enabled: false
   audience: ""
   expirationSeconds: 3600
   mountPath: /var/run/secrets/tokens
   path: token
-  clusterCA: true
+  clusterCA: false
   envName: ""
+
+# Service-to-service authentication. caller mounts a projected token with
+# audience `audience` at /var/run/secrets/sneakers/token (WORKLOAD_TOKEN_FILE),
+# sent on every gRPC call this service makes. callers are the services allowed
+# to reach this service's main port: the NetworkPolicy admits only them, and
+# with verify the service checks their tokens against the cluster's issuer
+# (WORKLOAD_OIDC_* and WORKLOAD_ALLOWED_SERVICEACCOUNTS, with an API token and
+# the cluster CA at /var/run/secrets/tokens). Read the issuer with
+# `kubectl get --raw /.well-known/openid-configuration`.
+workloadIdentity:
+  caller: true
+  verify: true
+  callers: [gateway, workflow, sshbroker, connector]
+  audience: sneakers
+  expirationSeconds: 3600
+  issuer: https://kubernetes.default.svc.cluster.local
+  jwksURL: https://kubernetes.default.svc/openid/v1/jwks
 
 # One key of a ConfigMap holding a PEM bundle, pointed to by envName. Go's
 # SSL_CERT_FILE replaces the system roots, so the bundle must carry every root

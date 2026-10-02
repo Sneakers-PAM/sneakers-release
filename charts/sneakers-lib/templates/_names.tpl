@@ -42,3 +42,12 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | 
 {{- define "sneakers.logFormat" -}}
 {{- .Values.logFormat | default ((.Values.global).logFormat) | default "json" -}}
 {{- end -}}
+
+{{/*
+Where the workload identity tokens are mounted. The services read these paths
+from the env the chart sets: the caller token (audience workloadIdentity.audience)
+that a service sends on its gRPC calls, and the API token plus the cluster CA a
+callee uses to fetch the cluster's signing keys.
+*/}}
+{{- define "sneakers.callerTokenDir" -}}/var/run/secrets/sneakers{{- end -}}
+{{- define "sneakers.verifierDir" -}}/var/run/secrets/tokens{{- end -}}

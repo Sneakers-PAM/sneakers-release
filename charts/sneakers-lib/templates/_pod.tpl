@@ -3,6 +3,12 @@
 {{- if .Values.projectedToken.enabled }}
 {{- $mounts = append $mounts (dict "name" "workload-token" "mountPath" .Values.projectedToken.mountPath "readOnly" true) }}
 {{- end }}
+{{- if .Values.workloadIdentity.caller }}
+{{- $mounts = append $mounts (dict "name" "workload-caller" "mountPath" (include "sneakers.callerTokenDir" .) "readOnly" true) }}
+{{- end }}
+{{- if .Values.workloadIdentity.verify }}
+{{- $mounts = append $mounts (dict "name" "workload-verifier" "mountPath" (include "sneakers.verifierDir" .) "readOnly" true) }}
+{{- end }}
 {{- if .Values.caBundle.configMap }}
 {{- $mounts = append $mounts (dict "name" "ca-bundle" "mountPath" .Values.caBundle.mountPath "readOnly" true) }}
 {{- end }}
@@ -20,6 +26,18 @@
 {{- $sources = append $sources (dict "configMap" (dict "name" "kube-root-ca.crt" "items" (list (dict "key" "ca.crt" "path" "ca.crt")))) }}
 {{- end }}
 {{- $volumes = append $volumes (dict "name" "workload-token" "projected" (dict "sources" $sources)) }}
+{{- end }}
+{{- end }}
+{{- with .Values.workloadIdentity }}
+{{- if .caller }}
+{{- $token := dict "audience" .audience "expirationSeconds" (int .expirationSeconds) "path" "token" }}
+{{- $volumes = append $volumes (dict "name" "workload-caller" "projected" (dict "sources" (list (dict "serviceAccountToken" $token)))) }}
+{{- end }}
+{{- if .verify }}
+{{- $sources := list
+  (dict "serviceAccountToken" (dict "expirationSeconds" (int .expirationSeconds) "path" "token"))
+  (dict "configMap" (dict "name" "kube-root-ca.crt" "items" (list (dict "key" "ca.crt" "path" "ca.crt")))) }}
+{{- $volumes = append $volumes (dict "name" "workload-verifier" "projected" (dict "sources" $sources)) }}
 {{- end }}
 {{- end }}
 {{- with .Values.caBundle }}

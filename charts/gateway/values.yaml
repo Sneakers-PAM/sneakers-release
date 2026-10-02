@@ -90,6 +90,19 @@ secretEnv:
     secretName: ""
     key: POLIS_API_KEY
     required: false
+
+# SAML single sign-on through your Ory Polis. enabled sets POLIS_PUBLIC_URL
+# (the Polis URL the browser is sent to) and POLIS_CLIENT_SECRET, read from
+# key in the Secret clientSecret.secretName: the CLIENT_SECRET_VERIFIER your
+# Polis runs with. Both are required when enabled; there is no default secret,
+# and the gateway refuses Polis's development value. Set the other POLIS_*
+# settings in env.
+sso:
+  enabled: false
+  publicURL: ""
+  clientSecret:
+    secretName: ""
+    key: POLIS_CLIENT_SECRET
 # Secrets loaded whole as environment variables.
 envFromSecrets: []
 # Extra container env, Kubernetes format.
@@ -132,6 +145,23 @@ projectedToken:
   clusterCA: false
   envName: ""
 
+# Service-to-service authentication. caller mounts a projected token with
+# audience `audience` at /var/run/secrets/sneakers/token (WORKLOAD_TOKEN_FILE),
+# sent on every gRPC call this service makes. callers are the services allowed
+# to reach this service's main port: the NetworkPolicy admits only them, and
+# with verify the service checks their tokens against the cluster's issuer
+# (WORKLOAD_OIDC_* and WORKLOAD_ALLOWED_SERVICEACCOUNTS, with an API token and
+# the cluster CA at /var/run/secrets/tokens). Read the issuer with
+# `kubectl get --raw /.well-known/openid-configuration`.
+workloadIdentity:
+  caller: true
+  verify: false
+  callers: [mcp]
+  audience: sneakers
+  expirationSeconds: 3600
+  issuer: https://kubernetes.default.svc.cluster.local
+  jwksURL: https://kubernetes.default.svc/openid/v1/jwks
+
 # One key of a ConfigMap holding a PEM bundle, pointed to by envName. Go's
 # SSL_CERT_FILE replaces the system roots, so the bundle must carry every root
 # the service needs.
@@ -146,7 +176,7 @@ extraVolumeMounts: []
 
 networkPolicy:
   enabled: true
-  # Peers allowed on ingressPorts besides this release's own pods: the
+  # Peers allowed on ingressPorts besides workloadIdentity.callers: the
   # ingress controller. The default is any pod in the cluster; narrow it to
   # your controller's namespace.
   ingressFrom:

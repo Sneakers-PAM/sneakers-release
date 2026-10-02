@@ -68,13 +68,15 @@ automountServiceAccountToken: false
 {{- end -}}
 
 {{/*
-Ingress is allowed only from pods of this release (app.kubernetes.io/part-of:
-sneakers in the same namespace) and from the peers in
-networkPolicy.ingressFrom, which an edge service uses for its ingress
-controller.
+Ingress on the main port is allowed only from the services named in
+workloadIdentity.callers (matched by their component label in this release),
+and from the peers in networkPolicy.ingressFrom on networkPolicy.ingressPorts,
+which an edge service uses for its ingress controller. Everything else is
+refused, including other pods of the release.
 */}}
 {{- define "sneakers.networkPolicy" -}}
 {{- if .Values.networkPolicy.enabled }}
+{{- $callers := .Values.workloadIdentity.callers }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -90,16 +92,18 @@ spec:
     {{- if .Values.networkPolicy.egress }}
     - Egress
     {{- end }}
+  {{- if or $callers .Values.networkPolicy.ingressFrom }}
   ingress:
+    {{- range $callers }}
     - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/part-of: sneakers
+              app.kubernetes.io/component: {{ . }}
+              app.kubernetes.io/instance: {{ $.Release.Name }}
       ports:
-        - port: {{ .Values.service.portName }}
-        {{- range .Values.service.extraPorts }}
-        - port: {{ .name }}
-        {{- end }}
+        - port: {{ $.Values.service.portName }}
+    {{- end }}
     {{- with .Values.networkPolicy.ingressFrom }}
     - from:
         {{- toYaml . | nindent 8 }}
@@ -108,6 +112,9 @@ spec:
         - port: {{ . }}
         {{- end }}
     {{- end }}
+  {{- else }}
+  ingress: []
+  {{- end }}
   {{- with .Values.networkPolicy.egress }}
   egress:
     {{- toYaml . | nindent 4 }}

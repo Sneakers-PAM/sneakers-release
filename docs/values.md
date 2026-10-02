@@ -68,12 +68,20 @@ All nine service charts take the same values. Each one also works on its own, ou
 | `podSecurityContext` | non-root (65532), `RuntimeDefault` seccomp | `runAsNonRoot` must stay true. |
 | `securityContext` | read-only root filesystem, no privilege escalation, all capabilities dropped | `readOnlyRootFilesystem` must stay true and `allowPrivilegeEscalation` false. |
 | `serviceAccount.*` | one per service, no token mounted | `create`, `name`, `automountToken`. |
-| `projectedToken.*` | on for vault and connector | A kubelet-rotated ServiceAccount token: `audience`, `expirationSeconds`, `mountPath`, `path`, `clusterCA` (also mount the cluster CA), `envName` (a variable set to the token's path). |
+| `projectedToken.*` | off | An extra kubelet-rotated ServiceAccount token: `audience`, `expirationSeconds`, `mountPath`, `path`, `clusterCA` (also mount the cluster CA), `envName` (a variable set to the token's path). It can't use the workload identity paths below. |
+| `workloadIdentity.caller` | on for every service that makes gRPC calls | Mount a token with audience `workloadIdentity.audience` at `/var/run/secrets/sneakers/token` and set `WORKLOAD_TOKEN_FILE` to it. The service sends it on every gRPC call. |
+| `workloadIdentity.callers` | the service's callers ([install.md](install.md#service-to-service-traffic)) | The services allowed to call this one's main port. The NetworkPolicy admits only their pods there. |
+| `workloadIdentity.verify` | on for vault, workflow, sshbroker, audit, notify and identity | Check the callers' tokens: sets `WORKLOAD_OIDC_ISSUER`, `WORKLOAD_OIDC_JWKS_URL`, `WORKLOAD_OIDC_CA_FILE`, `WORKLOAD_OIDC_BEARER_FILE`, `WORKLOAD_AUDIENCE` and `WORKLOAD_ALLOWED_SERVICEACCOUNTS` (`<namespace>/sneakers-<caller>` for each caller), and mounts an API token and the cluster CA at `/var/run/secrets/tokens` for the key fetch. Needs `callers`. |
+| `workloadIdentity.audience`, `expirationSeconds` | `sneakers`, `3600` | The caller token's audience and lifetime. |
+| `workloadIdentity.issuer`, `jwksURL` | the in-cluster issuer and JWKS | Where a callee checks the tokens. Both must be https. |
+| `sso.enabled` | `false` | Gateway only. SAML single sign-on through your Ory Polis: sets `POLIS_PUBLIC_URL` and `POLIS_CLIENT_SECRET`. Requires `sso.publicURL` and `sso.clientSecret.secretName`. Setting `env.POLIS_PUBLIC_URL` without it is refused. |
+| `sso.publicURL` | (empty) | `POLIS_PUBLIC_URL`, the Polis URL the browser is sent to. |
+| `sso.clientSecret.secretName`, `key` | (empty), `POLIS_CLIENT_SECRET` | The Secret and key holding `POLIS_CLIENT_SECRET`: the `CLIENT_SECRET_VERIFIER` your Polis runs with. There is no default value; the gateway refuses to start with Polis's development value. |
 | `caBundle.*` | off | One key of a ConfigMap with a PEM bundle, pointed to by `envName` (`SSL_CERT_FILE`). The bundle replaces the system roots, so it must hold every root the service needs. |
 | `extraVolumes`, `extraVolumeMounts` | `[]` | |
-| `networkPolicy.enabled` | `true` | Ingress only from this release's pods (`app.kubernetes.io/part-of: sneakers`). |
+| `networkPolicy.enabled` | `true` | Ingress on the main port only from the services in `workloadIdentity.callers`; nothing else from the release. |
 | `networkPolicy.ingressFrom`, `networkPolicy.ingressPorts` | any pod in the cluster, on `http`, for gateway, mcp and sshbroker; none for the rest | More peers, for the ingress controller. |
-| `networkPolicy.egress` | `[]` | Egress rules. Empty means no egress policy. |
+| `networkPolicy.egress` | `[]` (DNS, the gateway and Hydra for mcp) | Egress rules. Empty means no egress policy. |
 | `ingress.*` | off | `enabled`, `className`, `host` (default `global.host` for the edge services), `annotations`, `tlsSecretName`, `paths` (each `{path, pathType, portName}`). |
 | `migrations.job.*` | off | A pre-upgrade Job running the image with `args`. Off until the services have a migrate-only command; they migrate at start today. |
 | `podLabels`, `podAnnotations`, `priorityClassName`, `terminationGracePeriodSeconds`, `nodeSelector`, `tolerations`, `affinity` | | Pod placement and metadata. |
@@ -90,7 +98,7 @@ All nine service charts take the same values. Each one also works on its own, ou
 | notify | 9195 | | `REDIS_URL` (required) | The inboxes live in Valkey or Redis. |
 | connector | 9196 (health) | | | Sends a projected token with audience `sneakers-vault`. Mount a CA bundle with `caBundle` for LDAPS to a private CA. |
 | sshbroker | 9096, 9097 | | `REDIS_URL` | Without Redis the tickets stay in memory: run one replica. |
-| gateway | 9100 | | `REDIS_URL` (required), `SETUP_TOKEN`, `POLIS_API_KEY` | `AUTH_MODE=real`, secure cookies, MFA enforced. |
+| gateway | 9100 | | `REDIS_URL` (required), `SETUP_TOKEN`, `POLIS_API_KEY`, `POLIS_CLIENT_SECRET` (with `sso.enabled`) | `AUTH_MODE=real`, secure cookies, MFA enforced. |
 | mcp | 9101 | | | Accepts service-account and personal tokens; Hydra JWTs once `HYDRA_ISSUER` is set. |
 
 ## The bundled PostgreSQL (`charts/postgres`)

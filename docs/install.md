@@ -99,6 +99,36 @@ and `/.well-known/oauth-protected-resource`; the SSH broker `/ssh` (a WebSocket)
 services' NetworkPolicies let any pod in the cluster reach their HTTP port; set
 `<service>.networkPolicy.ingressFrom` to your ingress controller's namespace to narrow that.
 
+## Service-to-service traffic
+
+Every gRPC call between the services carries the caller's projected ServiceAccount token
+(audience `sneakers`), and the callee checks it against the cluster's issuer and refuses a
+service account that isn't one of its callers. Each service runs as its own service account,
+`sneakers-<service>`. The NetworkPolicies admit, on each service's main port, only the callers
+below; any other pod, including the other pods of the release, can't connect.
+
+| Service | Callers |
+|---|---|
+| vault | gateway, workflow, sshbroker, connector |
+| workflow | gateway |
+| sshbroker (gRPC) | gateway. Its WebSocket port is open to the edge. |
+| audit | gateway, vault, sshbroker, identity, workflow |
+| notify | vault, gateway |
+| identity | gateway, notify |
+| connector | none (health probes only) |
+| gateway (HTTP) | the edge and mcp |
+| mcp (HTTP) | the edge |
+
+The MCP server's own egress allows only DNS, the gateway's HTTP port and the bundled Hydra's
+public port. With an external Hydra or an OTLP collector, add a rule to
+`mcp.networkPolicy.egress`.
+
+The callees fetch the cluster's signing keys from `https://kubernetes.default.svc/openid/v1/jwks`
+with their own API token. If your cluster's issuer differs (check with
+`kubectl get --raw /.well-known/openid-configuration`), set
+`<service>.workloadIdentity.issuer` and `jwksURL` on vault, workflow, sshbroker, audit, notify and
+identity.
+
 ## Bring your own
 
 Each bundled piece can be turned off and replaced with your own. The services take every address
@@ -158,8 +188,23 @@ gateway `HYDRA_ENABLED: "true"` and `HYDRA_ISSUER`, and on mcp `HYDRA_ISSUER` an
 
 ### Single sign-on
 
-SAML single sign-on goes through Ory Polis, which isn't bundled. Point the gateway's `POLIS_*`
-settings at your own (see the gateway's configuration docs).
+SAML single sign-on goes through Ory Polis, which isn't bundled. Put the client secret your Polis
+checks (its `CLIENT_SECRET_VERIFIER`) in a Secret, then turn SSO on:
+
+```yaml
+gateway:
+  sso:
+    enabled: true
+    publicURL: https://sso.example.org
+    clientSecret:
+      secretName: sneakers-polis
+  env:
+    POLIS_ISSUER_URL: http://polis.polis.svc:5225
+    POLIS_TENANT: example.org
+```
+
+The gateway refuses to start with SSO on and no client secret, or Polis's development value. The
+other `POLIS_*` settings are in the gateway's configuration docs.
 
 ## Upgrades
 

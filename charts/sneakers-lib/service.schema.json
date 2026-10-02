@@ -156,6 +156,49 @@
         "envName": { "type": "string" }
       }
     },
+    "sso": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "publicURL": { "type": "string" },
+        "clientSecret": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "secretName": { "type": "string" },
+            "key": { "type": "string", "minLength": 1 }
+          }
+        }
+      },
+      "if": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] },
+      "then": {
+        "required": ["publicURL", "clientSecret"],
+        "properties": {
+          "publicURL": { "pattern": "^https?://" },
+          "clientSecret": { "required": ["secretName"], "properties": { "secretName": { "minLength": 1 } } }
+        }
+      }
+    },
+    "workloadIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "caller": { "type": "boolean" },
+        "verify": { "type": "boolean" },
+        "callers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["identity", "vault", "workflow", "audit", "notify", "connector", "sshbroker", "gateway", "mcp"]
+          }
+        },
+        "audience": { "type": "string", "minLength": 1 },
+        "expirationSeconds": { "type": "integer", "minimum": 600 },
+        "issuer": { "type": "string", "pattern": "^https://" },
+        "jwksURL": { "type": "string", "pattern": "^https://" }
+      }
+    },
     "caBundle": {
       "type": "object",
       "additionalProperties": false,

@@ -17,6 +17,9 @@ Two things to know before changing it:
 - The service charts share their templates (`charts/sneakers-lib`) and one values schema
   (`charts/sneakers-lib/service.schema.json`). Edit the schema there and run
   `scripts/sync-schemas.sh`.
+- The call graph lives in each chart's `workloadIdentity.callers`, which drives both the
+  NetworkPolicy and the callee's allowed service accounts. `scripts/check-edges.py` and
+  `test/kind/run.sh` hold the same table; change all three together, with docs/install.md.
 
 ## Layout
 
@@ -27,7 +30,7 @@ Two things to know before changing it:
 - `charts/sneakers/` - the umbrella: dependencies, the bundled Secrets, the `helm test` pod
 - `manifest/release.yaml` - the pinned release
 - `scripts/` - `install-tools.sh` (pinned, checksum-checked tools), `check-charts.sh`, the
-  manifest and defaults checks, `sync-schemas.sh`
+  manifest, defaults and edges checks, `sync-schemas.sh`
 - `test/ci/` - values for rendering in CI; `test/kind/` - the install test
 - `docs/` - install, values, and the manual release checks
 
@@ -35,7 +38,7 @@ Two things to know before changing it:
 
 - Tools: `scripts/install-tools.sh bin helm kubeconform` (add `kind kubectl` for the install test)
 - Chart checks: `PATH="$PWD/bin:$PATH" scripts/check-charts.sh` (lint, render, schema refusals,
-  kubeconform, production-safe defaults, manifest)
+  kubeconform, production-safe defaults, service-to-service edges, manifest)
 - Install test: create a kind cluster, then `test/kind/build-images.sh` and `test/kind/run.sh`
 - Lint: `yamllint .` and `actionlint`
 - Chart dependencies are resolved by `helm dependency build`; the `charts/*/charts/` archives are

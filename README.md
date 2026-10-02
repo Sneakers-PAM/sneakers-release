@@ -59,12 +59,13 @@ Secret with the database: without it no stored secret can be opened.
 
 ```bash
 scripts/install-tools.sh bin helm kubeconform   # pinned, checksum-checked tools
-PATH="$PWD/bin:$PATH" scripts/check-charts.sh  # lint, render, schemas, defaults, manifest
+PATH="$PWD/bin:$PATH" scripts/check-charts.sh  # lint, render, schemas, defaults, edges, manifest
 ```
 
 The install test (`test/kind/run.sh`, run by the Install Test workflow) builds every service image
 from its repository, installs the umbrella on a throwaway kind cluster, upgrades it in place, runs
-`helm test` and checks the NetworkPolicies.
+`helm test` and checks that each service's port takes only its callers, and that a callee refuses a
+caller with the wrong service account.
 
 ## ⚖️ License
 
