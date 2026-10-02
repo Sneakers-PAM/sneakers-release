@@ -104,8 +104,15 @@ PY
 
 step "target: the umbrella chart in rehearsal mode"
 scripts/build-deps.sh >/dev/null
+# The services that check caller tokens fetch the cluster's signing keys from
+# the API server, the one address rehearsal mode lets them reach.
+api_ips="$(kubectl get endpoints kubernetes -n default -o jsonpath='{range .subsets[*].addresses[*]}{.ip}/32,{end}')"
+api_port="$(kubectl get endpoints kubernetes -n default -o jsonpath='{.subsets[0].ports[0].port}')"
+[ -n "$api_ips" ] && [ -n "$api_port" ] || fail "could not read the API server endpoints"
 helm install "$release" charts/sneakers -n "$ns" --create-namespace \
-  -f test/kind/values.yaml -f test/migrate/rehearsal-values.yaml --wait --timeout "$timeout"
+  -f test/kind/values.yaml -f test/migrate/rehearsal-values.yaml \
+  --set "rehearsal.apiServer.addresses={${api_ips%,}}" --set "rehearsal.apiServer.port=${api_port}" \
+  --wait --timeout "$timeout"
 kubectl -n "$ns" get pods
 
 step "target: the import key"

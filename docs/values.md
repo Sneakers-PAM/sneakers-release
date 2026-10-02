@@ -18,6 +18,8 @@ chart by `scripts/sync-schemas.sh`.
 | `<service>.enabled` | `true` | Install that service: `identity`, `vault`, `workflow`, `audit`, `notify`, `connector`, `sshbroker`, `gateway`, `mcp`, `web-staff`, `web-admin`. |
 | `rehearsal.enabled` | `false` | Migration rehearsal mode ([migrate.md](migrate.md)): a deny-all egress NetworkPolicy for the namespace (other pods in it and the cluster DNS only), and the chart refuses to render with `connector`, `sshbroker` or `mcp` enabled. Never on for production. |
 | `rehearsal.dnsNamespace` | `kube-system` | The namespace of the cluster DNS the rehearsal policy still allows. |
+| `rehearsal.apiServer.addresses` | `[]` | The Kubernetes API server's endpoint addresses as CIDRs (`kubectl get endpoints kubernetes -n default`). Only the services that check caller tokens may reach them, to fetch the cluster's signing keys. Required with rehearsal mode on. |
+| `rehearsal.apiServer.port` | `6443` | The API server endpoint port. |
 | `global.sso.enabled` | `false` | `SSO_ENABLED` for both web apps: shows the single sign-on button. Turn it on with the gateway's SSO settings. |
 | `<service>.*` | | That service chart's values (next section). The umbrella sets each database DSN and points each `secretEnv` at the bundled Secrets. |
 | `postgres.enabled` | `true` | The bundled PostgreSQL (`charts/postgres`). |

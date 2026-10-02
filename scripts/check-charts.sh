@@ -45,7 +45,10 @@ helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml >"$out/sneak
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f test/kind/values.yaml >/dev/null
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set hydra.enabled=true >"$out/sneakers-hydra.yaml"
 
-helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f test/migrate/rehearsal-values.yaml >"$out/sneakers-rehearsal.yaml"
+# The API server address a cluster's rehearsal names (test/migrate/rehearsal.sh reads it from the
+# kubernetes endpoints); a documentation address here.
+rehearsal_api=(--set 'rehearsal.apiServer.addresses={192.0.2.10/32}' --set rehearsal.apiServer.port=6443)
+helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f test/migrate/rehearsal-values.yaml "${rehearsal_api[@]}" >"$out/sneakers-rehearsal.yaml"
 python3 - "$out/sneakers-rehearsal.yaml" <<'PY'
 import sys, yaml
 docs = [d for d in yaml.safe_load_all(open(sys.argv[1])) if d]
@@ -53,7 +56,16 @@ np = [d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] 
 assert np, "rehearsal mode renders no egress policy"
 spec = np[0]["spec"]
 assert spec["podSelector"] == {} and spec["policyTypes"] == ["Egress"], spec
-assert all("ipBlock" not in t for rule in spec["egress"] for t in rule.get("to", [])), "rehearsal egress must not allow an address block"
+assert all("ipBlock" not in t for rule in spec["egress"] for t in rule.get("to", [])), "the namespace-wide rehearsal egress must not allow an address block"
+# The services that check caller tokens fetch the cluster's signing keys from
+# the API server; only they, and only there.
+api = [d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "sneakers-rehearsal-api-server"]
+assert api, "rehearsal mode renders no API server egress for the token checkers"
+a = api[0]["spec"]
+checkers = sorted(["identity", "vault", "workflow", "audit", "notify", "sshbroker"])
+assert a["podSelector"] == {"matchExpressions": [{"key": "app.kubernetes.io/component", "operator": "In", "values": checkers}]}, a["podSelector"]
+assert a["policyTypes"] == ["Egress"], a
+assert a["egress"] == [{"to": [{"ipBlock": {"cidr": "192.0.2.10/32"}}], "ports": [{"port": 6443, "protocol": "TCP"}]}], a["egress"]
 for kind in ("Deployment",):
     names = {d["metadata"]["name"] for d in docs if d["kind"] == kind}
     for svc in ("connector", "sshbroker", "mcp"):
@@ -110,8 +122,9 @@ helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml \
   --set gateway.ingress.enabled=true --set web-staff.ingress.enabled=true \
   --set web-admin.ingress.enabled=true --set global.sso.enabled=true >"$out/sneakers-web.yaml"
 python3 scripts/check-web.py "$out/sneakers.yaml" "$out/sneakers-web.yaml"
+must_fail "rehearsal mode without the API server address" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f test/migrate/rehearsal-values.yaml
 for svc in connector sshbroker mcp; do
-  must_fail "rehearsal mode with the ${svc} on" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f test/migrate/rehearsal-values.yaml --set "${svc}.enabled=true"
+  must_fail "rehearsal mode with the ${svc} on" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f test/migrate/rehearsal-values.yaml "${rehearsal_api[@]}" --set "${svc}.enabled=true"
 done
 
 step "sneakers-migrate Job manifests"
@@ -120,7 +133,7 @@ NAMESPACE=sneakers JOB_NAME=sneakers-migrate-import MIGRATE_IMAGE=ci.example.org
   envsubst <migrate/deploy/import-job.yaml >"$out/migrate-import.yaml"
 SOURCE_NAMESPACE=sneakers-old MIGRATE_IMAGE=ci.example.org/sneakers-migrate:ci HOLDER_IMAGE=ci.example.org/holder:ci \
   RECIPIENT=age1example envsubst <migrate/deploy/export-job.yaml >"$out/migrate-export.yaml"
-NAMESPACE=sneakers envsubst <migrate/deploy/rehearsal-egress.yaml >"$out/migrate-egress.yaml"
+NAMESPACE=sneakers API_SERVER_CIDR=192.0.2.10/32 API_SERVER_PORT=6443 envsubst <migrate/deploy/rehearsal-egress.yaml >"$out/migrate-egress.yaml"
 if grep -h -v '^[[:space:]]*#' "$out"/migrate-*.yaml | grep -q '\${'; then fail "a Job manifest placeholder was not filled"; fi
 python3 - "$out/migrate-import.yaml" <<'PY'
 import sys, yaml

@@ -137,7 +137,10 @@ not a person's. The vault admits it to `SealForImport`, `RevealSecretField`, `Ge
   - The umbrella chart's `rehearsal.enabled` renders a deny-all egress NetworkPolicy for the
     namespace (other pods in it and the cluster DNS only), and the chart refuses to render with the
     connector (rotation, heartbeats), the SSH broker (brokered sessions) or the MCP server (agent
-    access) on. `test/migrate/rehearsal-values.yaml` is that layer. For an install that isn't the
+    access) on. The one exception is the Kubernetes API server, from the services that check caller
+    tokens only: they fetch the cluster's signing keys there and refuse every call without them.
+    Name its endpoint in `rehearsal.apiServer` (`kubectl get endpoints kubernetes -n default`); the
+    chart refuses rehearsal mode without it. `test/migrate/rehearsal-values.yaml` is that layer. For an install that isn't the
     umbrella chart, apply `migrate/deploy/rehearsal-egress.yaml`.
   - `import --rehearsal` also turns KEK rotation off and is the only mode that allows
     `--wipe-target` and `--owner-email`.
@@ -221,12 +224,14 @@ mapped differences; it was checked against the original migration chains with a
 Real data is proved once, after the v0.1.0 tag, as a separate QA install on the production cluster
 in rehearsal mode. Every production step needs the owner's explicit yes at the time.
 
-1. **Install QA.** Deploy the tagged release as its own namespace with rehearsal mode on, and the
-   import principal on the vault:
+1. **Install QA.** Deploy the tagged release as its own namespace with rehearsal mode on, the API
+   server endpoint named, and `migrate` on the vault and audit callers:
 
    ```bash
+   kubectl get endpoints kubernetes -n default   # the API server addresses and port
    helm install sneakers charts/sneakers -n sneakers-qa --create-namespace \
-     -f <the install's values> -f test/migrate/rehearsal-values.yaml
+     -f <the install's values> -f test/migrate/rehearsal-values.yaml \
+     --set 'rehearsal.apiServer.addresses={<address>/32}' --set rehearsal.apiServer.port=<port>
    ```
 
    Don't run first-run setup: the import brings the root user.

@@ -28,6 +28,13 @@ rehearsal:
   enabled: false
   # The namespace the cluster DNS runs in.
   dnsNamespace: kube-system
+  # The Kubernetes API server's endpoint addresses (CIDRs) and port, from
+  # `kubectl get endpoints kubernetes`. The services that check caller tokens
+  # fetch the cluster's signing keys there, so only they may reach it. Required
+  # with rehearsal mode on.
+  apiServer:
+    addresses: []
+    port: 6443
 
 # Secrets shared by the bundled pieces: the PostgreSQL passwords, the Valkey
 # password and the REDIS_URL built from it, and the Kratos and Hydra DSNs and
