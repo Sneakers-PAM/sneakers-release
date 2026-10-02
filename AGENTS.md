@@ -35,7 +35,13 @@ Two things to know before changing it:
 - `scripts/` - `install-tools.sh` (pinned, checksum-checked tools), `check-charts.sh`, the
   manifest, defaults, edges and web checks, `sync-schemas.sh`
 - `test/ci/` - values for rendering in CI; `test/kind/` - the install test
-- `docs/` - install, values, and the manual release checks
+- `migrate/` - `sneakers-migrate` (Go, cobra): `cmd/sneakers-migrate`, `internal/` (one package per
+  job: bundle, envelope, chain, kratos, source, mapping, settings, target, verify, report), `test/synth` (the
+  synthetic source), `testdata/source-schema`, `deploy/` (the Job manifests), `Dockerfile`
+- `gen/go/thirdparty/` - vault and audit client stubs from the protos pinned in `proto-refs.env`
+  (`scripts/proto-generate.sh`); never import another service's Go module
+- `test/migrate/` - the migration rehearsal and its rehearsal-mode values
+- `docs/` - install, values, migrate and the manual release checks
 
 ## Build, test, lint
 
@@ -43,6 +49,12 @@ Two things to know before changing it:
 - Chart checks: `PATH="$PWD/bin:$PATH" scripts/check-charts.sh` (lint, render, schema refusals,
   kubeconform, production-safe defaults, service-to-service edges, manifest)
 - Install test: create a kind cluster, then `test/kind/build-images.sh` and `test/kind/run.sh`
+- sneakers-migrate: `go test ./...` (set `MIGRATE_TEST_PG` to an admin Postgres DSN for the
+  integration tests); the image is `docker build -f migrate/Dockerfile .`
+- Migration rehearsal: a kind cluster with the service images and the sneakers-migrate image
+  loaded, then `test/migrate/rehearsal.sh` (it refuses any context that isn't `kind-*`)
+- Generated code: `scripts/proto-generate.sh` with the plugin versions in
+  `.github/workflows/job-go-lang-ci.yaml`
 - Lint: `yamllint .` and `actionlint`
 - Chart dependencies are resolved by `helm dependency build`; the `charts/*/charts/` archives are
   never committed. `Chart.lock` files are.

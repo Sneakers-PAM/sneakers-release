@@ -1,0 +1,122 @@
+# The sneakers-migrate import or verify Job, in the target install's namespace.
+# Fill the ${...} placeholders with envsubst (docs/migrate.md):
+#   NAMESPACE      the target install's namespace
+#   JOB_NAME       e.g. sneakers-migrate-import
+#   MIGRATE_IMAGE  the sneakers-migrate image, by digest
+#   COMMAND_ARGS   the command and its flags, as a YAML flow list, e.g.
+#                  ["import", "--bundle", "/bundle/bundle.age", "--identity", "/key/import.key", "--rehearsal"]
+# It reads the bundle from the Secret sneakers-migrate-bundle and the import
+# identity from sneakers-migrate-key. The names below are the umbrella chart's
+# defaults for a release called sneakers with the bundled PostgreSQL and Kratos.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sneakers-migrate
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: sneakers
+    app.kubernetes.io/name: sneakers-migrate
+automountServiceAccountToken: false
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${JOB_NAME}
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: sneakers
+    app.kubernetes.io/name: sneakers-migrate
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: sneakers
+        app.kubernetes.io/name: sneakers-migrate
+    spec:
+      restartPolicy: Never
+      serviceAccountName: sneakers-migrate
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: ${MIGRATE_IMAGE}
+          imagePullPolicy: IfNotPresent
+          args: ${COMMAND_ARGS}
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sneakers-bundled
+                  key: password
+            - name: TARGET_IDENTITY_DSN
+              value: postgres://sneakers@sneakers-postgres:5432/sneakers_identity?sslmode=disable
+            - name: TARGET_VAULT_DSN
+              value: postgres://sneakers@sneakers-postgres:5432/sneakers_vault?sslmode=disable
+            - name: TARGET_WORKFLOW_DSN
+              value: postgres://sneakers@sneakers-postgres:5432/sneakers_workflow?sslmode=disable
+            - name: TARGET_AUDIT_DSN
+              value: postgres://sneakers@sneakers-postgres:5432/sneakers_audit?sslmode=disable
+            - name: TARGET_KRATOS_ADMIN_URL
+              value: http://sneakers-kratos-admin
+            - name: TARGET_VAULT_ADDR
+              value: sneakers-vault:9091
+            - name: TARGET_AUDIT_ADDR
+              value: sneakers-audit:9194
+            - name: TARGET_TOTP_ENC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sneakers-identity-generated
+                  key: TOTP_ENC_KEY
+            - name: MIGRATE_PRINCIPAL
+              value: system:sneakers-migrate
+            - name: WORKLOAD_TOKEN_FILE
+              value: /var/run/secrets/sneakers/token
+            - name: LOG_FORMAT
+              value: json
+            - name: LOG_LEVEL
+              value: info
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: bundle
+              mountPath: /bundle
+              readOnly: true
+            - name: key
+              mountPath: /key
+              readOnly: true
+            - name: workload-token
+              mountPath: /var/run/secrets/sneakers
+              readOnly: true
+      volumes:
+        - name: bundle
+          secret:
+            secretName: sneakers-migrate-bundle
+        - name: key
+          secret:
+            secretName: sneakers-migrate-key
+            defaultMode: 0440
+        - name: workload-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: sneakers
+                  expirationSeconds: 3600
+                  path: token

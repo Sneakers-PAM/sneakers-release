@@ -1,0 +1,25 @@
+# The deny-egress policy of a rehearsal namespace, for an install that doesn't
+# use the umbrella chart's rehearsal.enabled (which renders the same policy).
+# Every pod may reach only other pods in the namespace and the cluster DNS.
+# Fill ${NAMESPACE} with envsubst.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sneakers-rehearsal-egress
+  namespace: ${NAMESPACE}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector: {}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP

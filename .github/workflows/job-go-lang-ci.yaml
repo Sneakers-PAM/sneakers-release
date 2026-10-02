@@ -9,12 +9,33 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 permissions:
   contents: read
+env:
+  BUF_VERSION: v1.70.0
+  PROTOC_GEN_GO_VERSION: v1.36.11
+  PROTOC_GEN_GO_GRPC_VERSION: v1.6.2
 jobs:
   build-test:
     name: 🧪 Build & Test
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    # The sneakers-migrate integration tests create throwaway databases on the
+    # server MIGRATE_TEST_PG names, and skip when it is unset. The container
+    # trusts connections without a password, for CI only.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      MIGRATE_TEST_PG: postgres://postgres@localhost:5432/postgres?sslmode=disable
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,6 +45,21 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # go install checks each module against the Go checksum database.
+      - name: Install buf and the protoc plugins
+        run: |
+          go install "github.com/bufbuild/buf/cmd/buf@${BUF_VERSION}"
+          go install "google.golang.org/protobuf/cmd/protoc-gen-go@${PROTOC_GEN_GO_VERSION}"
+          go install "google.golang.org/grpc/cmd/protoc-gen-go-grpc@${PROTOC_GEN_GO_GRPC_VERSION}"
+      # Fetches the callee protos pinned in proto-refs.env, which buf lint
+      # needs too, so it runs first.
+      - name: Generated code is current
+        run: |
+          scripts/proto-generate.sh
+          git diff --exit-code -- gen
+          test -z "$(git status --porcelain -- gen)"
+      - name: buf lint
+        run: buf lint
       - name: gofmt
         run: |
           unformatted="$(gofmt -l .)"
@@ -33,7 +69,9 @@ jobs:
       - name: Build
         run: go build ./...
       - name: Test
-        run: go test ./... -cover
+        run: go test -race -count=1 ./... -cover
+      - name: Image
+        run: docker build -q -f migrate/Dockerfile -t ci.example.org/sneakers-migrate:ci .
       - name: Install chart tools
         run: |
           scripts/install-tools.sh "$RUNNER_TEMP/bin" helm kubeconform
