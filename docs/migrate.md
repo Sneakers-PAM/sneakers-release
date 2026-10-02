@@ -163,7 +163,11 @@ are audited as the tool's, not a person's.
 | `LOG_LEVEL`, `LOG_FORMAT` | all | logging (console format unless `LOG_FORMAT` says otherwise; `-v` is trace) |
 
 The target vault must list the principal in `VAULT_IMPORT_PRINCIPALS` for the import
-(`vault.env.VAULT_IMPORT_PRINCIPALS`); take it out after the cutover.
+(`vault.env.VAULT_IMPORT_PRINCIPALS`), and the vault and audit must list `migrate` as a caller
+(`vault.workloadIdentity.callers` and `audit.workloadIdentity.callers`, their defaults plus
+`migrate`), so their NetworkPolicy and token check admit the Jobs. The Jobs run as the
+`sneakers-migrate` ServiceAccount with the `migrate` component label of release `sneakers`.
+`test/migrate/rehearsal-values.yaml` sets all three. Take them out after the cutover.
 
 ## Exit codes
 
@@ -270,10 +274,10 @@ Only after the v0.1.0 tag, on the adopter's own Kubernetes:
 3. **Take the original production down.** Freeze it to read-only, force open check-outs back, take
    the final export, then stop it.
 4. **Production.** Deploy Sneakers-PAM as production with `vault.env.VAULT_IMPORT_PRINCIPALS` set
-   and without rehearsal mode, import the final export (no `--rehearsal`, so no wipe and no owner
+   and `migrate` added to the vault and audit callers, without rehearsal mode, import the final export (no `--rehearsal`, so no wipe and no owner
    password), restart the vault, verify, turn automation on (the connector, SSH broker and MCP
    server) after verify, pin the SSH host keys the report lists, take `VAULT_IMPORT_PRINCIPALS`
-   out, then switch the address over.
+   and the `migrate` callers out, then switch the address over.
 5. **Clean up.** Remove the QA install. The original system's data stays read-only until the owner
    signs off, then it's retired.
 

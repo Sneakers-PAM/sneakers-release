@@ -172,8 +172,8 @@ PY
 )"
 # kindnet's policy engine only filters a pod once its IP is in its pod set and
 # lets traffic through until then, so each probe waits before connecting.
-probe() { # namespace name url: prints the curl exit code
-  kubectl -n "$1" run "$2" --image="$test_image" --restart=Never --quiet --labels=app.kubernetes.io/part-of=sneakers \
+probe() { # namespace name url [labels]: prints the curl exit code
+  kubectl -n "$1" run "$2" --image="$test_image" --restart=Never --quiet --labels="${4:-app.kubernetes.io/part-of=sneakers}" \
     --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65532,"seccompProfile":{"type":"RuntimeDefault"}}}}' \
     --command -- sh -c "sleep 10; curl -sk -m 5 -o /dev/null $3; echo \$?" >/dev/null
   kubectl -n "$1" wait --for=jsonpath='{.status.phase}'=Succeeded "pod/$2" --timeout=120s >/dev/null
@@ -185,7 +185,8 @@ kubectl create namespace "$outside_ns" >/dev/null
 api=https://kubernetes.default.svc/healthz
 inside="$(probe "$ns" egress-rehearsal "$api")"
 control="$(probe "$outside_ns" egress-control "$api")"
-in_ns="$(probe "$ns" egress-in-namespace http://sneakers-vault:9091/)"
+# Each service admits only its callers, so this probe is the migrate caller.
+in_ns="$(probe "$ns" egress-in-namespace http://sneakers-vault:9091/ app.kubernetes.io/part-of=sneakers,app.kubernetes.io/component=migrate,app.kubernetes.io/instance=${release})"
 kubectl delete namespace "$outside_ns" --wait=false >/dev/null
 note "egress to the cluster API from the rehearsal namespace: curl exit ${inside} (28 = timed out)"
 note "egress to the cluster API from another namespace (control): curl exit ${control}"

@@ -1,5 +1,7 @@
 # Rehearsal mode for a migration rehearsal: no automation, no egress out of
 # the namespace, and the vault accepts sneakers-migrate's import principal.
+# The vault and audit list migrate as a caller (their defaults plus migrate),
+# so the import and verify Jobs pass their NetworkPolicy and token check.
 # Layer it over the install's own values (test/kind/values.yaml here).
 rehearsal:
   enabled: true
@@ -16,3 +18,9 @@ mcp:
 vault:
   env:
     VAULT_IMPORT_PRINCIPALS: system:sneakers-migrate
+  workloadIdentity:
+    callers: [gateway, workflow, sshbroker, connector, migrate]
+
+audit:
+  workloadIdentity:
+    callers: [gateway, vault, sshbroker, identity, workflow, migrate]

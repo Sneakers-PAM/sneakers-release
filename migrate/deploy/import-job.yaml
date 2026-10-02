@@ -31,9 +31,12 @@ spec:
   ttlSecondsAfterFinished: 86400
   template:
     metadata:
+      # The vault and audit admit the migrate caller of release sneakers.
       labels:
         app.kubernetes.io/part-of: sneakers
         app.kubernetes.io/name: sneakers-migrate
+        app.kubernetes.io/component: migrate
+        app.kubernetes.io/instance: sneakers
     spec:
       restartPolicy: Never
       serviceAccountName: sneakers-migrate

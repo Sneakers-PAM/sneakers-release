@@ -61,6 +61,27 @@ for kind in ("Deployment",):
 print("ok: rehearsal mode denies egress and runs no automation")
 PY
 if grep -q sneakers-rehearsal-egress "$out/sneakers.yaml"; then fail "the default install renders the rehearsal egress policy"; fi
+python3 - "$out/sneakers-rehearsal.yaml" "$out/sneakers.yaml" <<'PY'
+import sys, yaml
+def load(p):
+    return [d for d in yaml.safe_load_all(open(p)) if d]
+def migrate_edge(docs, svc):
+    pol = [d for d in docs if d["kind"] == "NetworkPolicy"
+           and d["spec"]["podSelector"].get("matchLabels", {}).get("app.kubernetes.io/name") == "sneakers-" + svc]
+    assert pol, f"no NetworkPolicy for the {svc}"
+    net = any(p.get("podSelector", {}).get("matchLabels", {}).get("app.kubernetes.io/component") == "migrate"
+              for r in pol[0]["spec"].get("ingress", []) for p in r.get("from", []))
+    dep = [d for d in docs if d["kind"] == "Deployment"
+           and d["spec"]["selector"]["matchLabels"].get("app.kubernetes.io/name") == "sneakers-" + svc]
+    assert dep, f"no Deployment for the {svc}"
+    env = {e["name"]: e.get("value", "") for c in dep[0]["spec"]["template"]["spec"]["containers"] for e in c.get("env", [])}
+    sa = "sneakers/sneakers-migrate" in env.get("WORKLOAD_ALLOWED_SERVICEACCOUNTS", "").split(",")
+    return net, sa
+for svc in ("vault", "audit"):
+    assert migrate_edge(load(sys.argv[1]), svc) == (True, True), f"rehearsal mode does not admit sneakers-migrate to the {svc}"
+    assert migrate_edge(load(sys.argv[2]), svc) == (False, False), f"the default install admits sneakers-migrate to the {svc}"
+print("ok: the rehearsal values admit sneakers-migrate to the vault and audit; the default install doesn't")
+PY
 
 step "guards and schema refusals"
 must_fail "the umbrella without a vault root key" helm template ci charts/sneakers -n sneakers
@@ -101,6 +122,15 @@ SOURCE_NAMESPACE=sneakers-old MIGRATE_IMAGE=ci.example.org/sneakers-migrate:ci H
   RECIPIENT=age1example envsubst <migrate/deploy/export-job.yaml >"$out/migrate-export.yaml"
 NAMESPACE=sneakers envsubst <migrate/deploy/rehearsal-egress.yaml >"$out/migrate-egress.yaml"
 if grep -h -v '^[[:space:]]*#' "$out"/migrate-*.yaml | grep -q '\${'; then fail "a Job manifest placeholder was not filled"; fi
+python3 - "$out/migrate-import.yaml" <<'PY'
+import sys, yaml
+job = [d for d in yaml.safe_load_all(open(sys.argv[1])) if d and d["kind"] == "Job"][0]
+labels = job["spec"]["template"]["metadata"]["labels"]
+want = {"app.kubernetes.io/part-of": "sneakers", "app.kubernetes.io/component": "migrate", "app.kubernetes.io/instance": "sneakers"}
+assert all(labels.get(k) == v for k, v in want.items()), f"the import Job pod labels {labels} don't match the vault and audit caller policy"
+assert job["spec"]["template"]["spec"]["serviceAccountName"] == "sneakers-migrate"
+print("ok: the import Job runs as the migrate caller")
+PY
 
 step "kubeconform (Kubernetes ${KUBE_VERSION})"
 kubeconform -strict -summary -kubernetes-version "${KUBE_VERSION}" "$out"/*.yaml
