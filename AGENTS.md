@@ -5,36 +5,41 @@ hook-enforced rules). Keep this file current when the build, layout, or public A
 
 ## What this is
 
-Sneakers release manifest: every service, k0s and third-party component pinned to one version
+The Sneakers release: the Helm charts for every service (`charts/`), the `sneakers` umbrella that
+installs them with optional bundled PostgreSQL, Valkey and Ory Kratos and Hydra, and the pinned
+release manifest (`manifest/release.yaml`). The appliance is the recommended deployment; Helm is
+the supported alternative.
 
-<!-- Fill in: what the project does, what it ships (library, service, action, CLI), and the one or
-two things an agent must understand before changing it. -->
+Two things to know before changing it:
 
-## Using sneakers-release
-
-<!-- If this project is consumed by others (a library/plugin/action), describe the contract a
-consumer must respect: the single entry point, the public surface, required options, and anything
-that must not be bypassed. Delete this section for a leaf application. -->
+- The manifest and the charts pin the same versions. `scripts/check-manifest.py` fails CI when
+  they differ, so change both together.
+- The service charts share their templates (`charts/sneakers-lib`) and one values schema
+  (`charts/sneakers-lib/service.schema.json`). Edit the schema there and run
+  `scripts/sync-schemas.sh`.
 
 ## Layout
 
-<!-- The directories that matter and what lives in each. Keep it short; point at the entry points. -->
-
-- `src/` - <what>
-- `<tests dir>/` - <what>
+- `charts/sneakers-lib/` - the library chart: every service resource, plus the shared schema
+- `charts/<service>/` - one chart per service: `values.yaml`, `values.schema.json`, and a template
+  that includes the library
+- `charts/postgres/` - the bundled single-instance PostgreSQL
+- `charts/sneakers/` - the umbrella: dependencies, the bundled Secrets, the `helm test` pod
+- `manifest/release.yaml` - the pinned release
+- `scripts/` - `install-tools.sh` (pinned, checksum-checked tools), `check-charts.sh`, the
+  manifest and defaults checks, `sync-schemas.sh`
+- `test/ci/` - values for rendering in CI; `test/kind/` - the install test
+- `docs/` - install and values
 
 ## Build, test, lint
 
-<!-- The exact commands. Pull these from package.json scripts (npm), the Taskfile (Go/Task), or
-pyproject (Python) so they stay accurate. -->
-
-- Build: `<command>`
-- Test: `<command>` (note any service/fixture the integration tests require)
-- Lint: `<command>`
-- Package checks (npm packages), after a build: `npm run check:pack` (contents and ceiling),
-  `npm run check:pack:growth` (growth against the last release), `npm run check:install`
-  (install the tarball, import ESM and CJS); see CLAUDE.md "npm package contents"
-- License headers / docs: `<command>`
+- Tools: `scripts/install-tools.sh bin helm kubeconform` (add `kind kubectl` for the install test)
+- Chart checks: `PATH="$PWD/bin:$PATH" scripts/check-charts.sh` (lint, render, schema refusals,
+  kubeconform, production-safe defaults, manifest)
+- Install test: create a kind cluster, then `test/kind/build-images.sh` and `test/kind/run.sh`
+- Lint: `yamllint .` and `actionlint`
+- Chart dependencies are resolved by `helm dependency build`; the `charts/*/charts/` archives are
+  never committed. `Chart.lock` files are.
 
 ## Logging
 
@@ -56,4 +61,6 @@ Follow the logging rules in `CLAUDE.md`. In short:
   `.claude/hooks` (run `bash .claude/hooks/install.sh` once per clone).
 - Open every PR as a draft. CI skips drafts, so run the full checks locally, push once they pass,
   and mark the PR ready when the work is finished; see CLAUDE.md "CI and Actions minutes".
-- <project-specific conventions, non-obvious constraints, and traps an agent should know>
+- Defaults are production-safe and the schemas enforce the security ones: a change that makes a
+  root filesystem writable or turns off `runAsNonRoot` fails validation on purpose.
+- `sneakers-release` `main` takes changes only through a PR approved by the release-review group.
