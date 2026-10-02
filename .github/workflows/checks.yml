@@ -17,3 +17,7 @@ jobs:
   checks:
     if: github.event.pull_request.draft != true
     uses: Sneakers-PAM/.github/.github/workflows/scrub.yml@main
+    with:
+      # valkey.io: the public Helm repository of the bundled Valkey chart.
+      allowed-domains: >-
+        valkey.io

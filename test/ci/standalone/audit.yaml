@@ -1,0 +1,5 @@
+env:
+  DATABASE_DSN: postgres://sneakers@db.example.org:5432/sneakers_audit?sslmode=require
+secretEnv:
+  PGPASSWORD:
+    secretName: sneakers-audit-db

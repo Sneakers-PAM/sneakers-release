@@ -1,0 +1,7 @@
+env:
+  DATABASE_DSN: postgres://sneakers@db.example.org:5432/sneakers_vault?sslmode=require
+secretEnv:
+  PGPASSWORD:
+    secretName: sneakers-vault-db
+  VAULT_ROOT_KEK:
+    secretName: sneakers-vault-root-key

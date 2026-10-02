@@ -34,6 +34,12 @@ jobs:
         run: go build ./...
       - name: Test
         run: go test ./... -cover
+      - name: Install chart tools
+        run: |
+          scripts/install-tools.sh "$RUNNER_TEMP/bin" helm kubeconform
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Chart checks
+        run: scripts/check-charts.sh
   lint:
     name: 🧹 GolangCI
     if: github.event.pull_request.draft == false

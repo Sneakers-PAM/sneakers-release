@@ -1,0 +1,5 @@
+env:
+  DATABASE_DSN: postgres://sneakers@db.example.org:5432/sneakers_workflow?sslmode=require
+secretEnv:
+  PGPASSWORD:
+    secretName: sneakers-workflow-db

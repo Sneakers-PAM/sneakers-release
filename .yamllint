@@ -4,6 +4,11 @@ yaml-files:
   - '*.yml'
   - '.yamllint'
 
+# Helm templates are Go templates, not YAML; they are checked by helm lint
+# and the rendered output by kubeconform.
+ignore: |
+  charts/*/templates/
+
 rules:
   braces:
     level: warning
