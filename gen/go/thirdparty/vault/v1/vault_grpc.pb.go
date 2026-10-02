@@ -53,6 +53,7 @@ const (
 	VaultService_RemoveFolderRule_FullMethodName                = "/sneakers.vault.v1.VaultService/RemoveFolderRule"
 	VaultService_GetFolderRuleset_FullMethodName                = "/sneakers.vault.v1.VaultService/GetFolderRuleset"
 	VaultService_SetFolderRuleset_FullMethodName                = "/sneakers.vault.v1.VaultService/SetFolderRuleset"
+	VaultService_SetFolderRevealStepUp_FullMethodName           = "/sneakers.vault.v1.VaultService/SetFolderRevealStepUp"
 	VaultService_GetMyAccess_FullMethodName                     = "/sneakers.vault.v1.VaultService/GetMyAccess"
 	VaultService_SimulateFolder_FullMethodName                  = "/sneakers.vault.v1.VaultService/SimulateFolder"
 	VaultService_SimulateSecret_FullMethodName                  = "/sneakers.vault.v1.VaultService/SimulateSecret"
@@ -77,6 +78,7 @@ const (
 	VaultService_MoveFolderForPrincipal_FullMethodName          = "/sneakers.vault.v1.VaultService/MoveFolderForPrincipal"
 	VaultService_ListSecretVersions_FullMethodName              = "/sneakers.vault.v1.VaultService/ListSecretVersions"
 	VaultService_RevealSecretVersionField_FullMethodName        = "/sneakers.vault.v1.VaultService/RevealSecretVersionField"
+	VaultService_RestoreSecretVersion_FullMethodName            = "/sneakers.vault.v1.VaultService/RestoreSecretVersion"
 	VaultService_BreakGlassSecret_FullMethodName                = "/sneakers.vault.v1.VaultService/BreakGlassSecret"
 	VaultService_CopySecret_FullMethodName                      = "/sneakers.vault.v1.VaultService/CopySecret"
 	VaultService_RetireSecret_FullMethodName                    = "/sneakers.vault.v1.VaultService/RetireSecret"
@@ -165,6 +167,7 @@ type VaultServiceClient interface {
 	// folder, evaluated down the folder chain. Enforcement source of truth.
 	GetFolderRuleset(ctx context.Context, in *GetFolderRulesetRequest, opts ...grpc.CallOption) (*GetFolderRulesetResponse, error)
 	SetFolderRuleset(ctx context.Context, in *SetFolderRulesetRequest, opts ...grpc.CallOption) (*SetFolderRulesetResponse, error)
+	SetFolderRevealStepUp(ctx context.Context, in *SetFolderRevealStepUpRequest, opts ...grpc.CallOption) (*SetFolderRevealStepUpResponse, error)
 	GetMyAccess(ctx context.Context, in *GetMyAccessRequest, opts ...grpc.CallOption) (*GetMyAccessResponse, error)
 	SimulateFolder(ctx context.Context, in *SimulateFolderRequest, opts ...grpc.CallOption) (*SimulateFolderResponse, error)
 	SimulateSecret(ctx context.Context, in *SimulateSecretRequest, opts ...grpc.CallOption) (*SimulateSecretResponse, error)
@@ -196,6 +199,7 @@ type VaultServiceClient interface {
 	// reveal a single field's value from a specific version (audited).
 	ListSecretVersions(ctx context.Context, in *ListSecretVersionsRequest, opts ...grpc.CallOption) (*ListSecretVersionsResponse, error)
 	RevealSecretVersionField(ctx context.Context, in *RevealSecretVersionFieldRequest, opts ...grpc.CallOption) (*RevealSecretVersionFieldResponse, error)
+	RestoreSecretVersion(ctx context.Context, in *RestoreSecretVersionRequest, opts ...grpc.CallOption) (*RestoreSecretVersionResponse, error)
 	// Emergency access: bypasses checkout/approval gating for a read-eligible
 	// actor; high-severity audit + owner notify + forced rotation-enqueue.
 	BreakGlassSecret(ctx context.Context, in *BreakGlassSecretRequest, opts ...grpc.CallOption) (*BreakGlassSecretResponse, error)
@@ -241,7 +245,7 @@ type VaultServiceClient interface {
 	// Rotates the active working-KEK: mints a new KEK, activates it, and
 	// sweeps existing records to re-wrap their DEKs under it.
 	RotateKek(ctx context.Context, in *RotateKekRequest, opts ...grpc.CallOption) (*RotateKekResponse, error)
-	// Seals field sets for an import without storing them (VAULT_IMPORT_PRINCIPALS).
+	// Seals field sets for an import without storing them (migrate caller only).
 	SealForImport(ctx context.Context, in *SealForImportRequest, opts ...grpc.CallOption) (*SealForImportResponse, error)
 	PrepareSecretUse(ctx context.Context, in *PrepareSecretUseRequest, opts ...grpc.CallOption) (*PrepareSecretUseResponse, error)
 	GetSecretUse(ctx context.Context, in *GetSecretUseRequest, opts ...grpc.CallOption) (*GetSecretUseResponse, error)
@@ -576,6 +580,16 @@ func (c *vaultServiceClient) SetFolderRuleset(ctx context.Context, in *SetFolder
 	return out, nil
 }
 
+func (c *vaultServiceClient) SetFolderRevealStepUp(ctx context.Context, in *SetFolderRevealStepUpRequest, opts ...grpc.CallOption) (*SetFolderRevealStepUpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetFolderRevealStepUpResponse)
+	err := c.cc.Invoke(ctx, VaultService_SetFolderRevealStepUp_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vaultServiceClient) GetMyAccess(ctx context.Context, in *GetMyAccessRequest, opts ...grpc.CallOption) (*GetMyAccessResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetMyAccessResponse)
@@ -810,6 +824,16 @@ func (c *vaultServiceClient) RevealSecretVersionField(ctx context.Context, in *R
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RevealSecretVersionFieldResponse)
 	err := c.cc.Invoke(ctx, VaultService_RevealSecretVersionField_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vaultServiceClient) RestoreSecretVersion(ctx context.Context, in *RestoreSecretVersionRequest, opts ...grpc.CallOption) (*RestoreSecretVersionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RestoreSecretVersionResponse)
+	err := c.cc.Invoke(ctx, VaultService_RestoreSecretVersion_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1271,6 +1295,7 @@ type VaultServiceServer interface {
 	// folder, evaluated down the folder chain. Enforcement source of truth.
 	GetFolderRuleset(context.Context, *GetFolderRulesetRequest) (*GetFolderRulesetResponse, error)
 	SetFolderRuleset(context.Context, *SetFolderRulesetRequest) (*SetFolderRulesetResponse, error)
+	SetFolderRevealStepUp(context.Context, *SetFolderRevealStepUpRequest) (*SetFolderRevealStepUpResponse, error)
 	GetMyAccess(context.Context, *GetMyAccessRequest) (*GetMyAccessResponse, error)
 	SimulateFolder(context.Context, *SimulateFolderRequest) (*SimulateFolderResponse, error)
 	SimulateSecret(context.Context, *SimulateSecretRequest) (*SimulateSecretResponse, error)
@@ -1302,6 +1327,7 @@ type VaultServiceServer interface {
 	// reveal a single field's value from a specific version (audited).
 	ListSecretVersions(context.Context, *ListSecretVersionsRequest) (*ListSecretVersionsResponse, error)
 	RevealSecretVersionField(context.Context, *RevealSecretVersionFieldRequest) (*RevealSecretVersionFieldResponse, error)
+	RestoreSecretVersion(context.Context, *RestoreSecretVersionRequest) (*RestoreSecretVersionResponse, error)
 	// Emergency access: bypasses checkout/approval gating for a read-eligible
 	// actor; high-severity audit + owner notify + forced rotation-enqueue.
 	BreakGlassSecret(context.Context, *BreakGlassSecretRequest) (*BreakGlassSecretResponse, error)
@@ -1347,7 +1373,7 @@ type VaultServiceServer interface {
 	// Rotates the active working-KEK: mints a new KEK, activates it, and
 	// sweeps existing records to re-wrap their DEKs under it.
 	RotateKek(context.Context, *RotateKekRequest) (*RotateKekResponse, error)
-	// Seals field sets for an import without storing them (VAULT_IMPORT_PRINCIPALS).
+	// Seals field sets for an import without storing them (migrate caller only).
 	SealForImport(context.Context, *SealForImportRequest) (*SealForImportResponse, error)
 	PrepareSecretUse(context.Context, *PrepareSecretUseRequest) (*PrepareSecretUseResponse, error)
 	GetSecretUse(context.Context, *GetSecretUseRequest) (*GetSecretUseResponse, error)
@@ -1465,6 +1491,9 @@ func (UnimplementedVaultServiceServer) GetFolderRuleset(context.Context, *GetFol
 func (UnimplementedVaultServiceServer) SetFolderRuleset(context.Context, *SetFolderRulesetRequest) (*SetFolderRulesetResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetFolderRuleset not implemented")
 }
+func (UnimplementedVaultServiceServer) SetFolderRevealStepUp(context.Context, *SetFolderRevealStepUpRequest) (*SetFolderRevealStepUpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetFolderRevealStepUp not implemented")
+}
 func (UnimplementedVaultServiceServer) GetMyAccess(context.Context, *GetMyAccessRequest) (*GetMyAccessResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetMyAccess not implemented")
 }
@@ -1536,6 +1565,9 @@ func (UnimplementedVaultServiceServer) ListSecretVersions(context.Context, *List
 }
 func (UnimplementedVaultServiceServer) RevealSecretVersionField(context.Context, *RevealSecretVersionFieldRequest) (*RevealSecretVersionFieldResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevealSecretVersionField not implemented")
+}
+func (UnimplementedVaultServiceServer) RestoreSecretVersion(context.Context, *RestoreSecretVersionRequest) (*RestoreSecretVersionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreSecretVersion not implemented")
 }
 func (UnimplementedVaultServiceServer) BreakGlassSecret(context.Context, *BreakGlassSecretRequest) (*BreakGlassSecretResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BreakGlassSecret not implemented")
@@ -2239,6 +2271,24 @@ func _VaultService_SetFolderRuleset_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VaultService_SetFolderRevealStepUp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetFolderRevealStepUpRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VaultServiceServer).SetFolderRevealStepUp(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VaultService_SetFolderRevealStepUp_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VaultServiceServer).SetFolderRevealStepUp(ctx, req.(*SetFolderRevealStepUpRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VaultService_GetMyAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetMyAccessRequest)
 	if err := dec(in); err != nil {
@@ -2667,6 +2717,24 @@ func _VaultService_RevealSecretVersionField_Handler(srv interface{}, ctx context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VaultServiceServer).RevealSecretVersionField(ctx, req.(*RevealSecretVersionFieldRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VaultService_RestoreSecretVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreSecretVersionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VaultServiceServer).RestoreSecretVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VaultService_RestoreSecretVersion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VaultServiceServer).RestoreSecretVersion(ctx, req.(*RestoreSecretVersionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3541,6 +3609,10 @@ var VaultService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VaultService_SetFolderRuleset_Handler,
 		},
 		{
+			MethodName: "SetFolderRevealStepUp",
+			Handler:    _VaultService_SetFolderRevealStepUp_Handler,
+		},
+		{
 			MethodName: "GetMyAccess",
 			Handler:    _VaultService_GetMyAccess_Handler,
 		},
@@ -3635,6 +3707,10 @@ var VaultService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RevealSecretVersionField",
 			Handler:    _VaultService_RevealSecretVersionField_Handler,
+		},
+		{
+			MethodName: "RestoreSecretVersion",
+			Handler:    _VaultService_RestoreSecretVersion_Handler,
 		},
 		{
 			MethodName: "BreakGlassSecret",

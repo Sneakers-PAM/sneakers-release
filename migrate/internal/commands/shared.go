@@ -71,7 +71,7 @@ func dialTarget(t config.Target) (*targetConns, error) {
 	}
 	return &targetConns{
 		vault: vc, audit: ac,
-		Vault:  rpc.NewVault(vc, t.Principal, t.Principal),
+		Vault:  rpc.NewVault(vc),
 		Audit:  rpc.NewAudit(ac),
 		Kratos: kratos.New(t.KratosAdminURL),
 	}, nil

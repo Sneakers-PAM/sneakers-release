@@ -4,8 +4,8 @@
 # sneakers-vault and sneakers-workflow: the head of Sneakers-PAM/sneakers-vault#58 (SealForImport)
 # until it merges.
 sneakers-identity  Sneakers-PAM/sneakers-identity   444d98d45ebc969676a7373ca4810b93058dd18c  -
-sneakers-vault     Sneakers-PAM/sneakers-vault      94cf6d5c2387d93a131e8a81951150ac87517d4d  vault
-sneakers-workflow  Sneakers-PAM/sneakers-vault      94cf6d5c2387d93a131e8a81951150ac87517d4d  workflow
+sneakers-vault     Sneakers-PAM/sneakers-vault      8507f576a9ea6907ea98ce6a30525efe140c174a  vault
+sneakers-workflow  Sneakers-PAM/sneakers-vault      8507f576a9ea6907ea98ce6a30525efe140c174a  workflow
 sneakers-audit     Sneakers-PAM/sneakers-audit      c79a2a3110011fa8293e5cb1e0ebaf9a41ad336b  -
 sneakers-notify    Sneakers-PAM/sneakers-notify     3c4d475aae8a47dfeb0b2253901173b4ad8426ec  -
 sneakers-connector Sneakers-PAM/sneakers-connector  31f3fc454fb409d97eee38c794ad8ba2300a193d  -

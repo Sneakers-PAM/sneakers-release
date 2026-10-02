@@ -125,8 +125,11 @@ Any mismatch fails the run (exit code 4):
 - **Targets (dry run):** every target resolves to its connection, and every connection's
   privileged secret resolves. Nothing is contacted: a rehearsal denies egress.
 
-Verify reveals and lists as a root actor named for the tool (`MIGRATE_PRINCIPAL`), so those reads
-are audited as the tool's, not a person's.
+sneakers-migrate calls the vault as itself and sends no actor: the vault refuses one from it and
+acts as its own `system:migrate` actor, so the seals, reveals and lists are audited as the tool's,
+not a person's. The vault admits it to `SealForImport`, `RevealSecretField`, `GetSecret`,
+`ListTargets` and `ListConnections` only, and only with workload authentication on: with
+`WORKLOAD_AUTH=disabled` it refuses `SealForImport`.
 
 ## Guardrails
 
@@ -158,16 +161,16 @@ are audited as the tool's, not a person's.
 | `TARGET_KRATOS_ADMIN_URL` | import, verify | the target Kratos admin API |
 | `TARGET_VAULT_ADDR`, `TARGET_AUDIT_ADDR` | import, verify | the target vault and audit gRPC addresses |
 | `TARGET_TOTP_ENC_KEY` | import | the target identity's `TOTP_ENC_KEY` |
-| `MIGRATE_PRINCIPAL` | import, verify | the workload principal and audit actor (default `system:sneakers-migrate`) |
+| `MIGRATE_PRINCIPAL` | import | the actor on the migration's own audit entries (default `system:sneakers-migrate`) |
 | `WORKLOAD_TOKEN_FILE` | import, verify | the projected ServiceAccount token sent as the caller's workload identity |
 | `LOG_LEVEL`, `LOG_FORMAT` | all | logging (console format unless `LOG_FORMAT` says otherwise; `-v` is trace) |
 
-The target vault must list the principal in `VAULT_IMPORT_PRINCIPALS` for the import
-(`vault.env.VAULT_IMPORT_PRINCIPALS`), and the vault and audit must list `migrate` as a caller
+For the import and verify, the vault and audit must list `migrate` as a caller
 (`vault.workloadIdentity.callers` and `audit.workloadIdentity.callers`, their defaults plus
-`migrate`), so their NetworkPolicy and token check admit the Jobs. The Jobs run as the
-`sneakers-migrate` ServiceAccount with the `migrate` component label of release `sneakers`.
-`test/migrate/rehearsal-values.yaml` sets all three. Take them out after the cutover.
+`migrate`). That puts `<namespace>/sneakers-migrate` in their `WORKLOAD_ALLOWED_SERVICEACCOUNTS` and
+admits the Jobs through their NetworkPolicy. The Jobs run as the `sneakers-migrate`
+ServiceAccount with the `migrate` component label of release `sneakers`.
+`test/migrate/rehearsal-values.yaml` sets both. Take `migrate` out again once the Jobs are done.
 
 ## Exit codes
 
@@ -273,11 +276,11 @@ Only after the v0.1.0 tag, on the adopter's own Kubernetes:
 2. **QA on the production cluster.** The real-data rehearsal above.
 3. **Take the original production down.** Freeze it to read-only, force open check-outs back, take
    the final export, then stop it.
-4. **Production.** Deploy Sneakers-PAM as production with `vault.env.VAULT_IMPORT_PRINCIPALS` set
-   and `migrate` added to the vault and audit callers, without rehearsal mode, import the final export (no `--rehearsal`, so no wipe and no owner
+4. **Production.** Deploy Sneakers-PAM as production with `migrate` added to the vault and audit
+   callers, without rehearsal mode, import the final export (no `--rehearsal`, so no wipe and no owner
    password), restart the vault, verify, turn automation on (the connector, SSH broker and MCP
-   server) after verify, pin the SSH host keys the report lists, take `VAULT_IMPORT_PRINCIPALS`
-   and the `migrate` callers out, then switch the address over.
+   server) after verify, pin the SSH host keys the report lists, take the `migrate` callers
+   out, then switch the address over.
 5. **Clean up.** Remove the QA install. The original system's data stays read-only until the owner
    signs off, then it's retired.
 

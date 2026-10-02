@@ -56,28 +56,15 @@ func (f tokenCreds) GetRequestMetadata(context.Context, ...string) (map[string]s
 
 func (tokenCreds) RequireTransportSecurity() bool { return false }
 
-// Vault calls the target vault.
+// Vault calls the target vault. sneakers-migrate is a Self caller there: it
+// sends no actor, and the vault acts for it as its own system actor.
 type Vault struct {
 	c vaultv1.VaultServiceClient
-	// Importer is the workload principal SealForImport accepts
-	// (VAULT_IMPORT_PRINCIPALS on the vault).
-	Importer string
-	// Reader is the actor verify reveals and lists as: a root actor named for
-	// the tool, so its reads are audited as the tool's, not a person's.
-	Reader string
 }
 
 // NewVault wraps a connection.
-func NewVault(cc grpc.ClientConnInterface, importer, reader string) *Vault {
-	return &Vault{c: vaultv1.NewVaultServiceClient(cc), Importer: importer, Reader: reader}
-}
-
-func (v *Vault) importer() *vaultv1.ActorContext {
-	return &vaultv1.ActorContext{UserId: v.Importer, PrincipalKind: vaultv1.PrincipalKind_PRINCIPAL_KIND_WORKLOAD}
-}
-
-func (v *Vault) reader() *vaultv1.ActorContext {
-	return &vaultv1.ActorContext{UserId: v.Reader, IsRoot: true, IsSiteAdmin: true}
+func NewVault(cc grpc.ClientConnInterface) *Vault {
+	return &Vault{c: vaultv1.NewVaultServiceClient(cc)}
 }
 
 // Seal seals each field set under the target vault's active key, in batches,
@@ -86,7 +73,7 @@ func (v *Vault) Seal(ctx context.Context, items []map[string]string) ([][]byte, 
 	out := make([][]byte, 0, len(items))
 	for start := 0; start < len(items); start += SealBatch {
 		end := min(start+SealBatch, len(items))
-		req := &vaultv1.SealForImportRequest{Actor: v.importer()}
+		req := &vaultv1.SealForImportRequest{}
 		for _, f := range items[start:end] {
 			req.Items = append(req.Items, &vaultv1.SealForImportItem{Fields: f})
 		}
@@ -109,7 +96,7 @@ func (v *Vault) Seal(ctx context.Context, items []map[string]string) ([][]byte, 
 func (v *Vault) Reveal(ctx context.Context, secretID string, field string) (string, error) {
 	cctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
-	resp, err := v.c.RevealSecretField(cctx, &vaultv1.RevealSecretFieldRequest{Actor: v.reader(), Id: secretID, FieldKey: field})
+	resp, err := v.c.RevealSecretField(cctx, &vaultv1.RevealSecretFieldRequest{Id: secretID, FieldKey: field})
 	if err != nil {
 		return "", err
 	}
@@ -131,7 +118,7 @@ type Connection struct {
 func (v *Vault) Targets(ctx context.Context) ([]Target, error) {
 	cctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
-	resp, err := v.c.ListTargets(cctx, &vaultv1.ListTargetsRequest{Actor: v.reader()})
+	resp, err := v.c.ListTargets(cctx, &vaultv1.ListTargetsRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +148,7 @@ func (v *Vault) Connections(ctx context.Context) ([]Connection, error) {
 func (v *Vault) SecretExists(ctx context.Context, id string) (bool, error) {
 	cctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
-	resp, err := v.c.GetSecret(cctx, &vaultv1.GetSecretRequest{Actor: v.reader(), Id: id})
+	resp, err := v.c.GetSecret(cctx, &vaultv1.GetSecretRequest{Id: id})
 	if err != nil {
 		return false, err
 	}
