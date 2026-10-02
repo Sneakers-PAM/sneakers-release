@@ -148,8 +148,10 @@ done
 [ "$failed" = 0 ] || { echo "a NetworkPolicy does not match the call graph" >&2; exit 1; }
 
 echo "== callees check the caller's service account"
-# Pods with the gateway's labels pass the NetworkPolicies; the callee must still
-# refuse a token from the wrong service account, or no token at all.
+# Pods with a caller's labels pass the NetworkPolicies; the callee must still
+# refuse a token from a service account it doesn't list (Unauthenticated), a
+# listed caller on a method outside its allow-list (PermissionDenied), and a
+# call with no token (Unauthenticated).
 call() { # <service:port> <method>
   printf 'grpcurl -plaintext -max-time 10 %s -d "{}" %s %s 2>&1; echo "exit $?"' \
     '${TOKEN:+-H "authorization: Bearer $TOKEN"}' "$1" "$2"
@@ -157,6 +159,7 @@ call() { # <service:port> <method>
 token='TOKEN="$(cat /var/run/secrets/sneakers/token)"; '
 pod tok-wrong-vault gateway sneakers-mcp "$grpcurl_image" "${token}$(call sneakers-vault:9091 sneakers.vault.v1.VaultService/RevealSecretField)"
 pod tok-wrong-broker gateway sneakers-mcp "$grpcurl_image" "${token}$(call sneakers-sshbroker:9096 sneakers.sshbroker.v1.SSHBrokerService/CreateSession)"
+pod tok-connector-vault connector sneakers-connector "$grpcurl_image" "${token}$(call sneakers-vault:9091 sneakers.vault.v1.VaultService/RevealSecretField)"
 pod tok-none-vault gateway sneakers-gateway "$grpcurl_image" "$(call sneakers-vault:9091 sneakers.vault.v1.VaultService/RevealSecretField)"
 pod tok-right-vault gateway sneakers-gateway "$grpcurl_image" "${token}$(call sneakers-vault:9091 sneakers.vault.v1.VaultService/RevealSecretField)"
 expect() { # <pod> <grep -E pattern> <yes|no> <what>
@@ -167,8 +170,9 @@ expect() { # <pod> <grep -E pattern> <yes|no> <what>
   echo "$out" >&2
   failed=1
 }
-expect tok-wrong-vault 'Code: PermissionDenied' yes "the vault took a token from sneakers-mcp"
-expect tok-wrong-broker 'Code: PermissionDenied' yes "the broker took a token from sneakers-mcp"
+expect tok-wrong-vault 'Code: Unauthenticated' yes "the vault took a token from sneakers-mcp"
+expect tok-wrong-broker 'Code: Unauthenticated' yes "the broker took a token from sneakers-mcp"
+expect tok-connector-vault 'Code: PermissionDenied' yes "the vault let the connector call a user-facing method"
 expect tok-none-vault 'Code: Unauthenticated' yes "the vault took a call with no token"
 expect tok-right-vault 'Code: Unauthenticated' no "the vault refused the gateway's token"
 [ "$failed" = 0 ] || exit 1
