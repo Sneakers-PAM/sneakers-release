@@ -90,6 +90,19 @@ secretEnv:
     secretName: ""
     key: POLIS_API_KEY
     required: false
+
+# SAML single sign-on through your Ory Polis. enabled sets POLIS_PUBLIC_URL
+# (the Polis URL the browser is sent to) and POLIS_CLIENT_SECRET, read from
+# key in the Secret clientSecret.secretName: the CLIENT_SECRET_VERIFIER your
+# Polis runs with. Both are required when enabled; there is no default secret,
+# and the gateway refuses Polis's development value. Set the other POLIS_*
+# settings in env.
+sso:
+  enabled: false
+  publicURL: ""
+  clientSecret:
+    secretName: ""
+    key: POLIS_CLIENT_SECRET
 # Secrets loaded whole as environment variables.
 envFromSecrets: []
 # Extra container env, Kubernetes format.

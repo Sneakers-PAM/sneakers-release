@@ -5,6 +5,11 @@ so they can use .Values.global (for example the public host).
 {{- define "sneakers.configData" -}}
 LOG_LEVEL: {{ include "sneakers.logLevel" . | quote }}
 LOG_FORMAT: {{ include "sneakers.logFormat" . | quote }}
+{{- with .Values.sso }}
+{{- if .enabled }}
+POLIS_PUBLIC_URL: {{ tpl .publicURL $ | quote }}
+{{- end }}
+{{- end }}
 {{- range $k, $v := .Values.env }}
 {{- if not (kindIs "invalid" $v) }}
 {{- $value := tpl (toString $v) $ }}
@@ -16,6 +21,17 @@ LOG_FORMAT: {{ include "sneakers.logFormat" . | quote }}
 {{- end -}}
 
 {{- define "sneakers.validate" -}}
+{{- $sso := .Values.sso | default dict }}
+{{- if $sso.enabled }}
+{{- if not $sso.publicURL }}
+{{- fail (printf "%s: sso.publicURL must be set when sso.enabled is true" (include "sneakers.fullname" .)) }}
+{{- end }}
+{{- if not ($sso.clientSecret).secretName }}
+{{- fail (printf "%s: sso.clientSecret.secretName must name the Secret holding POLIS_CLIENT_SECRET when sso.enabled is true" (include "sneakers.fullname" .)) }}
+{{- end }}
+{{- else if (index .Values.env "POLIS_PUBLIC_URL") }}
+{{- fail (printf "%s: set sso.enabled and sso.publicURL instead of env.POLIS_PUBLIC_URL, so the client secret is wired too" (include "sneakers.fullname" .)) }}
+{{- end }}
 {{- range .Values.requiredEnv }}
 {{- if not (tpl (toString (index $.Values.env . | default "")) $) }}
 {{- fail (printf "%s: env.%s must be set" (include "sneakers.fullname" $) .) }}
@@ -65,6 +81,11 @@ workload identity settings and the CA bundle paths, then extraEnv. Used by the D
 {{- with .Values.projectedToken }}
 {{- if and .enabled .envName }}
 {{- $env = append $env (dict "name" .envName "value" (printf "%s/%s" .mountPath .path)) }}
+{{- end }}
+{{- end }}
+{{- with .Values.sso }}
+{{- if .enabled }}
+{{- $env = append $env (dict "name" "POLIS_CLIENT_SECRET" "valueFrom" (dict "secretKeyRef" (dict "name" (tpl .clientSecret.secretName $) "key" (.clientSecret.key | default "POLIS_CLIENT_SECRET")))) }}
 {{- end }}
 {{- end }}
 {{- with .Values.workloadIdentity }}

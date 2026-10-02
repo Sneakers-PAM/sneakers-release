@@ -188,8 +188,23 @@ gateway `HYDRA_ENABLED: "true"` and `HYDRA_ISSUER`, and on mcp `HYDRA_ISSUER` an
 
 ### Single sign-on
 
-SAML single sign-on goes through Ory Polis, which isn't bundled. Point the gateway's `POLIS_*`
-settings at your own (see the gateway's configuration docs).
+SAML single sign-on goes through Ory Polis, which isn't bundled. Put the client secret your Polis
+checks (its `CLIENT_SECRET_VERIFIER`) in a Secret, then turn SSO on:
+
+```yaml
+gateway:
+  sso:
+    enabled: true
+    publicURL: https://sso.example.org
+    clientSecret:
+      secretName: sneakers-polis
+  env:
+    POLIS_ISSUER_URL: http://polis.polis.svc:5225
+    POLIS_TENANT: example.org
+```
+
+The gateway refuses to start with SSO on and no client secret, or Polis's development value. The
+other `POLIS_*` settings are in the gateway's configuration docs.
 
 ## Upgrades
 
