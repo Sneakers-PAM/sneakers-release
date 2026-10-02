@@ -44,7 +44,6 @@ i = yaml.safe_load(open("charts/sneakers/values.yaml"))["tests"]["image"]
 print("%s:%s@%s" % (i["repository"], i["tag"], i["digest"]))
 PY2
 )"
-grpcurl_image=docker.io/fullstorydev/grpcurl:v1.9.3-alpine@sha256:4614424ed58e9b9837c48b6b8eadb9ef40491d5af3499bcc8b378e9c64a9e4a9
 
 # callee: the services allowed on its gRPC port (scripts/check-edges.py has the
 # same table for the rendered charts).
@@ -152,29 +151,36 @@ echo "== callees check the caller's service account"
 # refuse a token from a service account it doesn't list (Unauthenticated), a
 # listed caller on a method outside its allow-list (PermissionDenied), and a
 # call with no token (Unauthenticated).
-call() { # <service:port> <method>
-  printf 'grpcurl -plaintext -max-time 10 %s -d "{}" %s %s 2>&1; echo "exit $?"' \
-    '${TOKEN:+-H "authorization: Bearer $TOKEN"}' "$1" "$2"
+# call <service:port> <method> [token]: one unary gRPC call with an empty
+# request, sent raw over HTTP/2 so the callee's check runs on the method itself
+# (grpcurl's reflection lookup would be checked first). Prints grpc-status.
+call() {
+  local auth=""
+  [ "${3:-}" = token ] && auth='-H "authorization: Bearer $(cat /var/run/secrets/sneakers/token)"'
+  printf "printf '\\\\000\\\\000\\\\000\\\\000\\\\000' | curl -s -m 10 --http2-prior-knowledge -o /dev/null -D - -H 'content-type: application/grpc' -H 'te: trailers' %s --data-binary @- http://%s/%s | grep -i '^grpc-'" "$auth" "$1" "$2"
 }
-token='TOKEN="$(cat /var/run/secrets/sneakers/token)"; '
-pod tok-wrong-vault gateway sneakers-mcp "$grpcurl_image" "${token}$(call sneakers-vault:9091 sneakers.vault.v1.VaultService/RevealSecretField)"
-pod tok-wrong-broker gateway sneakers-mcp "$grpcurl_image" "${token}$(call sneakers-sshbroker:9096 sneakers.sshbroker.v1.SSHBrokerService/CreateSession)"
-pod tok-connector-vault connector sneakers-connector "$grpcurl_image" "${token}$(call sneakers-vault:9091 sneakers.vault.v1.VaultService/RevealSecretField)"
-pod tok-none-vault gateway sneakers-gateway "$grpcurl_image" "$(call sneakers-vault:9091 sneakers.vault.v1.VaultService/RevealSecretField)"
-pod tok-right-vault gateway sneakers-gateway "$grpcurl_image" "${token}$(call sneakers-vault:9091 sneakers.vault.v1.VaultService/RevealSecretField)"
-expect() { # <pod> <grep -E pattern> <yes|no> <what>
-  local out; out="$(wait_logs "$1")"
-  echo "$1: $(grep -m1 -oE 'Code: [A-Za-z]+' <<<"$out" || tail -1 <<<"$out")"
-  if grep -qE "$2" <<<"$out"; then [ "$3" = yes ] && return 0; else [ "$3" = no ] && return 0; fi
+reveal=sneakers.vault.v1.VaultService/RevealSecretField
+pod tok-wrong-vault gateway sneakers-mcp "$test_image" "$(call sneakers-vault:9091 "$reveal" token)"
+pod tok-wrong-broker gateway sneakers-mcp "$test_image" "$(call sneakers-sshbroker:9096 sneakers.sshbroker.v1.SSHBrokerService/CreateSession token)"
+pod tok-connector-vault connector sneakers-connector "$test_image" "$(call sneakers-vault:9091 "$reveal" token)"
+pod tok-none-vault gateway sneakers-gateway "$test_image" "$(call sneakers-vault:9091 "$reveal")"
+pod tok-right-vault gateway sneakers-gateway "$test_image" "$(call sneakers-vault:9091 "$reveal" token)"
+# 16 is Unauthenticated, 7 PermissionDenied.
+expect() { # <pod> <grpc-status pattern> <yes|no> <what>
+  local out code
+  out="$(wait_logs "$1")"
+  code="$(awk -F': *' 'tolower($1) == "grpc-status" {gsub(/\r/, "", $2); print $2; exit}' <<<"$out")"
+  echo "$1: grpc-status ${code:-none}"
+  if [[ "$code" =~ ^($2)$ ]]; then [ "$3" = yes ] && return 0; else [ "$3" = no ] && return 0; fi
   echo "$4" >&2
   echo "$out" >&2
   failed=1
 }
-expect tok-wrong-vault 'Code: Unauthenticated' yes "the vault took a token from sneakers-mcp"
-expect tok-wrong-broker 'Code: Unauthenticated' yes "the broker took a token from sneakers-mcp"
-expect tok-connector-vault 'Code: PermissionDenied' yes "the vault let the connector call a user-facing method"
-expect tok-none-vault 'Code: Unauthenticated' yes "the vault took a call with no token"
-expect tok-right-vault 'Code: Unauthenticated' no "the vault refused the gateway's token"
+expect tok-wrong-vault 16 yes "the vault took a token from sneakers-mcp"
+expect tok-wrong-broker 16 yes "the broker took a token from sneakers-mcp"
+expect tok-connector-vault 7 yes "the vault let the connector call a user-facing method"
+expect tok-none-vault 16 yes "the vault took a call with no token"
+expect tok-right-vault '16|7|' no "the vault refused the gateway's token"
 [ "$failed" = 0 ] || exit 1
 
 echo "install test passed"
