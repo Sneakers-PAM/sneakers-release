@@ -16,3 +16,7 @@ coverage.*
 # chart dependencies, resolved by `helm dependency build`
 charts/*/charts/
 charts/*/tmpcharts*/
+
+# Local module links (see AGENTS.md); never committed.
+go.work
+go.work.sum
