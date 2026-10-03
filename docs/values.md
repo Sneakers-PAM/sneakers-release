@@ -28,6 +28,7 @@ chart by `scripts/sync-schemas.sh`.
 | `hydra.enabled` | `false` | The bundled Ory Hydra ([ory/k8s](https://github.com/ory/k8s)); its values pass through. |
 | `bundledNetworkPolicies.enabled` | `true` | NetworkPolicies for the bundled Kratos and Hydra, whose charts ship none. See [install.md](install.md#service-to-service-traffic). |
 | `bundledNetworkPolicies.kratosPublicFrom` | `[]` | More peers for Kratos's public port, besides the gateway. |
+| `bundledNetworkPolicies.kratosAdminFrom` | `[]` | Extra peers (NetworkPolicy `from` entries) admitted to the Kratos admin port, besides the identity service, the gateway and Kratos itself. A migration adds the `sneakers-migrate` Jobs ([migrate.md](migrate.md)). |
 | `bundledNetworkPolicies.hydraPublicFrom` | any pod | More peers for Hydra's public port, besides the gateway and mcp: the edge OAuth clients come through. |
 | `tests.image` | curl, pinned | The image of the `helm test` pod. |
 

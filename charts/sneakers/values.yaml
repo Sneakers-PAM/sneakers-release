@@ -354,10 +354,12 @@ hydra:
 # server and hydraPublicFrom (OAuth clients reach the issuer through the
 # edge; narrow it to your ingress controller's namespace). Hydra admin takes
 # only Hydra's own pods (the chart's helm test): manage its clients with
-# kubectl port-forward. Kratos admin also takes Kratos's own pods.
+# kubectl port-forward. Kratos admin also takes Kratos's own pods, and
+# kratosAdminFrom (the sneakers-migrate Jobs during a migration).
 bundledNetworkPolicies:
   enabled: true
   kratosPublicFrom: []
+  kratosAdminFrom: []
   hydraPublicFrom:
     - namespaceSelector: {}
 

@@ -1,0 +1,43 @@
+# The callers sneakers-migrate's import and verify Jobs need, for a rehearsal
+# and a cutover alike. Layer it over the install's values for the Jobs'
+# lifetime only, then upgrade without it to take migrate out again.
+#   - The vault and audit list migrate as a caller (their defaults plus
+#     migrate), which puts <namespace>/sneakers-migrate in their
+#     WORKLOAD_ALLOWED_SERVICEACCOUNTS and admits the Jobs through their
+#     NetworkPolicy.
+#   - The Jobs read and write the target databases and the Kratos admin API
+#     directly, so the bundled PostgreSQL (its default list plus migrate) and
+#     Kratos admin admit them too.
+# Update the vault, audit and PostgreSQL lists if their chart defaults change.
+vault:
+  workloadIdentity:
+    callers: [gateway, workflow, sshbroker, connector, migrate]
+
+audit:
+  workloadIdentity:
+    callers: [gateway, vault, sshbroker, identity, workflow, migrate]
+
+postgres:
+  networkPolicy:
+    from:
+      - app.kubernetes.io/part-of: sneakers
+        app.kubernetes.io/component: identity
+      - app.kubernetes.io/part-of: sneakers
+        app.kubernetes.io/component: vault
+      - app.kubernetes.io/part-of: sneakers
+        app.kubernetes.io/component: workflow
+      - app.kubernetes.io/part-of: sneakers
+        app.kubernetes.io/component: audit
+      - app.kubernetes.io/part-of: sneakers
+        app.kubernetes.io/name: kratos
+      - app.kubernetes.io/part-of: sneakers
+        app.kubernetes.io/name: hydra
+      - app.kubernetes.io/part-of: sneakers
+        app.kubernetes.io/component: migrate
+
+bundledNetworkPolicies:
+  kratosAdminFrom:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: sneakers
+          app.kubernetes.io/component: migrate

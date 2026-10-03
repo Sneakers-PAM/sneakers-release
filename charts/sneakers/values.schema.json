@@ -45,6 +45,7 @@
       "properties": {
         "enabled": { "type": "boolean" },
         "kratosPublicFrom": { "type": "array", "items": { "type": "object" } },
+        "kratosAdminFrom": { "type": "array", "items": { "type": "object" } },
         "hydraPublicFrom": { "type": "array", "items": { "type": "object" } }
       }
     },

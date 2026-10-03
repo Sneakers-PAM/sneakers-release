@@ -140,8 +140,9 @@ not a person's. The vault admits it to `SealForImport`, `RevealSecretField`, `Ge
     access) on. The one exception is the Kubernetes API server, from the services that check caller
     tokens only: they fetch the cluster's signing keys there and refuse every call without them.
     Name its endpoint in `rehearsal.apiServer` (`kubectl get endpoints kubernetes -n default`); the
-    chart refuses rehearsal mode without it. `test/migrate/rehearsal-values.yaml` is that layer. For an install that isn't the
-    umbrella chart, apply `migrate/deploy/rehearsal-egress.yaml`.
+    chart refuses rehearsal mode without it. `test/migrate/rehearsal-values.yaml` is that layer,
+    applied with the migrate callers below. For an install that isn't the umbrella chart, apply
+    `migrate/deploy/rehearsal-egress.yaml`.
   - `import --rehearsal` also turns KEK rotation off and is the only mode that allows
     `--wipe-target` and `--owner-email`.
 - **One account changed:** `--owner-email` gives that account a new random password, shown once on
@@ -168,12 +169,22 @@ not a person's. The vault admits it to `SealForImport`, `RevealSecretField`, `Ge
 | `WORKLOAD_TOKEN_FILE` | import, verify | the projected ServiceAccount token sent as the caller's workload identity |
 | `LOG_LEVEL`, `LOG_FORMAT` | all | logging (console format unless `LOG_FORMAT` says otherwise; `-v` is trace) |
 
-For the import and verify, the vault and audit must list `migrate` as a caller
+### The migrate callers
+
+For the import and verify Jobs' lifetime, in a rehearsal and a cutover alike, the vault and audit must list `migrate` as a caller
 (`vault.workloadIdentity.callers` and `audit.workloadIdentity.callers`, their defaults plus
 `migrate`). That puts `<namespace>/sneakers-migrate` in their `WORKLOAD_ALLOWED_SERVICEACCOUNTS` and
-admits the Jobs through their NetworkPolicy. The Jobs run as the `sneakers-migrate`
-ServiceAccount with the `migrate` component label of release `sneakers`.
-`test/migrate/rehearsal-values.yaml` sets both. Take `migrate` out again once the Jobs are done.
+admits the Jobs through their NetworkPolicy. The Jobs also read and write the target databases
+and the Kratos admin API directly, so the bundled PostgreSQL and Kratos must admit them too:
+`postgres.networkPolicy.from` (its default plus the `migrate` component) and
+`bundledNetworkPolicies.kratosAdminFrom`. The Jobs run as the `sneakers-migrate` ServiceAccount
+with the `migrate` component label of release `sneakers`.
+
+`migrate/deploy/migrate-callers-values.yaml` sets all four. Layer it over the install's values
+for the Jobs' lifetime only, then upgrade without it to take every `migrate` entry out again;
+`scripts/check-charts.sh` checks each list is its chart default plus `migrate`. A cutover isn't in
+rehearsal mode, so nothing denies egress and the token-checking services reach the API server as
+usual: `rehearsal.apiServer` is for rehearsals only.
 
 ## Exit codes
 
@@ -225,12 +236,13 @@ Real data is proved once, after the v0.1.0 tag, as a separate QA install on the 
 in rehearsal mode. Every production step needs the owner's explicit yes at the time.
 
 1. **Install QA.** Deploy the tagged release as its own namespace with rehearsal mode on, the API
-   server endpoint named, and `migrate` on the vault and audit callers:
+   server endpoint named, and the migrate callers:
 
    ```bash
    kubectl get endpoints kubernetes -n default   # the API server addresses and port
    helm install sneakers charts/sneakers -n sneakers-qa --create-namespace \
-     -f <the install's values> -f test/migrate/rehearsal-values.yaml \
+     -f <the install's values> -f migrate/deploy/migrate-callers-values.yaml \
+     -f test/migrate/rehearsal-values.yaml \
      --set 'rehearsal.apiServer.addresses={<address>/32}' --set rehearsal.apiServer.port=<port>
    ```
 
@@ -281,11 +293,12 @@ Only after the v0.1.0 tag, on the adopter's own Kubernetes:
 2. **QA on the production cluster.** The real-data rehearsal above.
 3. **Take the original production down.** Freeze it to read-only, force open check-outs back, take
    the final export, then stop it.
-4. **Production.** Deploy Sneakers-PAM as production with `migrate` added to the vault and audit
-   callers, without rehearsal mode, import the final export (no `--rehearsal`, so no wipe and no owner
+4. **Production.** Deploy Sneakers-PAM as production without rehearsal mode, with
+   `migrate/deploy/migrate-callers-values.yaml` layered on (the vault, audit and PostgreSQL callers
+   and `kratosAdminFrom`; no `rehearsal.apiServer`, since nothing denies egress), import the final export (no `--rehearsal`, so no wipe and no owner
    password), restart the vault, verify, turn automation on (the connector, SSH broker and MCP
-   server) after verify, pin the SSH host keys the report lists, take the `migrate` callers
-   out, then switch the address over.
+   server) after verify, pin the SSH host keys the report lists, upgrade without
+   `migrate-callers-values.yaml` so every `migrate` entry is gone, then switch the address over.
 5. **Clean up.** Remove the QA install. The original system's data stays read-only until the owner
    signs off, then it's retired.
 

@@ -1,8 +1,8 @@
 # Rehearsal mode for a migration rehearsal: no automation and no egress out of
-# the namespace. The vault and audit list migrate as a caller (their defaults
-# plus migrate), so the import and verify Jobs pass their NetworkPolicy and
-# token check.
-# Layer it over the install's own values (test/kind/values.yaml here).
+# the namespace but the API server, for the services that check caller
+# tokens. Layer it over the install's own values (test/kind/values.yaml here)
+# and migrate/deploy/migrate-callers-values.yaml, and name the API server in
+# rehearsal.apiServer.
 rehearsal:
   enabled: true
 
@@ -14,11 +14,3 @@ sshbroker:
 
 mcp:
   enabled: false
-
-vault:
-  workloadIdentity:
-    callers: [gateway, workflow, sshbroker, connector, migrate]
-
-audit:
-  workloadIdentity:
-    callers: [gateway, vault, sshbroker, identity, workflow, migrate]

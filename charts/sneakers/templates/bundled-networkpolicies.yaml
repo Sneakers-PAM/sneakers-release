@@ -42,6 +42,9 @@ spec:
             matchLabels:
               app.kubernetes.io/name: kratos
               app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- with $np.kratosAdminFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       ports:
         - port: {{ .Values.kratos.kratos.config.serve.admin.port }}
 {{- end }}

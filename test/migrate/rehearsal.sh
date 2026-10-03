@@ -110,7 +110,7 @@ api_ips="$(kubectl get endpoints kubernetes -n default -o jsonpath='{range .subs
 api_port="$(kubectl get endpoints kubernetes -n default -o jsonpath='{.subsets[0].ports[0].port}')"
 [ -n "$api_ips" ] && [ -n "$api_port" ] || fail "could not read the API server endpoints"
 helm install "$release" charts/sneakers -n "$ns" --create-namespace \
-  -f test/kind/values.yaml -f test/migrate/rehearsal-values.yaml \
+  -f test/kind/values.yaml -f migrate/deploy/migrate-callers-values.yaml -f test/migrate/rehearsal-values.yaml \
   --set "rehearsal.apiServer.addresses={${api_ips%,}}" --set "rehearsal.apiServer.port=${api_port}" \
   --wait --timeout "$timeout"
 kubectl -n "$ns" get pods
