@@ -70,3 +70,8 @@ Follow the logging rules in `CLAUDE.md`. In short:
 - Defaults are production-safe and the schemas enforce the security ones: a change that makes a
   root filesystem writable or turns off `runAsNonRoot` fails validation on purpose.
 - `sneakers-release` `main` takes changes only through a PR approved by the release-review group.
+- `go.mod` holds tagged releases only: no `replace` directive, and no pseudo-version (`@main`,
+  `@<sha>`) of a `github.com/Bugs5382/*` or `github.com/Sneakers-PAM/*` module; the
+  `proto-sync / check` job fails on either. To compile and test against a local package checkout,
+  use a git-ignored `go.work` beside `go.mod` (`go work init . ../go-<pkg>`, which writes
+  `use . ../go-<pkg>`); `go.work` and `go.work.sum` are in `.gitignore`.
