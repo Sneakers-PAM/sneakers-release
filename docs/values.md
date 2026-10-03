@@ -16,6 +16,10 @@ chart by `scripts/sync-schemas.sh`.
 | `global.otlpEndpoint` | (empty) | OTLP gRPC collector (`host:port`) for traces and metrics. |
 | `bundledSecrets.enabled` | `true` | Create the Secrets the bundled pieces share (below). |
 | `<service>.enabled` | `true` | Install that service: `identity`, `vault`, `workflow`, `audit`, `notify`, `connector`, `sshbroker`, `gateway`, `mcp`, `web-staff`, `web-admin`. |
+| `rehearsal.enabled` | `false` | Migration rehearsal mode ([migrate.md](migrate.md)): a deny-all egress NetworkPolicy for the namespace (other pods in it and the cluster DNS only), and the chart refuses to render with `connector`, `sshbroker` or `mcp` enabled. Never on for production. |
+| `rehearsal.dnsNamespace` | `kube-system` | The namespace of the cluster DNS the rehearsal policy still allows. |
+| `rehearsal.apiServer.addresses` | `[]` | The Kubernetes API server's endpoint addresses as CIDRs (`kubectl get endpoints kubernetes -n default`). Only the services that check caller tokens may reach them, to fetch the cluster's signing keys. Required with rehearsal mode on. |
+| `rehearsal.apiServer.port` | `6443` | The API server endpoint port. |
 | `global.sso.enabled` | `false` | `SSO_ENABLED` for both web apps: shows the single sign-on button. Turn it on with the gateway's SSO settings. |
 | `<service>.*` | | That service chart's values (next section). The umbrella sets each database DSN and points each `secretEnv` at the bundled Secrets. |
 | `postgres.enabled` | `true` | The bundled PostgreSQL (`charts/postgres`). |
@@ -24,6 +28,7 @@ chart by `scripts/sync-schemas.sh`.
 | `hydra.enabled` | `false` | The bundled Ory Hydra ([ory/k8s](https://github.com/ory/k8s)); its values pass through. |
 | `bundledNetworkPolicies.enabled` | `true` | NetworkPolicies for the bundled Kratos and Hydra, whose charts ship none. See [install.md](install.md#service-to-service-traffic). |
 | `bundledNetworkPolicies.kratosPublicFrom` | `[]` | More peers for Kratos's public port, besides the gateway. |
+| `bundledNetworkPolicies.kratosAdminFrom` | `[]` | Extra peers (NetworkPolicy `from` entries) admitted to the Kratos admin port, besides the identity service, the gateway and Kratos itself. A migration adds the `sneakers-migrate` Jobs ([migrate.md](migrate.md)). |
 | `bundledNetworkPolicies.hydraPublicFrom` | any pod | More peers for Hydra's public port, besides the gateway and mcp: the edge OAuth clients come through. |
 | `tests.image` | curl, pinned | The image of the `helm test` pod. |
 
@@ -74,7 +79,7 @@ All nine service charts take the same values. Each one also works on its own, ou
 | `serviceAccount.*` | one per service, no token mounted | `create`, `name`, `automountToken`. |
 | `projectedToken.*` | off | An extra kubelet-rotated ServiceAccount token: `audience`, `expirationSeconds`, `mountPath`, `path`, `clusterCA` (also mount the cluster CA), `envName` (a variable set to the token's path). It can't use the workload identity paths below. |
 | `workloadIdentity.caller` | on for every service that makes gRPC calls | Mount a token with audience `workloadIdentity.audience` at `/var/run/secrets/sneakers/token` and set `WORKLOAD_TOKEN_FILE` to it. The service sends it on every gRPC call. |
-| `workloadIdentity.callers` | the service's callers ([install.md](install.md#service-to-service-traffic)) | The services allowed to call this one's main port. The NetworkPolicy admits only their pods there. |
+| `workloadIdentity.callers` | the service's callers ([install.md](install.md#service-to-service-traffic)) | The services allowed to call this one's main port. The NetworkPolicy admits only their pods there. `migrate` is the `sneakers-migrate` Jobs, listed on the vault and audit only for a migration ([migrate.md](migrate.md)). |
 | `workloadIdentity.verify` | on for vault, workflow, sshbroker, audit, notify and identity | Check the callers' tokens: sets `WORKLOAD_OIDC_ISSUER`, `WORKLOAD_OIDC_JWKS_URL`, `WORKLOAD_OIDC_CA_FILE`, `WORKLOAD_OIDC_BEARER_FILE`, `WORKLOAD_AUDIENCE` and `WORKLOAD_ALLOWED_SERVICEACCOUNTS` (`<namespace>/sneakers-<caller>` for each caller), and mounts an API token and the cluster CA at `/var/run/secrets/tokens` for the key fetch. Needs `callers`. |
 | `workloadIdentity.audience`, `expirationSeconds` | `sneakers`, `3600` | The caller token's audience and lifetime. |
 | `workloadIdentity.issuer`, `jwksURL` | the in-cluster issuer and JWKS | Where a callee checks the tokens. Both must be https. |

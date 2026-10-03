@@ -195,7 +195,7 @@
           "type": "array",
           "uniqueItems": true,
           "items": {
-            "enum": ["identity", "vault", "workflow", "audit", "notify", "connector", "sshbroker", "gateway", "mcp"]
+            "enum": ["identity", "vault", "workflow", "audit", "notify", "connector", "sshbroker", "gateway", "mcp", "migrate"]
           }
         },
         "audience": { "type": "string", "minLength": 1 },

@@ -1,0 +1,91 @@
+# The sneakers-migrate export Job, in the ORIGINAL system's namespace. It only
+# reads: give it a read-only database role. Fill the ${...} placeholders with
+# envsubst (docs/migrate.md):
+#   SOURCE_NAMESPACE  the original system's namespace
+#   MIGRATE_IMAGE     the sneakers-migrate image, by digest
+#   HOLDER_IMAGE      a small image with tar and sleep (e.g. busybox, by digest)
+#   RECIPIENT         the target's import recipient (age1..., from keygen)
+# It needs a Secret sneakers-migrate-source in that namespace with the keys
+# SOURCE_IDENTITY_DSN, SOURCE_VAULT_DSN, SOURCE_WORKFLOW_DSN, SOURCE_AUDIT_DSN,
+# SOURCE_KRATOS_ADMIN_URL, SOURCE_VAULT_ROOT_KEK and, when the source has them,
+# SOURCE_DEV_KEK_SEED and SOURCE_TOTP_ENC_KEY. The export runs as an init
+# container and leaves the encrypted bundle in memory-backed scratch; the
+# holder container keeps it for `kubectl cp` and exits after an hour.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sneakers-migrate-export
+  namespace: ${SOURCE_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: sneakers-migrate
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sneakers-migrate
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: export
+          image: ${MIGRATE_IMAGE}
+          imagePullPolicy: IfNotPresent
+          args: ["export", "--recipient", "${RECIPIENT}", "--out", "/bundle/bundle.age"]
+          envFrom:
+            - secretRef:
+                name: sneakers-migrate-source
+          env:
+            - name: LOG_FORMAT
+              value: json
+            - name: LOG_LEVEL
+              value: info
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: bundle
+              mountPath: /bundle
+      containers:
+        - name: holder
+          image: ${HOLDER_IMAGE}
+          imagePullPolicy: IfNotPresent
+          command: ["sleep", "3600"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: bundle
+              mountPath: /bundle
+              readOnly: true
+      volumes:
+        - name: bundle
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi

@@ -1,0 +1,5 @@
+.git
+.protos
+.local
+bin
+charts/*/charts

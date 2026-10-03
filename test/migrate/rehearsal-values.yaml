@@ -1,0 +1,16 @@
+# Rehearsal mode for a migration rehearsal: no automation and no egress out of
+# the namespace but the API server, for the services that check caller
+# tokens. Layer it over the install's own values (test/kind/values.yaml here)
+# and migrate/deploy/migrate-callers-values.yaml, and name the API server in
+# rehearsal.apiServer.
+rehearsal:
+  enabled: true
+
+connector:
+  enabled: false
+
+sshbroker:
+  enabled: false
+
+mcp:
+  enabled: false

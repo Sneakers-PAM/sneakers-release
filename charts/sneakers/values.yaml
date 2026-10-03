@@ -20,6 +20,22 @@ global:
   sso:
     enabled: false
 
+# Rehearsal mode, for a migration rehearsal (docs/migrate.md). Every pod in
+# the namespace may reach only the other pods and the cluster DNS, and the chart
+# refuses to render while the connector, the SSH broker or the MCP server is
+# on. Never turn it on for a production install.
+rehearsal:
+  enabled: false
+  # The namespace the cluster DNS runs in.
+  dnsNamespace: kube-system
+  # The Kubernetes API server's endpoint addresses (CIDRs) and port, from
+  # `kubectl get endpoints kubernetes`. The services that check caller tokens
+  # fetch the cluster's signing keys there, so only they may reach it. Required
+  # with rehearsal mode on.
+  apiServer:
+    addresses: []
+    port: 6443
+
 # Secrets shared by the bundled pieces: the PostgreSQL passwords, the Valkey
 # password and the REDIS_URL built from it, and the Kratos and Hydra DSNs and
 # keys. Each value is generated once and kept on upgrade and uninstall. Turn
@@ -338,10 +354,12 @@ hydra:
 # server and hydraPublicFrom (OAuth clients reach the issuer through the
 # edge; narrow it to your ingress controller's namespace). Hydra admin takes
 # only Hydra's own pods (the chart's helm test): manage its clients with
-# kubectl port-forward. Kratos admin also takes Kratos's own pods.
+# kubectl port-forward. Kratos admin also takes Kratos's own pods, and
+# kratosAdminFrom (the sneakers-migrate Jobs during a migration).
 bundledNetworkPolicies:
   enabled: true
   kratosPublicFrom: []
+  kratosAdminFrom: []
   hydraPublicFrom:
     - namespaceSelector: {}
 

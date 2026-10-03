@@ -26,6 +26,9 @@ fails when the two disagree.
   read-only root filesystem, NetworkPolicies, PodDisruptionBudgets and a schema for every chart's
   values.
 - 📌 **Pinned:** every third-party chart and image is pinned by version and digest.
+- 🔁 **Migration:** `sneakers-migrate` (`migrate/`) exports an install of the original system to one
+  encrypted bundle, imports it into a fresh install and verifies counts, the audit chain, sample
+  reveals and targets.
 
 ## 🚀 Install with Helm
 
@@ -54,6 +57,7 @@ Secret with the database: without it no stored secret can be opened.
 - [docs/values.md](docs/values.md): every value of the umbrella and the service charts.
 - [docs/release-checks.md](docs/release-checks.md): the manual checks run on a release candidate
   before it's tagged.
+- [docs/migrate.md](docs/migrate.md): `sneakers-migrate`, the rehearsals and the cutover runbook.
 - [manifest/release.yaml](manifest/release.yaml): the pinned release.
 
 ## 🛠️ Develop
@@ -67,6 +71,11 @@ The install test (`test/kind/run.sh`, run by the Install Test workflow) builds e
 from its repository, installs the umbrella on a throwaway kind cluster, upgrades it in place, runs
 `helm test` and checks that each service's port takes only its callers, and that a callee refuses a
 caller with the wrong service account.
+
+The migration rehearsal (`test/migrate/rehearsal.sh`, run by the Migrate Rehearsal workflow) seeds
+a synthetic source in the original schema and runs export, import and verify against the umbrella
+in rehearsal mode, with its negative tests. `go test ./...` runs the tool's tests; set
+`MIGRATE_TEST_PG` to an admin Postgres DSN for the integration tests.
 
 ## ⚖️ License
 
