@@ -15,6 +15,10 @@ global:
   logFormat: json
   # OTLP gRPC collector (host:port) for traces and metrics. Empty: unset.
   otlpEndpoint: ""
+  # Single sign-on: shows the SSO sign-in in the web apps (SSO_ENABLED). Turn
+  # it on with the gateway's SSO settings.
+  sso:
+    enabled: false
 
 # Secrets shared by the bundled pieces: the PostgreSQL passwords, the Valkey
 # password and the REDIS_URL built from it, and the Kratos and Hydra DSNs and
@@ -90,6 +94,11 @@ gateway:
       secretName: sneakers-bundled
 
 mcp:
+  enabled: true
+# The web apps, on global.host: the staff app at / and the admin app at /admin.
+web-staff:
+  enabled: true
+web-admin:
   enabled: true
 
 # ---------------------------------------------------------------------------

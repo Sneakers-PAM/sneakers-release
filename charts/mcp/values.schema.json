@@ -29,7 +29,12 @@
         "environment": { "$ref": "#/definitions/nonEmptyString" },
         "logLevel": { "enum": ["trace", "debug", "info", "warn", "error", "fatal", "panic", "disabled"] },
         "logFormat": { "enum": ["json", "console", "pretty", "both"] },
-        "otlpEndpoint": { "type": "string" }
+        "otlpEndpoint": { "type": "string" },
+        "sso": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "enabled": { "type": "boolean" } }
+        }
       }
     },
     "image": {

@@ -77,3 +77,15 @@ mcp:
     repository: ci.example.org/sneakers-mcp
     tag: ci
     pullPolicy: Never
+
+web-staff:
+  image:
+    repository: ci.example.org/sneakers-web-staff
+    tag: ci
+    pullPolicy: Never
+
+web-admin:
+  image:
+    repository: ci.example.org/sneakers-web-admin
+    tag: ci
+    pullPolicy: Never

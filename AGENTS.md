@@ -27,13 +27,13 @@ Two things to know before changing it:
 ## Layout
 
 - `charts/sneakers-lib/` - the library chart: every service resource, plus the shared schema
-- `charts/<service>/` - one chart per service: `values.yaml`, `values.schema.json`, and a template
-  that includes the library
+- `charts/<service>/` - one chart per service, including the two web apps (`web-staff`,
+  `web-admin`): `values.yaml`, `values.schema.json`, and a template that includes the library
 - `charts/postgres/` - the bundled single-instance PostgreSQL
 - `charts/sneakers/` - the umbrella: dependencies, the bundled Secrets, the `helm test` pod
 - `manifest/release.yaml` - the pinned release
 - `scripts/` - `install-tools.sh` (pinned, checksum-checked tools), `check-charts.sh`, the
-  manifest, defaults and edges checks, `sync-schemas.sh`
+  manifest, defaults, edges and web checks, `sync-schemas.sh`
 - `test/ci/` - values for rendering in CI; `test/kind/` - the install test
 - `docs/` - install, values, and the manual release checks
 

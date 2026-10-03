@@ -24,7 +24,12 @@
         "environment": { "type": "string", "minLength": 1 },
         "logLevel": { "enum": ["trace", "debug", "info", "warn", "error", "fatal", "panic", "disabled"] },
         "logFormat": { "enum": ["json", "console", "pretty", "both"] },
-        "otlpEndpoint": { "type": "string" }
+        "otlpEndpoint": { "type": "string" },
+        "sso": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "enabled": { "type": "boolean" } }
+        }
       }
     },
     "bundledSecrets": {
@@ -52,6 +57,8 @@
     "sshbroker": { "$ref": "#/definitions/toggle" },
     "gateway": { "$ref": "#/definitions/toggle" },
     "mcp": { "$ref": "#/definitions/toggle" },
+    "web-staff": { "$ref": "#/definitions/toggle" },
+    "web-admin": { "$ref": "#/definitions/toggle" },
     "postgres": { "$ref": "#/definitions/toggle" },
     "valkey": { "$ref": "#/definitions/toggle" },
     "kratos": { "$ref": "#/definitions/toggle" },

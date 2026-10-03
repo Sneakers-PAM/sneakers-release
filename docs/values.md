@@ -15,7 +15,8 @@ chart by `scripts/sync-schemas.sh`.
 | `global.logFormat` | `json` | `LOG_FORMAT` for every service. Clusters log `json`. |
 | `global.otlpEndpoint` | (empty) | OTLP gRPC collector (`host:port`) for traces and metrics. |
 | `bundledSecrets.enabled` | `true` | Create the Secrets the bundled pieces share (below). |
-| `<service>.enabled` | `true` | Install that service: `identity`, `vault`, `workflow`, `audit`, `notify`, `connector`, `sshbroker`, `gateway`, `mcp`. |
+| `<service>.enabled` | `true` | Install that service: `identity`, `vault`, `workflow`, `audit`, `notify`, `connector`, `sshbroker`, `gateway`, `mcp`, `web-staff`, `web-admin`. |
+| `global.sso.enabled` | `false` | `SSO_ENABLED` for both web apps: shows the single sign-on button. Turn it on with the gateway's SSO settings. |
 | `<service>.*` | | That service chart's values (next section). The umbrella sets each database DSN and points each `secretEnv` at the bundled Secrets. |
 | `postgres.enabled` | `true` | The bundled PostgreSQL (`charts/postgres`). |
 | `valkey.enabled` | `true` | The bundled Valkey ([valkey-helm](https://github.com/valkey-io/valkey-helm)); its values pass through. |
@@ -83,7 +84,7 @@ All nine service charts take the same values. Each one also works on its own, ou
 | `caBundle.*` | off | One key of a ConfigMap with a PEM bundle, pointed to by `envName` (`SSL_CERT_FILE`). The bundle replaces the system roots, so it must hold every root the service needs. |
 | `extraVolumes`, `extraVolumeMounts` | `[]` | |
 | `networkPolicy.enabled` | `true` | Ingress on the main port only from the services in `workloadIdentity.callers`; nothing else from the release. |
-| `networkPolicy.ingressFrom`, `networkPolicy.ingressPorts` | any pod in the cluster, on `http`, for gateway, mcp and sshbroker; none for the rest | More peers, for the ingress controller. |
+| `networkPolicy.ingressFrom`, `networkPolicy.ingressPorts` | any pod in the cluster, on `http`, for gateway, mcp, sshbroker and the web apps; none for the rest | More peers, for the ingress controller. |
 | `networkPolicy.egress` | `[]` (DNS, the gateway and Hydra for mcp) | Egress rules. Empty means no egress policy. |
 | `ingress.*` | off | `enabled`, `className`, `host` (default `global.host` for the edge services), `annotations`, `tlsSecretName`, `paths` (each `{path, pathType, portName}`). |
 | `migrations.job.*` | off | A pre-upgrade Job running the image with `args`. Off until the services have a migrate-only command; they migrate at start today. |
@@ -103,6 +104,8 @@ All nine service charts take the same values. Each one also works on its own, ou
 | sshbroker | 9096, 9097 | | `REDIS_URL` | Without Redis the tickets stay in memory: run one replica. |
 | gateway | 9100 | | `REDIS_URL` (required), `SETUP_TOKEN`, `POLIS_API_KEY`, `POLIS_CLIENT_SECRET` (with `sso.enabled`) | `AUTH_MODE=real`, secure cookies, MFA enforced. |
 | mcp | 9101 | | | Accepts service-account and personal tokens; Hydra JWTs once `HYDRA_ISSUER` is set. |
+| web-staff | 3000 | | | The staff app at `/`. Runs as uid 1000. Health: `GET /healthz`. Settings: `GATEWAY_URL` (required), `APP_ENV` (`prod`), `SSO_ENABLED` (from `global.sso.enabled`), `STAFF_URL` (`/`), `ADMIN_URL` (`/admin/`), `TRUST_PROXY` (`1`: the proxies whose `X-Forwarded-*` headers the app trusts, as a hop count or the ingress's address range; leave it empty wherever clients reach the pod directly). Egress: the gateway and DNS only. `caBundle.envName` is `NODE_EXTRA_CA_CERTS`. |
+| web-admin | 3000 | | | The admin app at `/admin/`, same settings as web-staff. Health: `GET /admin/healthz`. |
 
 ## The bundled PostgreSQL (`charts/postgres`)
 

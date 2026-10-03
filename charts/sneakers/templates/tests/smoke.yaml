@@ -1,7 +1,7 @@
 {{- /*
-helm test: the edge services answer their health checks. Kratos isn't
-checked here: its NetworkPolicy admits only the identity service and the
-gateway, and helm install --wait already waits for it to be ready.
+helm test: the edge services and both web apps answer their health checks.
+Kratos isn't checked here: its NetworkPolicy admits only the identity service
+and the gateway, and helm install --wait already waits for it to be ready.
 */ -}}
 apiVersion: v1
 kind: Pod
@@ -36,6 +36,12 @@ spec:
           {{- end }}
           {{- if .Values.mcp.enabled }}
           check http://sneakers-mcp:9101/health
+          {{- end }}
+          {{- if (index .Values "web-staff").enabled }}
+          check http://sneakers-web-staff:3000/healthz
+          {{- end }}
+          {{- if (index .Values "web-admin").enabled }}
+          check http://sneakers-web-admin:3000/admin/healthz
           {{- end }}
           {{- if .Values.sshbroker.enabled }}
           check http://sneakers-sshbroker:9097/health

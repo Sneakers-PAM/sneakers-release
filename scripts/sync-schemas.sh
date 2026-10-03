@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 src=charts/sneakers-lib/service.schema.json
-services=(identity vault workflow audit notify connector sshbroker gateway mcp)
+services=(identity vault workflow audit notify connector sshbroker gateway mcp web-staff web-admin)
 status=0
 for svc in "${services[@]}"; do
   dst="charts/${svc}/values.schema.json"

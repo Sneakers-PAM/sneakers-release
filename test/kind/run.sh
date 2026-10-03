@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # The install test, against the current kubectl context (a throwaway kind
 # cluster): install the umbrella with the bundled pieces, upgrade it in place
-# and check the generated secrets survive, run helm test, check that each
-# service's port takes only the callers in the call graph, and that a callee
-# refuses a caller with the wrong service account.
+# and check the generated secrets survive, run helm test (which checks both web
+# apps' health), check that each service's port takes only the callers in the
+# call graph and that the web apps reach only the gateway, that a callee
+# refuses a caller with the wrong service account, and that both web apps
+# render a page.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 ns="${NAMESPACE:-sneakers}"
@@ -66,7 +68,7 @@ declare -A bundled=(
   [sneakers-valkey:6379]="gateway vault notify sshbroker"
   [sneakers-postgres:5432]="identity vault workflow audit"
 )
-edge_targets="sneakers-gateway:9100 sneakers-sshbroker:9097 sneakers-hydra-public:4444"
+edge_targets="sneakers-gateway:9100 sneakers-sshbroker:9097 sneakers-hydra-public:4444 sneakers-web-staff:3000 sneakers-web-admin:3000"
 targets="$edge_targets"
 for svc in "${!grpc_port[@]}"; do targets+=" sneakers-${svc}:${grpc_port[$svc]}"; done
 for t in "${!bundled[@]}"; do targets+=" $t"; done
@@ -75,7 +77,7 @@ for t in "${!bundled[@]}"; do targets+=" $t"; done
 # pod. With a component it carries that service's component labels, which its
 # callees' NetworkPolicies match, and a caller token with audience sneakers. It
 # never carries the service's name label, so the service's own Service doesn't
-# route to it; the MCP probe does, so the MCP server's egress policy applies.
+# route to it; the MCP and staff app probes do, so their egress policies apply.
 pod() {
   local name="$1" comp="$2" sa="$3" image="$4" script="$5" labels mounts="" volumes=""
   labels="edge-probe: \"$name\""
@@ -84,8 +86,8 @@ pod() {
     app.kubernetes.io/part-of: sneakers
     app.kubernetes.io/instance: ${release}
     app.kubernetes.io/component: ${comp}"
-    [ "$comp" = mcp ] && labels+="
-    app.kubernetes.io/name: sneakers-mcp"
+    case "$comp" in mcp | web-staff) labels+="
+    app.kubernetes.io/name: sneakers-${comp}" ;; esac
     mounts="volumeMounts: [{name: token, mountPath: /var/run/secrets/sneakers, readOnly: true}]"
     volumes="volumes: [{name: token, projected: {sources: [{serviceAccountToken: {audience: sneakers, expirationSeconds: 600, path: token}}]}}]"
   fi
@@ -125,6 +127,10 @@ wait_logs() {
 want() { # <probe> <host:port>: open or refused
   local probe="$1" target="$2" svc port
   svc="${target%%:*}"; svc="${svc#sneakers-}"; port="${target#*:}"
+  if [ "$probe" = web-staff ]; then
+    [ "$target" = sneakers-gateway:9100 ] && echo open || echo refused
+    return
+  fi
   if [ "$probe" = mcp ]; then
     case "$target" in sneakers-gateway:9100 | sneakers-hydra-public:4444) echo open ;; *) echo refused ;; esac
     return
@@ -141,7 +147,7 @@ want() { # <probe> <host:port>: open or refused
 }
 
 connect_script="for t in ${targets}; do curl -s -m 3 -o /dev/null http://\$t/; echo \"\$t \$?\"; done"
-probes="outside mcp gateway vault workflow sshbroker connector notify identity"
+probes="outside mcp web-staff gateway vault workflow sshbroker connector notify identity"
 for p in $probes; do
   comp="$p"; [ "$p" = outside ] && comp=-
   pod "np-${p}" "$comp" default "$test_image" "$connect_script"
@@ -196,5 +202,22 @@ expect tok-connector-vault 7 yes "the vault let the connector call a user-facing
 expect tok-none-vault 16 yes "the vault took a call with no token"
 expect tok-right-vault '16|7|' no "the vault refused the gateway's token"
 [ "$failed" = 0 ] || exit 1
+
+echo "== web apps render"
+# Each app renders a page (its sign-in, after redirects) through the live
+# gateway: 200 after at most a few redirects.
+page() { # name url: prints the final HTTP status
+  kubectl -n "$ns" run "$1" --image="$test_image" --restart=Never --quiet \
+    --overrides='{"spec":{"securityContext":{"runAsNonRoot":true,"runAsUser":65532,"seccompProfile":{"type":"RuntimeDefault"}}}}' \
+    --command -- curl -s -m 20 -L --max-redirs 5 -o /dev/null -w '%{http_code}' "$2" >/dev/null
+  kubectl -n "$ns" wait --for=jsonpath='{.status.phase}'=Succeeded "pod/$1" --timeout=60s >/dev/null
+  kubectl -n "$ns" logs "$1"
+  kubectl -n "$ns" delete pod "$1" --wait=false >/dev/null
+}
+staff="$(page web-staff-page http://sneakers-web-staff:3000/)"
+admin="$(page web-admin-page http://sneakers-web-admin:3000/admin/)"
+echo "staff /: HTTP ${staff}; admin /admin/: HTTP ${admin}"
+[ "$staff" = 200 ] || { echo "the staff app didn't render" >&2; exit 1; }
+[ "$admin" = 200 ] || { echo "the admin app didn't render" >&2; exit 1; }
 
 echo "install test passed"

@@ -1,6 +1,6 @@
 apiVersion: v2
 name: sneakers
-description: "Sneakers privileged access management: every service, plus optional PostgreSQL, Valkey and Ory Kratos and Hydra."
+description: "Sneakers privileged access management: every service and both web apps, plus optional PostgreSQL, Valkey and Ory Kratos and Hydra."
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
@@ -45,6 +45,14 @@ dependencies:
     version: 0.1.0
     repository: file://../mcp
     condition: mcp.enabled
+  - name: web-staff
+    version: 0.1.0
+    repository: file://../web-staff
+    condition: web-staff.enabled
+  - name: web-admin
+    version: 0.1.0
+    repository: file://../web-admin
+    condition: web-admin.enabled
   - name: postgres
     version: 0.1.0
     repository: file://../postgres

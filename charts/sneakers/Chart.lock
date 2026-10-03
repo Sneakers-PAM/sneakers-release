@@ -26,6 +26,12 @@ dependencies:
 - name: mcp
   repository: file://../mcp
   version: 0.1.0
+- name: web-staff
+  repository: file://../web-staff
+  version: 0.1.0
+- name: web-admin
+  repository: file://../web-admin
+  version: 0.1.0
 - name: postgres
   repository: file://../postgres
   version: 0.1.0
@@ -38,5 +44,5 @@ dependencies:
 - name: hydra
   repository: https://k8s.ory.sh/helm/charts
   version: 0.59.0
-digest: sha256:bedecfd6e5b5ddbe069caaffc0cf7a8c7cebd7e7d8fa56daeffb87afd55b0e8a
-generated: "2026-10-02T02:28:51.507620112-04:00"
+digest: sha256:0c6adacc4565d4e10793dd1dc873c1f3ea0afe0cbe90ef7dc01b2ee01e3735bd
+generated: "2026-10-02T11:53:41.409413383-04:00"

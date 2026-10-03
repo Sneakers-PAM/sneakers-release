@@ -72,10 +72,20 @@ the value again.
 
 ## The public edge
 
-The gateway, the MCP server and the SSH broker are the only services reached from outside. Each
-chart can render an Ingress; they are off by default:
+The two web apps, the gateway, the MCP server and the SSH broker are the only services reached
+from outside. Each chart can render an Ingress; they are off by default:
 
 ```yaml
+web-staff:
+  ingress:
+    enabled: true
+    className: nginx
+    tlsSecretName: sneakers-tls
+web-admin:
+  ingress:
+    enabled: true
+    className: nginx
+    tlsSecretName: sneakers-tls
 gateway:
   ingress:
     enabled: true
@@ -93,11 +103,21 @@ sshbroker:
     tlsSecretName: sneakers-tls
 ```
 
-They all use `global.host`, each with its own paths: the gateway serves `/graphql`, `/machine`,
+They all use `global.host`, each with its own paths: the staff web app serves `/` and the admin web
+app `/admin` (the path is passed on unchanged: each app's base is fixed when its image is built),
+and the more specific paths go to the other services. The gateway serves `/graphql`, `/machine`,
 `/auth`, `/setup`, `/oauth2` and `/.well-known/oauth-authorization-server`; the MCP server `/mcp`
 and `/.well-known/oauth-protected-resource`; the SSH broker `/ssh` (a WebSocket). The edge
 services' NetworkPolicies let any pod in the cluster reach their HTTP port; set
 `<service>.networkPolicy.ingressFrom` to your ingress controller's namespace to narrow that.
+
+The web apps render on the server and make every gateway call from there, at
+`http://sneakers-gateway:9100`; their egress policy allows only that and DNS. The browser talks
+to the gateway only for the single sign-on redirect. Your ingress must pass
+`X-Forwarded-Proto: https` through, so the apps (`TRUST_PROXY`, one hop by default) and the gateway
+see the request as secure.
+With single sign-on, set `global.sso.enabled: true` as well as the gateway's SSO settings: it
+shows the SSO sign-in in both apps.
 
 ## Service-to-service traffic
 
@@ -116,7 +136,7 @@ below; any other pod, including the other pods of the release, can't connect.
 | notify | vault, gateway |
 | identity | gateway, notify |
 | connector | none (health probes only) |
-| gateway (HTTP) | the edge and mcp |
+| gateway (HTTP) | the edge (any pod in the cluster, which takes in the web apps) and mcp |
 | mcp (HTTP) | the edge |
 
 The MCP server's own egress allows only DNS, the gateway's HTTP port and the bundled Hydra's

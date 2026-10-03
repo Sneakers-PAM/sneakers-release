@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 KUBE_VERSION="${KUBE_VERSION:-1.36.4}"
-services=(identity vault workflow audit notify connector sshbroker gateway mcp)
+services=(identity vault workflow audit notify connector sshbroker gateway mcp web-staff web-admin)
 out="$(mktemp -d)"
 trap 'rm -rf "$out"' EXIT
 
@@ -66,6 +66,12 @@ helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml \
   --set sso.enabled=true --set sso.publicURL=https://sso.example.org \
   --set sso.clientSecret.secretName=polis >"$out/sso-on.yaml"
 python3 scripts/check-sso.py "$out/sso-off.yaml" "$out/sso-on.yaml"
+
+step "web apps"
+helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml \
+  --set gateway.ingress.enabled=true --set web-staff.ingress.enabled=true \
+  --set web-admin.ingress.enabled=true --set global.sso.enabled=true >"$out/sneakers-web.yaml"
+python3 scripts/check-web.py "$out/sneakers.yaml" "$out/sneakers-web.yaml"
 
 step "kubeconform (Kubernetes ${KUBE_VERSION})"
 kubeconform -strict -summary -kubernetes-version "${KUBE_VERSION}" "$out"/*.yaml
