@@ -3,6 +3,13 @@ name: Install Test
 # image built in the job from its repository (never pushed). Runs on pull
 # requests that touch the charts, and by hand. It is kept out of Build & Test
 # because building nine images takes most of its run time.
+#
+# install runs the chart defaults on amd64. install-arm64 runs the same test on
+# an arm64 runner with the small-box example values, building each image
+# natively for arm64; it isn't a required check. Both record the pods' peak
+# memory and fail over 4 GiB. Where no arm64 runner is available (a private
+# fork without one), set the repository variable ARM64_RUNNER to none and the
+# job is skipped with a notice.
 on:
   pull_request:
     branches: [main]
@@ -35,7 +42,7 @@ jobs:
       KIND_NODE_IMAGE: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6.1.0
       - name: Install tools
         run: |
           scripts/install-tools.sh "$RUNNER_TEMP/bin" helm kind kubectl
@@ -48,6 +55,10 @@ jobs:
         run: test/kind/build-images.sh
       - name: Install, upgrade and test
         run: test/kind/run.sh
+      - name: Peak memory
+        env:
+          MEMORY_BUDGET: "4096"
+        run: test/kind/memory-peak.sh
       - name: Diagnostics
         if: failure()
         run: |
@@ -58,3 +69,56 @@ jobs:
             kubectl -n sneakers logs "$p" --all-containers --tail=80 || true
             echo "::endgroup::"
           done
+  install-arm64:
+    name: 🦾 Install on kind (arm64)
+    if: >-
+      vars.ARM64_RUNNER != 'none'
+      && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 75
+    env:
+      KIND_CLUSTER: sneakers
+      KIND_NODE_IMAGE: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6.1.0
+      - name: Install tools
+        run: |
+          scripts/install-tools.sh "$RUNNER_TEMP/bin" helm kind kubectl
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Create the cluster
+        run: kind create cluster --name "$KIND_CLUSTER" --image "$KIND_NODE_IMAGE" --wait 180s
+      # Built on the runner, so every image is linux/arm64; the published
+      # multi-arch images (#41) aren't needed.
+      - name: Build the service images
+        env:
+          SERVICES_FROM_MAIN: ${{ inputs.services-from-main || false }}
+        run: test/kind/build-images.sh
+      - name: Install, upgrade and test
+        env:
+          BASE_VALUES: charts/sneakers/examples/values-small-box.yaml
+        run: test/kind/run.sh
+      - name: Peak memory
+        env:
+          MEMORY_BUDGET: "4096"
+        run: test/kind/memory-peak.sh
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl -n sneakers get pods,events -o wide || true
+          for p in $(kubectl -n sneakers get pods -o name 2>/dev/null); do
+            echo "::group::$p"
+            kubectl -n sneakers describe "$p" | tail -30 || true
+            kubectl -n sneakers logs "$p" --all-containers --tail=80 || true
+            echo "::endgroup::"
+          done
+  install-arm64-skipped:
+    name: 🦾 Install on kind (arm64)
+    if: >-
+      vars.ARM64_RUNNER == 'none'
+      && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: No arm64 runner
+        run: echo "::notice title=arm64 install test skipped::The repository variable ARM64_RUNNER is none, so no arm64 runner is used. Unset it to run the test on ubuntu-24.04-arm."

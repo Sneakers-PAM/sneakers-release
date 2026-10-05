@@ -156,3 +156,5 @@ sneakers-release#44 replaces it with helm-postgres-ha, which adds PgBouncer pool
 chart template writes in a resource figure, a memory-backed volume size or a replica count instead
 of reading a value, and it renders both examples and fails if the small one's memory requests pass
 1 GiB or its limits 3 GiB, with Hydra on or off.
+The arm64 install test installs the small-box example on one kind node and fails if the pods'
+peak memory passes 4 GiB.

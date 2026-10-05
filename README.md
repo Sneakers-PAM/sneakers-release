@@ -71,6 +71,10 @@ The install test (`test/kind/run.sh`, run by the Install Test workflow) builds e
 from its repository, installs the umbrella on a throwaway kind cluster, upgrades it in place, runs
 `helm test` and checks that each service's port takes only its callers, and that a callee refuses a
 caller with the wrong service account.
+It runs twice: with the chart defaults on amd64, and with the small-box example values on an
+arm64 runner (`ubuntu-24.04-arm`), where every image is built natively for arm64. Both record each
+pod's peak memory (`test/kind/memory-peak.sh`) and fail when the sum passes 4 GiB. The arm64 job
+isn't a required check.
 
 The migration rehearsal (`test/migrate/rehearsal.sh`, run by the Migrate Rehearsal workflow) seeds
 a synthetic source in the original schema and runs export, import and verify against the umbrella

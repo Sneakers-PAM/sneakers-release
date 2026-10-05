@@ -43,6 +43,8 @@ done
 helm template ci charts/postgres -n sneakers --set auth.existingSecret=ci >"$out/postgres.yaml"
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml >"$out/sneakers.yaml"
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f test/kind/values.yaml >/dev/null
+# The arm64 install test: the small-box example under the install test values.
+helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f charts/sneakers/examples/values-small-box.yaml -f test/kind/values.yaml >/dev/null
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set hydra.enabled=true >"$out/sneakers-hydra.yaml"
 for box in small large; do
   helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f "charts/sneakers/examples/values-${box}-box.yaml" >"$out/sneakers-${box}-box.yaml"
