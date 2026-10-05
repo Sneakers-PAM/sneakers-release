@@ -20,7 +20,7 @@ chart by `scripts/sync-schemas.sh`.
 | `rehearsal.dnsNamespace` | `kube-system` | The namespace of the cluster DNS the rehearsal policy still allows. |
 | `rehearsal.apiServer.addresses` | `[]` | The Kubernetes API server's endpoint addresses as CIDRs (`kubectl get endpoints kubernetes -n default`). Only the services that check caller tokens may reach them, to fetch the cluster's signing keys. Required with rehearsal mode on. |
 | `rehearsal.apiServer.port` | `6443` | The API server endpoint port. |
-| `gateway.env.MCP_HEALTH_URL` | `http://sneakers-mcp:9101/health` | Where the gateway's diagnostics query reads the MCP server's build. Set it to `""` with `mcp.enabled: false`, so mcp shows as not configured. |
+| `gateway.env.MCP_HEALTH_URL` | `http://sneakers-mcp:9101/livez` | Where the gateway's diagnostics query reads the MCP server's build (its `Sneakers-Version` and `Sneakers-Commit` headers). Set it to `""` with `mcp.enabled: false`, so mcp shows as not configured. |
 | `global.sso.enabled` | `false` | `SSO_ENABLED` for both web apps: shows the single sign-on button. Turn it on with the gateway's SSO settings. |
 | `<service>.*` | | That service chart's values (next section). The umbrella sets each database DSN and points each `secretEnv` at the bundled Secrets. |
 | `postgres.enabled` | `true` | The bundled PostgreSQL (`charts/postgres`). |

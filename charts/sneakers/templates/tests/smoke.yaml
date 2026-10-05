@@ -32,10 +32,10 @@ spec:
           set -eu
           check() { echo "checking $1"; curl -fsS --max-time 10 --retry 5 --retry-all-errors --retry-delay 3 -o /dev/null "$1"; }
           {{- if .Values.gateway.enabled }}
-          check http://sneakers-gateway:9100/health
+          check http://sneakers-gateway:9100/livez
           {{- end }}
           {{- if .Values.mcp.enabled }}
-          check http://sneakers-mcp:9101/health
+          check http://sneakers-mcp:9101/livez
           {{- end }}
           {{- if (index .Values "web-staff").enabled }}
           check http://sneakers-web-staff:3000/healthz
@@ -44,7 +44,7 @@ spec:
           check http://sneakers-web-admin:3000/admin/healthz
           {{- end }}
           {{- if .Values.sshbroker.enabled }}
-          check http://sneakers-sshbroker:9097/health
+          check http://sneakers-sshbroker:9097/readyz
           {{- end }}
           echo ok
       resources:
