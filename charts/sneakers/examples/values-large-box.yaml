@@ -2,7 +2,7 @@
 # each, for a team that wants the services to ride through a node going down.
 # It is an example only, the counterpart of values-small-box.yaml. Nothing in
 # the chart or the appliance applies it: copy the keys you want into your own
-# values file and change them freely. Every key below is a documented chart
+# values file and change them freely. Each key in this file is a documented chart
 # value (docs/values.md).
 #
 #   helm install sneakers charts/sneakers -n sneakers --create-namespace \
