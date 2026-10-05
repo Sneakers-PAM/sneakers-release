@@ -372,3 +372,10 @@ tests:
     repository: docker.io/curlimages/curl
     tag: "8.22.0"
     digest: sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+  resources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      cpu: 200m
+      memory: 64Mi

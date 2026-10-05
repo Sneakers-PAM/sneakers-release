@@ -47,6 +47,17 @@
       }
     },
     "resources": { "type": "object", "required": ["requests", "limits"] },
+    "parameters": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z_][a-z0-9_.]*$" },
+      "additionalProperties": { "type": ["string", "integer", "number", "boolean"] }
+    },
+    "shm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sizeLimit"],
+      "properties": { "sizeLimit": { "type": "string", "minLength": 1 } }
+    },
     "podSecurityContext": {
       "type": "object",
       "properties": { "runAsNonRoot": { "const": true } }

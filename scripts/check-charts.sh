@@ -44,6 +44,10 @@ helm template ci charts/postgres -n sneakers --set auth.existingSecret=ci >"$out
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml >"$out/sneakers.yaml"
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f test/kind/values.yaml >/dev/null
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set hydra.enabled=true >"$out/sneakers-hydra.yaml"
+for box in small large; do
+  helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f "charts/sneakers/examples/values-${box}-box.yaml" >"$out/sneakers-${box}-box.yaml"
+  helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f "charts/sneakers/examples/values-${box}-box.yaml" --set hydra.enabled=true >"$out/sneakers-${box}-box-hydra.yaml"
+done
 
 # The API server address a cluster's rehearsal names (test/migrate/rehearsal.sh reads it from the
 # kubernetes endpoints); a documentation address here.
@@ -179,6 +183,18 @@ kubeconform -strict -summary -kubernetes-version "${KUBE_VERSION}" "$out"/*.yaml
 
 step "production-safe defaults"
 python3 scripts/check-defaults.py <"$out/sneakers.yaml"
+
+step "sizing: every figure is a value, and the example values' budgets"
+python3 scripts/check-resources.py templates
+# The small-box example (docs/values.md) must leave room for the operating
+# system and Kubernetes on a 4 GB board, with Hydra on or off.
+python3 scripts/check-resources.py budget "$out/sneakers-small-box.yaml" 1Gi 3Gi
+python3 scripts/check-resources.py budget "$out/sneakers-small-box-hydra.yaml" 1Gi 3Gi
+python3 scripts/check-resources.py budget "$out/sneakers-large-box-hydra.yaml" 16Gi 48Gi
+must_fail "the chart defaults within the small-box budget" python3 scripts/check-resources.py budget "$out/sneakers.yaml" 1Gi 3Gi
+for box in small large; do
+  python3 scripts/check-defaults.py <"$out/sneakers-${box}-box.yaml"
+done
 
 step "service-to-service edges"
 python3 scripts/check-edges.py <"$out/sneakers.yaml"

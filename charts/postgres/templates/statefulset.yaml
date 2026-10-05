@@ -36,6 +36,14 @@ spec:
         - name: postgres
           image: {{ include "postgres.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.parameters }}
+          args:
+            - postgres
+            {{- range $k, $v := . }}
+            - -c
+            - {{ printf "%s=%v" $k $v | quote }}
+            {{- end }}
+          {{- end }}
           ports:
             - name: postgres
               containerPort: 5432
@@ -101,7 +109,7 @@ spec:
         - name: shm
           emptyDir:
             medium: Memory
-            sizeLimit: 256Mi
+            sizeLimit: {{ .Values.shm.sizeLimit }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

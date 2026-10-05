@@ -32,6 +32,7 @@ chart by `scripts/sync-schemas.sh`.
 | `bundledNetworkPolicies.kratosAdminFrom` | `[]` | Extra peers (NetworkPolicy `from` entries) admitted to the Kratos admin port, besides the identity service, the gateway and Kratos itself. A migration adds the `sneakers-migrate` Jobs ([migrate.md](migrate.md)). |
 | `bundledNetworkPolicies.hydraPublicFrom` | any pod | More peers for Hydra's public port, besides the gateway and mcp: the edge OAuth clients come through. |
 | `tests.image` | curl, pinned | The image of the `helm test` pod. |
+| `tests.resources` | 10m and 16Mi requested, 200m and 64Mi limit | The `helm test` pod's requests and limits. |
 
 The one value with no default is the vault root key:
 `vault.secretEnv.VAULT_ROOT_KEK.secretName` (or `generate: true`). See [install.md](install.md).
@@ -124,4 +125,34 @@ All nine service charts take the same values. Each one also works on its own, ou
 | `databases` | one per service, plus Kratos and Hydra | Created on the first start only. |
 | `persistence.size`, `persistence.storageClass`, `persistence.accessModes` | `10Gi`, the default class, `ReadWriteOnce` | The data volume, kept when the release is deleted. |
 | `resources` | 100m and 256Mi requested, 2 CPUs and 1Gi limit | |
+| `parameters` | `{}` (the image's defaults) | Server settings, each passed as `-c <name>=<value>`: `shared_buffers`, `work_mem`, `maintenance_work_mem`, `max_connections` and any other. |
+| `shm.sizeLimit` | `256Mi` | The memory-backed `/dev/shm`, used by parallel query workers. It counts against the pod's memory. |
 | `networkPolicy.enabled` | `true` | Only this release's pods may connect. |
+
+## Sizing examples
+
+Sizing is yours. The chart has no profiles and doesn't look at the hardware: the defaults are
+the same everywhere, and every request, limit, replica count, PostgreSQL setting and volume size is
+a value you set. Two example files show what a small and a larger install might use. Nothing in
+the chart or the appliance loads them; copy what you want into your own values file, or pass one
+with `-f` ahead of your own.
+
+| File | For | Memory (all pods) |
+|---|---|---|
+| [`charts/sneakers/examples/values-small-box.yaml`](../charts/sneakers/examples/values-small-box.yaml) | One node with 4 to 8 GB: a Raspberry Pi 4 or 5, or a small VM, on k3s, k0s or kind | under 1 GiB requested, under 3 GiB of limits |
+| [`charts/sneakers/examples/values-large-box.yaml`](../charts/sneakers/examples/values-large-box.yaml) | Three or more nodes with 16 GB or more | about 9 GiB requested |
+
+The small box runs one pod per service, a PostgreSQL with `shared_buffers` 64MB, `work_mem` 2MB,
+`maintenance_work_mem` 32MB and `max_connections` 50, a Valkey capped at 64mb, and Hydra off (it
+only serves machine callers of the MCP server). The larger box runs three pods for most services
+(audit always runs one), Kratos on three, and a PostgreSQL with `shared_buffers` 2GB.
+
+Each Go service keeps its own connection pool of up to the larger of 4 and the node's CPU count,
+so `max_connections` has to cover every service pod's pool plus Kratos and Hydra. The PostgreSQL
+blocks in both files use the current bundled chart (`charts/postgres`); they change when
+sneakers-release#44 replaces it with helm-postgres-ha, which adds PgBouncer pooling.
+
+`scripts/check-resources.py` (run by `scripts/check-charts.sh`) keeps this honest: it fails if a
+chart template writes in a resource figure, a memory-backed volume size or a replica count instead
+of reading a value, and it renders both examples and fails if the small one's memory requests pass
+1 GiB or its limits 3 GiB, with Hydra on or off.
