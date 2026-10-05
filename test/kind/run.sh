@@ -5,12 +5,17 @@
 # apps' health), check that each service's port takes only the callers in the
 # call graph and that the web apps reach only the gateway, that a callee
 # refuses a caller with the wrong service account, and that both web apps
-# render a page.
+# render a page. BASE_VALUES names values files (space-separated) applied
+# before test/kind/values.yaml, such as a sizing example; the test's own
+# values (the images built in the job, Hydra on) still win.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 ns="${NAMESPACE:-sneakers}"
 release=sneakers
 timeout="${HELM_TIMEOUT:-15m}"
+values=()
+for f in ${BASE_VALUES:-}; do values+=(-f "$f"); done
+values+=(-f test/kind/values.yaml)
 
 secret_hashes() {
   for s in sneakers-bundled sneakers-kratos sneakers-vault-generated sneakers-identity-generated; do
@@ -22,12 +27,12 @@ echo "== dependencies"
 scripts/build-deps.sh
 
 echo "== install"
-helm install "$release" charts/sneakers -n "$ns" --create-namespace -f test/kind/values.yaml --wait --timeout "$timeout"
+helm install "$release" charts/sneakers -n "$ns" --create-namespace "${values[@]}" --wait --timeout "$timeout"
 kubectl -n "$ns" get pods
 
 echo "== upgrade in place"
 before="$(secret_hashes)"
-helm upgrade "$release" charts/sneakers -n "$ns" -f test/kind/values.yaml --wait --timeout "$timeout"
+helm upgrade "$release" charts/sneakers -n "$ns" "${values[@]}" --wait --timeout "$timeout"
 after="$(secret_hashes)"
 if [ "$before" != "$after" ]; then
   echo "generated secrets changed on upgrade:" >&2
