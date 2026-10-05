@@ -67,7 +67,7 @@ All nine service charts take the same values. Each one also works on its own, ou
 | `logLevel`, `logFormat` | (empty: the global values) | Per-service overrides. |
 | `service.port`, `service.portName` | the service's port, `grpc` or `http` | The main port. |
 | `service.extraPorts` | `[]` (`http` 9097 for sshbroker) | More ports, each `{name, port}`. |
-| `probes.*` | gRPC health, or HTTP `/health` | Startup, liveness and readiness probes: `type`, `port`, `path`, `startupFailureThreshold`. |
+| `probes.*` | gRPC health, or HTTP `/livez` and `/readyz` | Startup, liveness and readiness probes: `type`, `port`, `startupFailureThreshold`. Liveness (and startup) checks the process only: gRPC health service `livenessService` (`liveness`), or HTTP `livenessPath`. Readiness follows the service's required dependencies: the default gRPC health service, or HTTP `readinessPath`. Unset, both use `path` or the default gRPC service. |
 | `env` | per service | Non-secret settings, rendered into the ConfigMap. Values go through `tpl` (so `{{ .Values.global.host }}` works); an empty value is left out so the service uses its own default. The settings are in each service's `docs/configuration.md`. |
 | `requiredEnv` | `[DATABASE_DSN]` where there is a database | Keys of `env` that must not be empty. |
 | `secretEnv.<VAR>` | per service | A setting read from a Secret: `secretName`, `key` (default: the variable name), `required`. With `generate: true` and no `secretName` the chart creates the value once (`bytes` random bytes, base64) in `sneakers-<service>-generated`, kept on upgrade and uninstall. |

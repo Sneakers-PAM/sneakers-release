@@ -46,7 +46,8 @@ service:
 probes:
   type: grpc
   port: 9096
-  path: /health
+  # Liveness asks health service "liveness" (the process only); readiness the default service.
+  livenessService: liveness
   startupFailureThreshold: 60
 
 # Non-secret settings, rendered into the ConfigMap. Values go through tpl.

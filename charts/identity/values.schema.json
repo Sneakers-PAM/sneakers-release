@@ -103,6 +103,9 @@
         "type": { "enum": ["grpc", "http"] },
         "port": { "$ref": "#/definitions/port" },
         "path": { "type": "string" },
+        "livenessPath": { "type": "string" },
+        "readinessPath": { "type": "string" },
+        "livenessService": { "type": "string" },
         "startupFailureThreshold": { "type": "integer", "minimum": 1 }
       }
     },

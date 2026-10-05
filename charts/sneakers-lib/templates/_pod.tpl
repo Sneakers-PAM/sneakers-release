@@ -48,24 +48,38 @@
 {{- toYaml (concat $volumes .Values.extraVolumes) }}
 {{- end -}}
 
+{{- /*
+Liveness checks the process only, so a dependency outage never restarts pods; readiness
+follows the service's required dependencies, so traffic stops reaching a pod that can't
+serve. A gRPC service answers liveness on health service "liveness" and readiness on the
+default service; an HTTP service on livenessPath and readinessPath. Startup uses the
+liveness check: the pod is up once the process answers, and readiness gates traffic.
+Unset, both follow `path` (or the default gRPC service), as before.
+*/ -}}
 {{- define "sneakers.probes" -}}
 {{- with .Values.probes }}
-{{- $check := dict }}
+{{- $live := dict }}
+{{- $ready := dict }}
 {{- if eq .type "grpc" }}
-{{- $check = dict "grpc" (dict "port" (int .port)) }}
+{{- $ready = dict "grpc" (dict "port" (int .port)) }}
+{{- $live = $ready }}
+{{- with .livenessService }}
+{{- $live = dict "grpc" (dict "port" (int $.Values.probes.port) "service" .) }}
+{{- end }}
 {{- else }}
-{{- $check = dict "httpGet" (dict "path" .path "port" (int .port)) }}
+{{- $ready = dict "httpGet" (dict "path" (.readinessPath | default .path) "port" (int .port)) }}
+{{- $live = dict "httpGet" (dict "path" (.livenessPath | default .path) "port" (int .port)) }}
 {{- end }}
 startupProbe:
-  {{- toYaml $check | nindent 2 }}
+  {{- toYaml $live | nindent 2 }}
   periodSeconds: 5
   failureThreshold: {{ .startupFailureThreshold }}
 livenessProbe:
-  {{- toYaml $check | nindent 2 }}
+  {{- toYaml $live | nindent 2 }}
   periodSeconds: 10
   failureThreshold: 3
 readinessProbe:
-  {{- toYaml $check | nindent 2 }}
+  {{- toYaml $ready | nindent 2 }}
   periodSeconds: 5
   failureThreshold: 3
 {{- end }}
