@@ -1,0 +1,294 @@
+# Example values for a small box: a Raspberry Pi 4 or 5 with 4 to 8 GB of
+# memory, or a small VM, running the whole release on one node (k3s, k0s or
+# kind). It is an example only. Nothing in the chart or the appliance applies
+# it: copy the keys you want into your own values file and change them freely.
+# Every key below is a documented chart value (docs/values.md).
+#
+#   helm install sneakers charts/sneakers -n sneakers --create-namespace \
+#     -f charts/sneakers/examples/values-small-box.yaml -f my-values.yaml
+#
+# Sized so the memory requests stay under 1 GiB and the limits under 3 GiB
+# (scripts/check-resources.py checks both), which leaves room for the
+# operating system and Kubernetes on a 4 GB board. Your own values still need
+# global.host and the vault root key (docs/install.md).
+#
+# Every service runs one pod: there is no failover on a single node anyway.
+# Raise a limit when its pod is restarted for running out of memory
+# (OOMKilled in `kubectl get pods`).
+
+# ---------------------------------------------------------------------------
+# Sneakers services. The Go services idle well under 64Mi; the limits leave
+# room for bursts.
+# ---------------------------------------------------------------------------
+
+identity:
+  # One pod.
+  replicas: 1
+  resources:
+    # Set aside for the pod by the scheduler.
+    requests:
+      cpu: 20m
+      memory: 40Mi
+    # The most it may use. Past the memory limit the pod is restarted.
+    limits:
+      cpu: 500m
+      memory: 160Mi
+
+vault:
+  # One pod.
+  replicas: 1
+  resources:
+    # Set aside for the pod by the scheduler.
+    requests:
+      cpu: 20m
+      memory: 40Mi
+    # The most it may use. Past the memory limit the pod is restarted.
+    limits:
+      cpu: 500m
+      memory: 160Mi
+
+workflow:
+  # One pod.
+  replicas: 1
+  resources:
+    # Set aside for the pod by the scheduler.
+    requests:
+      cpu: 20m
+      memory: 40Mi
+    # The most it may use. Past the memory limit the pod is restarted.
+    limits:
+      cpu: 500m
+      memory: 160Mi
+
+audit:
+  # The single writer of the audit chain: always one pod.
+  replicas: 1
+  resources:
+    # Set aside for the pod by the scheduler.
+    requests:
+      cpu: 20m
+      memory: 40Mi
+    # The most it may use. Past the memory limit the pod is restarted.
+    limits:
+      cpu: 500m
+      memory: 160Mi
+
+notify:
+  # One pod.
+  replicas: 1
+  resources:
+    # Set aside for the pod by the scheduler.
+    requests:
+      cpu: 20m
+      memory: 40Mi
+    # The most it may use. Past the memory limit the pod is restarted.
+    limits:
+      cpu: 500m
+      memory: 160Mi
+
+connector:
+  # One pod.
+  replicas: 1
+  resources:
+    # Set aside for the pod by the scheduler.
+    requests:
+      cpu: 20m
+      memory: 40Mi
+    # The most it may use. Past the memory limit the pod is restarted.
+    limits:
+      cpu: 500m
+      memory: 160Mi
+
+sshbroker:
+  # One pod.
+  replicas: 1
+  resources:
+    # Set aside for the pod by the scheduler.
+    requests:
+      cpu: 20m
+      memory: 40Mi
+    # The most it may use. Past the memory limit the pod is restarted.
+    limits:
+      cpu: 500m
+      memory: 160Mi
+
+gateway:
+  # One pod.
+  replicas: 1
+  resources:
+    # Set aside for the pod by the scheduler.
+    requests:
+      cpu: 20m
+      memory: 40Mi
+    # The most it may use. Past the memory limit the pod is restarted.
+    limits:
+      cpu: 500m
+      memory: 160Mi
+
+mcp:
+  # One pod. Turn the MCP server off (enabled: false, and set
+  # gateway.env.MCP_HEALTH_URL to "") if no agent uses it.
+  replicas: 1
+  resources:
+    # Set aside for the pod by the scheduler.
+    requests:
+      cpu: 20m
+      memory: 40Mi
+    # The most it may use. Past the memory limit the pod is restarted.
+    limits:
+      cpu: 500m
+      memory: 160Mi
+
+# The web apps run Node, so they get more memory than the Go services.
+web-staff:
+  # One pod.
+  replicas: 1
+  resources:
+    # Set aside for the pod by the scheduler.
+    requests:
+      cpu: 20m
+      memory: 80Mi
+    # The most it may use. Past the memory limit the pod is restarted.
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+web-admin:
+  # One pod.
+  replicas: 1
+  resources:
+    # Set aside for the pod by the scheduler.
+    requests:
+      cpu: 20m
+      memory: 80Mi
+    # The most it may use. Past the memory limit the pod is restarted.
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# ---------------------------------------------------------------------------
+# Bundled pieces.
+# ---------------------------------------------------------------------------
+
+# The one shared PostgreSQL, with a database per service plus Kratos and
+# Hydra. This block uses the current bundled chart (charts/postgres); it
+# changes when sneakers-release#44 replaces that chart with helm-postgres-ha,
+# which also brings PgBouncer pooling. Until then each service keeps its own
+# small connection pool (the larger of 4 and the node's CPU count).
+postgres:
+  # The data volume. Grow it with the audit log; it is kept on uninstall.
+  persistence:
+    size: 5Gi
+  resources:
+    # Set aside for the pod by the scheduler.
+    requests:
+      cpu: 50m
+      memory: 192Mi
+    # The most it may use, shared buffers and /dev/shm included.
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  # The memory-backed /dev/shm, for parallel query workers (off below).
+  shm:
+    sizeLimit: 64Mi
+  # Server settings (`-c name=value`).
+  parameters:
+    # The shared page cache. About a quarter of the pod's memory limit at most.
+    shared_buffers: 64MB
+    # What the planner assumes the OS caches; no memory is set aside for it.
+    effective_cache_size: 192MB
+    # Per sort or hash, per query: keep it small with many connections.
+    work_mem: 2MB
+    # For VACUUM and CREATE INDEX.
+    maintenance_work_mem: 32MB
+    # The four service pools (4 connections each on a 4-core board), Kratos,
+    # Hydra and a few spare for maintenance.
+    max_connections: 50
+    # No parallel query workers on a small CPU.
+    max_parallel_workers_per_gather: 0
+
+# Valkey: sessions, inboxes, SSH tickets and cache invalidation. Small data.
+valkey:
+  # The data volume.
+  dataStorage:
+    requestedSize: 512Mi
+  # Valkey's own memory cap, below the pod's limit. noeviction refuses new
+  # writes at the cap rather than drop sessions.
+  valkeyConfig: |
+    maxmemory 64mb
+    maxmemory-policy noeviction
+  resources:
+    # Set aside for the pod by the scheduler.
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    # The most it may use. Past the memory limit the pod is restarted.
+    limits:
+      cpu: 500m
+      memory: 128Mi
+  # The init container that writes the configuration.
+  initResources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+# Ory Kratos: the passwords.
+kratos:
+  # The schema migration that runs before Kratos starts.
+  kratos:
+    automigration:
+      resources:
+        requests:
+          cpu: 20m
+          memory: 32Mi
+        limits:
+          cpu: 500m
+          memory: 128Mi
+  deployment:
+    resources:
+      # Set aside for the pod by the scheduler.
+      requests:
+        cpu: 20m
+        memory: 64Mi
+      # The most it may use. Past the memory limit the pod is restarted.
+      limits:
+        cpu: 500m
+        memory: 192Mi
+
+# Ory Hydra issues tokens only for machine callers of the MCP server. Off,
+# as by default; the sizes below apply if you turn it on.
+hydra:
+  enabled: false
+  # The schema migration that runs before Hydra starts.
+  hydra:
+    automigration:
+      resources:
+        requests:
+          cpu: 20m
+          memory: 32Mi
+        limits:
+          cpu: 500m
+          memory: 128Mi
+  deployment:
+    resources:
+      # Set aside for the pod by the scheduler.
+      requests:
+        cpu: 20m
+        memory: 64Mi
+      # The most it may use. Past the memory limit the pod is restarted.
+      limits:
+        cpu: 500m
+        memory: 192Mi
+
+# The helm test pod.
+tests:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      cpu: 200m
+      memory: 64Mi

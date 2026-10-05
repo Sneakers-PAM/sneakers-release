@@ -30,10 +30,12 @@ Two things to know before changing it:
 - `charts/<service>/` - one chart per service, including the two web apps (`web-staff`,
   `web-admin`): `values.yaml`, `values.schema.json`, and a template that includes the library
 - `charts/postgres/` - the bundled single-instance PostgreSQL
-- `charts/sneakers/` - the umbrella: dependencies, the bundled Secrets, the `helm test` pod
+- `charts/sneakers/` - the umbrella: dependencies, the bundled Secrets, the `helm test` pod, and
+  `examples/` (the small-box and large-box sizing examples; documentation, never loaded by the
+  chart)
 - `manifest/release.yaml` - the pinned release
 - `scripts/` - `install-tools.sh` (pinned, checksum-checked tools), `check-charts.sh`, the
-  manifest, defaults, edges and web checks, `sync-schemas.sh`
+  manifest, defaults, edges, web and resources checks, `sync-schemas.sh`
 - `test/ci/` - values for rendering in CI; `test/kind/` - the install test
 - `migrate/` - `sneakers-migrate` (Go, cobra): `cmd/sneakers-migrate`, `internal/` (one package per
   job: bundle, envelope, chain, kratos, source, mapping, settings, target, verify, report), `test/synth` (the
@@ -79,6 +81,9 @@ Follow the logging rules in `CLAUDE.md`. In short:
   `.claude/hooks` (run `bash .claude/hooks/install.sh` once per clone).
 - Open every PR as a draft. CI skips drafts, so run the full checks locally, push once they pass,
   and mark the PR ready when the work is finished; see CLAUDE.md "CI and Actions minutes".
+- Sizing is the user's: no template writes in a request, limit, memory-backed volume size or
+  replica count (`scripts/check-resources.py templates`); read each from a value. The examples'
+  memory budgets are checked in `scripts/check-charts.sh`.
 - Defaults are production-safe and the schemas enforce the security ones: a change that makes a
   root filesystem writable or turns off `runAsNonRoot` fails validation on purpose.
 - `sneakers-release` `main` takes changes only through a PR approved by the release-review group.

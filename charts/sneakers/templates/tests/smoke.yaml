@@ -48,12 +48,7 @@ spec:
           {{- end }}
           echo ok
       resources:
-        requests:
-          cpu: 10m
-          memory: 16Mi
-        limits:
-          cpu: 200m
-          memory: 64Mi
+        {{- toYaml .Values.tests.resources | nindent 8 }}
       securityContext:
         allowPrivilegeEscalation: false
         readOnlyRootFilesystem: true

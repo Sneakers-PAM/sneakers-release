@@ -42,6 +42,16 @@ resources:
     cpu: "2"
     memory: 1Gi
 
+# Server settings, each passed as `-c <name>=<value>`. Empty: the image's
+# defaults. Use it to size PostgreSQL to the box, for example shared_buffers,
+# work_mem, maintenance_work_mem and max_connections.
+parameters: {}
+
+# The memory-backed /dev/shm, used for parallel query workers. It counts
+# against the pod's memory.
+shm:
+  sizeLimit: 256Mi
+
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 999

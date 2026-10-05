@@ -24,6 +24,9 @@ same pinned release, but some things the appliance does for you become yours:
   `valkey.dataStorage.className` set, for the bundled PostgreSQL and Valkey.
 - Helm 3.14 or newer, or Helm 4.
 - An ingress controller (or another edge) that terminates TLS for your public host.
+- Memory for the pods you run. The defaults run two pods of most services; for one small node (a
+  Raspberry Pi 4 or 5, or a small VM) start from the small-box example in
+  [values.md](values.md#sizing-examples).
 
 ## Install
 
