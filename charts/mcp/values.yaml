@@ -44,7 +44,9 @@ service:
 probes:
   type: http
   port: 9101
-  path: /health
+  # /livez checks the process only; /readyz follows the required dependencies.
+  livenessPath: /livez
+  readinessPath: /readyz
   startupFailureThreshold: 60
 
 # Non-secret settings, rendered into the ConfigMap. Values go through tpl.
