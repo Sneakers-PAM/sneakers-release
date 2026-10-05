@@ -105,6 +105,10 @@ sshbroker:
 
 gateway:
   enabled: true
+  env:
+    # The diagnostics query reads the MCP server's build from its health route.
+    # Set it to "" when mcp.enabled is false, so mcp shows as not configured.
+    MCP_HEALTH_URL: http://sneakers-mcp:9101/health
   secretEnv:
     REDIS_URL:
       secretName: sneakers-bundled
