@@ -30,6 +30,7 @@
         "logLevel": { "enum": ["trace", "debug", "info", "warn", "error", "fatal", "panic", "disabled"] },
         "logFormat": { "enum": ["json", "console", "pretty", "both"] },
         "otlpEndpoint": { "type": "string" },
+        "mfaMaxAge": { "type": "string", "pattern": "^(0|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$" },
         "sso": {
           "type": "object",
           "additionalProperties": false,

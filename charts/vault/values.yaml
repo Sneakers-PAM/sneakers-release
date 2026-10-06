@@ -10,6 +10,11 @@ global:
   logFormat: json
   # OTLP gRPC collector (host:port) for traces and metrics. Empty: unset.
   otlpEndpoint: ""
+  # MFA_MAX_AGE for the vault, the workflow and the gateway: the step-up
+  # window. After one step-up there are no further MFA prompts until it ends.
+  # A Go duration from 0 (every sensitive action asks) to 4h; the services
+  # refuse to start outside that.
+  mfaMaxAge: 30m
 
 image:
   repository: ghcr.io/sneakers-pam/sneakers-vault
@@ -53,6 +58,7 @@ probes:
 env:
   ENVIRONMENT: "{{ .Values.global.environment }}"
   OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.global.otlpEndpoint }}"
+  MFA_MAX_AGE: "{{ .Values.global.mfaMaxAge }}"
   GRPC_PORT: "9091"
   DATABASE_DSN: ""
   AUDIT_ADDR: sneakers-audit:9194

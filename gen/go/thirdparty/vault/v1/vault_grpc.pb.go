@@ -98,6 +98,7 @@ const (
 	VaultService_ClaimDueRotations_FullMethodName               = "/sneakers.vault.v1.VaultService/ClaimDueRotations"
 	VaultService_RevealForRotation_FullMethodName               = "/sneakers.vault.v1.VaultService/RevealForRotation"
 	VaultService_ReportRotation_FullMethodName                  = "/sneakers.vault.v1.VaultService/ReportRotation"
+	VaultService_ListConnectors_FullMethodName                  = "/sneakers.vault.v1.VaultService/ListConnectors"
 	VaultService_ListPasswordPolicies_FullMethodName            = "/sneakers.vault.v1.VaultService/ListPasswordPolicies"
 	VaultService_SavePasswordPolicy_FullMethodName              = "/sneakers.vault.v1.VaultService/SavePasswordPolicy"
 	VaultService_DeletePasswordPolicy_FullMethodName            = "/sneakers.vault.v1.VaultService/DeletePasswordPolicy"
@@ -111,6 +112,8 @@ const (
 	VaultService_GetSecretUse_FullMethodName                    = "/sneakers.vault.v1.VaultService/GetSecretUse"
 	VaultService_ListPendingSecretUses_FullMethodName           = "/sneakers.vault.v1.VaultService/ListPendingSecretUses"
 	VaultService_DecideSecretUse_FullMethodName                 = "/sneakers.vault.v1.VaultService/DecideSecretUse"
+	VaultService_ConfirmSecretUse_FullMethodName                = "/sneakers.vault.v1.VaultService/ConfirmSecretUse"
+	VaultService_ListSecretUsesToDecide_FullMethodName          = "/sneakers.vault.v1.VaultService/ListSecretUsesToDecide"
 	VaultService_RedeemSecretUse_FullMethodName                 = "/sneakers.vault.v1.VaultService/RedeemSecretUse"
 	VaultService_CreateUseGrant_FullMethodName                  = "/sneakers.vault.v1.VaultService/CreateUseGrant"
 	VaultService_ListUseGrants_FullMethodName                   = "/sneakers.vault.v1.VaultService/ListUseGrants"
@@ -226,6 +229,10 @@ type VaultServiceClient interface {
 	ClaimDueRotations(ctx context.Context, in *ClaimDueRotationsRequest, opts ...grpc.CallOption) (*ClaimDueRotationsResponse, error)
 	RevealForRotation(ctx context.Context, in *RevealForRotationRequest, opts ...grpc.CallOption) (*RevealForRotationResponse, error)
 	ReportRotation(ctx context.Context, in *ReportRotationRequest, opts ...grpc.CallOption) (*ReportRotationResponse, error)
+	// Connector builds: each connector's build (from the sneakers-version and
+	// sneakers-commit metadata of its pull calls) and its last contact, for the
+	// gateway's diagnostics. Caller gateway only, as itself.
+	ListConnectors(ctx context.Context, in *ListConnectorsRequest, opts ...grpc.CallOption) (*ListConnectorsResponse, error)
 	// Instance configuration: password policies + security settings
 	ListPasswordPolicies(ctx context.Context, in *ListPasswordPoliciesRequest, opts ...grpc.CallOption) (*ListPasswordPoliciesResponse, error)
 	SavePasswordPolicy(ctx context.Context, in *SavePasswordPolicyRequest, opts ...grpc.CallOption) (*SavePasswordPolicyResponse, error)
@@ -251,6 +258,8 @@ type VaultServiceClient interface {
 	GetSecretUse(ctx context.Context, in *GetSecretUseRequest, opts ...grpc.CallOption) (*GetSecretUseResponse, error)
 	ListPendingSecretUses(ctx context.Context, in *ListPendingSecretUsesRequest, opts ...grpc.CallOption) (*ListPendingSecretUsesResponse, error)
 	DecideSecretUse(ctx context.Context, in *DecideSecretUseRequest, opts ...grpc.CallOption) (*DecideSecretUseResponse, error)
+	ConfirmSecretUse(ctx context.Context, in *ConfirmSecretUseRequest, opts ...grpc.CallOption) (*ConfirmSecretUseResponse, error)
+	ListSecretUsesToDecide(ctx context.Context, in *ListSecretUsesToDecideRequest, opts ...grpc.CallOption) (*ListSecretUsesToDecideResponse, error)
 	RedeemSecretUse(ctx context.Context, in *RedeemSecretUseRequest, opts ...grpc.CallOption) (*RedeemSecretUseResponse, error)
 	CreateUseGrant(ctx context.Context, in *CreateUseGrantRequest, opts ...grpc.CallOption) (*CreateUseGrantResponse, error)
 	ListUseGrants(ctx context.Context, in *ListUseGrantsRequest, opts ...grpc.CallOption) (*ListUseGrantsResponse, error)
@@ -1030,6 +1039,16 @@ func (c *vaultServiceClient) ReportRotation(ctx context.Context, in *ReportRotat
 	return out, nil
 }
 
+func (c *vaultServiceClient) ListConnectors(ctx context.Context, in *ListConnectorsRequest, opts ...grpc.CallOption) (*ListConnectorsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListConnectorsResponse)
+	err := c.cc.Invoke(ctx, VaultService_ListConnectors_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vaultServiceClient) ListPasswordPolicies(ctx context.Context, in *ListPasswordPoliciesRequest, opts ...grpc.CallOption) (*ListPasswordPoliciesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListPasswordPoliciesResponse)
@@ -1154,6 +1173,26 @@ func (c *vaultServiceClient) DecideSecretUse(ctx context.Context, in *DecideSecr
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DecideSecretUseResponse)
 	err := c.cc.Invoke(ctx, VaultService_DecideSecretUse_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vaultServiceClient) ConfirmSecretUse(ctx context.Context, in *ConfirmSecretUseRequest, opts ...grpc.CallOption) (*ConfirmSecretUseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfirmSecretUseResponse)
+	err := c.cc.Invoke(ctx, VaultService_ConfirmSecretUse_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vaultServiceClient) ListSecretUsesToDecide(ctx context.Context, in *ListSecretUsesToDecideRequest, opts ...grpc.CallOption) (*ListSecretUsesToDecideResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSecretUsesToDecideResponse)
+	err := c.cc.Invoke(ctx, VaultService_ListSecretUsesToDecide_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1354,6 +1393,10 @@ type VaultServiceServer interface {
 	ClaimDueRotations(context.Context, *ClaimDueRotationsRequest) (*ClaimDueRotationsResponse, error)
 	RevealForRotation(context.Context, *RevealForRotationRequest) (*RevealForRotationResponse, error)
 	ReportRotation(context.Context, *ReportRotationRequest) (*ReportRotationResponse, error)
+	// Connector builds: each connector's build (from the sneakers-version and
+	// sneakers-commit metadata of its pull calls) and its last contact, for the
+	// gateway's diagnostics. Caller gateway only, as itself.
+	ListConnectors(context.Context, *ListConnectorsRequest) (*ListConnectorsResponse, error)
 	// Instance configuration: password policies + security settings
 	ListPasswordPolicies(context.Context, *ListPasswordPoliciesRequest) (*ListPasswordPoliciesResponse, error)
 	SavePasswordPolicy(context.Context, *SavePasswordPolicyRequest) (*SavePasswordPolicyResponse, error)
@@ -1379,6 +1422,8 @@ type VaultServiceServer interface {
 	GetSecretUse(context.Context, *GetSecretUseRequest) (*GetSecretUseResponse, error)
 	ListPendingSecretUses(context.Context, *ListPendingSecretUsesRequest) (*ListPendingSecretUsesResponse, error)
 	DecideSecretUse(context.Context, *DecideSecretUseRequest) (*DecideSecretUseResponse, error)
+	ConfirmSecretUse(context.Context, *ConfirmSecretUseRequest) (*ConfirmSecretUseResponse, error)
+	ListSecretUsesToDecide(context.Context, *ListSecretUsesToDecideRequest) (*ListSecretUsesToDecideResponse, error)
 	RedeemSecretUse(context.Context, *RedeemSecretUseRequest) (*RedeemSecretUseResponse, error)
 	CreateUseGrant(context.Context, *CreateUseGrantRequest) (*CreateUseGrantResponse, error)
 	ListUseGrants(context.Context, *ListUseGrantsRequest) (*ListUseGrantsResponse, error)
@@ -1626,6 +1671,9 @@ func (UnimplementedVaultServiceServer) RevealForRotation(context.Context, *Revea
 func (UnimplementedVaultServiceServer) ReportRotation(context.Context, *ReportRotationRequest) (*ReportRotationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportRotation not implemented")
 }
+func (UnimplementedVaultServiceServer) ListConnectors(context.Context, *ListConnectorsRequest) (*ListConnectorsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListConnectors not implemented")
+}
 func (UnimplementedVaultServiceServer) ListPasswordPolicies(context.Context, *ListPasswordPoliciesRequest) (*ListPasswordPoliciesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPasswordPolicies not implemented")
 }
@@ -1664,6 +1712,12 @@ func (UnimplementedVaultServiceServer) ListPendingSecretUses(context.Context, *L
 }
 func (UnimplementedVaultServiceServer) DecideSecretUse(context.Context, *DecideSecretUseRequest) (*DecideSecretUseResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DecideSecretUse not implemented")
+}
+func (UnimplementedVaultServiceServer) ConfirmSecretUse(context.Context, *ConfirmSecretUseRequest) (*ConfirmSecretUseResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmSecretUse not implemented")
+}
+func (UnimplementedVaultServiceServer) ListSecretUsesToDecide(context.Context, *ListSecretUsesToDecideRequest) (*ListSecretUsesToDecideResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSecretUsesToDecide not implemented")
 }
 func (UnimplementedVaultServiceServer) RedeemSecretUse(context.Context, *RedeemSecretUseRequest) (*RedeemSecretUseResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RedeemSecretUse not implemented")
@@ -3081,6 +3135,24 @@ func _VaultService_ReportRotation_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VaultService_ListConnectors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListConnectorsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VaultServiceServer).ListConnectors(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VaultService_ListConnectors_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VaultServiceServer).ListConnectors(ctx, req.(*ListConnectorsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VaultService_ListPasswordPolicies_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListPasswordPoliciesRequest)
 	if err := dec(in); err != nil {
@@ -3311,6 +3383,42 @@ func _VaultService_DecideSecretUse_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VaultServiceServer).DecideSecretUse(ctx, req.(*DecideSecretUseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VaultService_ConfirmSecretUse_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmSecretUseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VaultServiceServer).ConfirmSecretUse(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VaultService_ConfirmSecretUse_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VaultServiceServer).ConfirmSecretUse(ctx, req.(*ConfirmSecretUseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VaultService_ListSecretUsesToDecide_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSecretUsesToDecideRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VaultServiceServer).ListSecretUsesToDecide(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VaultService_ListSecretUsesToDecide_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VaultServiceServer).ListSecretUsesToDecide(ctx, req.(*ListSecretUsesToDecideRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3789,6 +3897,10 @@ var VaultService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VaultService_ReportRotation_Handler,
 		},
 		{
+			MethodName: "ListConnectors",
+			Handler:    _VaultService_ListConnectors_Handler,
+		},
+		{
 			MethodName: "ListPasswordPolicies",
 			Handler:    _VaultService_ListPasswordPolicies_Handler,
 		},
@@ -3839,6 +3951,14 @@ var VaultService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DecideSecretUse",
 			Handler:    _VaultService_DecideSecretUse_Handler,
+		},
+		{
+			MethodName: "ConfirmSecretUse",
+			Handler:    _VaultService_ConfirmSecretUse_Handler,
+		},
+		{
+			MethodName: "ListSecretUsesToDecide",
+			Handler:    _VaultService_ListSecretUsesToDecide_Handler,
 		},
 		{
 			MethodName: "RedeemSecretUse",
