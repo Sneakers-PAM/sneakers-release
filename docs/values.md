@@ -21,6 +21,7 @@ chart by `scripts/sync-schemas.sh`.
 | `rehearsal.apiServer.addresses` | `[]` | The Kubernetes API server's endpoint addresses as CIDRs (`kubectl get endpoints kubernetes -n default`). Only the services that check caller tokens may reach them, to fetch the cluster's signing keys. Required with rehearsal mode on. |
 | `rehearsal.apiServer.port` | `6443` | The API server endpoint port. |
 | `gateway.env.MCP_HEALTH_URL` | `http://sneakers-mcp:9101/livez` | Where the gateway's diagnostics query reads the MCP server's build (its `Sneakers-Version` and `Sneakers-Commit` headers). Set it to `""` with `mcp.enabled: false`, so mcp shows as not configured. |
+| `web-staff.env.MCP_URL` | `https://{{ .Values.global.host }}/mcp` | The MCP server's public address, shown on the staff app's agent setup steps. Set it to `""` with `mcp.enabled: false`, so the page falls back to asking the administrator. |
 | `global.sso.enabled` | `false` | `SSO_ENABLED` for both web apps: shows the single sign-on button. Turn it on with the gateway's SSO settings. |
 | `<service>.*` | | That service chart's values (next section). The umbrella sets each database DSN and points each `secretEnv` at the bundled Secrets. |
 | `postgres.enabled` | `true` | The bundled PostgreSQL (`charts/postgres`). |
