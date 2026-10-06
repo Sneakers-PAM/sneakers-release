@@ -118,6 +118,11 @@ mcp:
 # The web apps, on global.host: the staff app at / and the admin app at /admin.
 web-staff:
   enabled: true
+  env:
+    # The MCP server's public address, for the staff app's agent setup steps.
+    # Set it to "" when mcp.enabled is false, so the page falls back to
+    # asking the administrator.
+    MCP_URL: "https://{{ .Values.global.host }}/mcp"
 web-admin:
   enabled: true
 

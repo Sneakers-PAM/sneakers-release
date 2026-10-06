@@ -42,6 +42,17 @@ for svc in "${services[@]}"; do
 done
 helm template ci charts/postgres -n sneakers --set auth.existingSecret=ci >"$out/postgres.yaml"
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml >"$out/sneakers.yaml"
+python3 - "$out/sneakers.yaml" <<'PY'
+import sys, yaml
+docs = [d for d in yaml.safe_load_all(open(sys.argv[1])) if d]
+cm = [
+    d for d in docs
+    if d["kind"] == "ConfigMap" and d["metadata"]["labels"].get("app.kubernetes.io/component") == "web-staff"
+]
+assert cm, "web-staff renders no ConfigMap"
+assert cm[0]["data"].get("MCP_URL") == "https://sneakers.example.org/mcp", cm[0]["data"].get("MCP_URL")
+print("ok: web-staff gets the MCP server's public address")
+PY
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f test/kind/values.yaml >/dev/null
 # The arm64 install test: the small-box example under the install test values.
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f charts/sneakers/examples/values-small-box.yaml -f test/kind/values.yaml >/dev/null
