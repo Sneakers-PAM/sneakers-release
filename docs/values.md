@@ -14,6 +14,7 @@ chart by `scripts/sync-schemas.sh`.
 | `global.logLevel` | `error` | `LOG_LEVEL` for every service: `trace`, `debug`, `info`, `warn`, `error`. |
 | `global.logFormat` | `json` | `LOG_FORMAT` for every service. Clusters log `json`. |
 | `global.otlpEndpoint` | (empty) | OTLP gRPC collector (`host:port`) for traces and metrics. |
+| `global.mfaMaxAge` | `30m` | `MFA_MAX_AGE` for the vault, the workflow and the gateway: the step-up window. After one step-up a person gets no further MFA prompt until it ends. A Go duration from `0` (every sensitive action asks) to `4h`; the services refuse to start outside that. Login MFA is separate. Agents signed in through `/login` never get a step-up. |
 | `bundledSecrets.enabled` | `true` | Create the Secrets the bundled pieces share (below). |
 | `<service>.enabled` | `true` | Install that service: `identity`, `vault`, `workflow`, `audit`, `notify`, `connector`, `sshbroker`, `gateway`, `mcp`, `web-staff`, `web-admin`. |
 | `rehearsal.enabled` | `false` | Migration rehearsal mode ([migrate.md](migrate.md)): a deny-all egress NetworkPolicy for the namespace (other pods in it and the cluster DNS only), and the chart refuses to render with `connector`, `sshbroker` or `mcp` enabled. Never on for production. |
