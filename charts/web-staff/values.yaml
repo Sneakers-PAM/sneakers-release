@@ -65,6 +65,9 @@ env:
   # when its image is built.
   STAFF_URL: /
   ADMIN_URL: /admin/
+  # The MCP server's public address, so the Agents page can show it. Set it
+  # to "" with mcp.enabled: false, so the page shows it as not configured.
+  MCP_URL: "https://{{ .Values.global.host }}/mcp"
   # The proxies whose X-Forwarded-* headers the app trusts: a hop count or the
   # ingress's address range. One ingress hop sits in front. Leave it empty
   # wherever clients reach the pod directly.
