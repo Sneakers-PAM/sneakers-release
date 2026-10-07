@@ -153,6 +153,17 @@ ingress:
   tlsSecretName: ""
   paths: []
 
+certManager:
+  # false: TLS comes from the Secret named in ingress.tlsSecretName, which you
+  # provide. true: the chart creates one Certificate per ingress.host from
+  # issuerRef; it never creates an Issuer, a ClusterIssuer or any
+  # cert-manager CRD or webhook.
+  enabled: false
+  issuerRef:
+    kind: ClusterIssuer
+    name: ""
+    group: cert-manager.io
+
 migrations:
   job:
     enabled: false

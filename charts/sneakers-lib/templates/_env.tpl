@@ -50,6 +50,19 @@ POLIS_PUBLIC_URL: {{ tpl .publicURL $ | quote }}
 {{- fail (printf "%s: secretEnv.%s needs secretName (an existing Secret) or generate: true" (include "sneakers.fullname" $) $name) }}
 {{- end }}
 {{- end }}
+{{- with .Values.certManager }}
+{{- if .enabled }}
+{{- if not $.Values.ingress.enabled }}
+{{- fail (printf "%s: certManager.enabled needs ingress.enabled" (include "sneakers.fullname" $)) }}
+{{- end }}
+{{- if not $.Values.ingress.tlsSecretName }}
+{{- fail (printf "%s: certManager.enabled needs ingress.tlsSecretName, the Secret the Certificate writes to" (include "sneakers.fullname" $)) }}
+{{- end }}
+{{- if not .issuerRef.name }}
+{{- fail (printf "%s: certManager.issuerRef.name must be set when certManager.enabled is true" (include "sneakers.fullname" $)) }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- end -}}
 
 {{/* The Secret holding generated values, named <fullname>-generated. */}}

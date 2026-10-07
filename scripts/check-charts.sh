@@ -145,6 +145,9 @@ must_fail "SSO without its public URL" helm template ci charts/gateway -n sneake
 must_fail "a Polis URL with SSO off" helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml --set env.POLIS_PUBLIC_URL=https://sso.example.org
 must_fail "a projected token over the workload tokens" helm template ci charts/vault -n sneakers -f test/ci/standalone/vault.yaml --set projectedToken.enabled=true
 must_fail "an mfaMaxAge that isn't a Go duration" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.mfaMaxAge=thirty-minutes
+must_fail "certManager.enabled without ingress.enabled" helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml --set certManager.enabled=true --set certManager.issuerRef.name=letsencrypt
+must_fail "certManager.enabled without ingress.tlsSecretName" helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml --set ingress.enabled=true --set ingress.host=sneakers.example.org --set certManager.enabled=true --set certManager.issuerRef.name=letsencrypt
+must_fail "certManager.enabled without issuerRef.name" helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml --set ingress.enabled=true --set ingress.host=sneakers.example.org --set ingress.tlsSecretName=sneakers-tls --set certManager.enabled=true
 
 step "SSO wiring"
 helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml >"$out/sso-off.yaml"
@@ -163,6 +166,38 @@ for name in ("sneakers-vault", "sneakers-workflow", "sneakers-gateway"):
     assert cms[name]["data"].get("MFA_MAX_AGE") == "90m", f"{name}: MFA_MAX_AGE did not take global.mfaMaxAge"
 print("ok: global.mfaMaxAge sets MFA_MAX_AGE on the vault, the workflow and the gateway")
 PY
+
+step "cert-manager"
+# Rendered into its own subdirectory, out of kubeconform's "$out"/*.yaml glob:
+# kubeconform has no schema for the cert-manager.io CRD kinds (the same reason
+# the Hydra maester CRD stays off), and the fields the chart sets are checked
+# below instead.
+mkdir -p "$out/certtest"
+helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml \
+  --set ingress.enabled=true --set ingress.host=sneakers.example.org --set ingress.tlsSecretName=sneakers-tls \
+  --set certManager.enabled=true --set certManager.issuerRef.name=letsencrypt >"$out/certtest/gateway-cert-on.yaml"
+python3 - "$out/gateway.yaml" "$out/certtest/gateway-cert-on.yaml" <<'PY'
+import sys, yaml
+off_docs = [d for d in yaml.safe_load_all(open(sys.argv[1])) if d]
+assert not [d for d in off_docs if d["kind"] == "Certificate"], "certManager.enabled: false still renders a Certificate"
+on_docs = [d for d in yaml.safe_load_all(open(sys.argv[2])) if d]
+certs = [d for d in on_docs if d["kind"] == "Certificate"]
+assert certs, "certManager.enabled: true renders no Certificate"
+cert = certs[0]
+assert cert["spec"]["issuerRef"] == {"name": "letsencrypt", "kind": "ClusterIssuer", "group": "cert-manager.io"}, cert["spec"]["issuerRef"]
+assert cert["spec"]["secretName"] == "sneakers-tls", cert["spec"]["secretName"]
+assert not [d for d in on_docs if d["kind"] in ("Issuer", "ClusterIssuer")], "the chart must never create an Issuer or a ClusterIssuer"
+print("ok: certManager.enabled renders one Certificate at the configured issuer, off renders none, and the chart never creates an Issuer")
+PY
+
+step "no cluster-scoped objects"
+cluster_scoped=(CustomResourceDefinition ClusterRole ClusterRoleBinding MutatingWebhookConfiguration ValidatingWebhookConfiguration IngressClass StorageClass PriorityClass)
+for f in "$out"/sneakers.yaml "$out"/sneakers-hydra.yaml "$out"/sneakers-small-box.yaml "$out"/sneakers-small-box-hydra.yaml "$out"/sneakers-large-box.yaml "$out"/sneakers-large-box-hydra.yaml; do
+  for kind in "${cluster_scoped[@]}"; do
+    if grep -qx "kind: ${kind}" "$f"; then fail "${f} renders a cluster-scoped ${kind}"; fi
+  done
+done
+echo "ok: no render carries a cluster-scoped object"
 
 step "mcp.enabled"
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set mcp.enabled=false >"$out/sneakers-mcp-off.yaml"

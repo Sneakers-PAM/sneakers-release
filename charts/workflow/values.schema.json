@@ -255,6 +255,22 @@
         }
       }
     },
+    "certManager": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "issuerRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "enum": ["ClusterIssuer", "Issuer"] },
+            "name": { "type": "string" },
+            "group": { "$ref": "#/definitions/nonEmptyString" }
+          }
+        }
+      }
+    },
     "migrations": {
       "type": "object",
       "properties": {
