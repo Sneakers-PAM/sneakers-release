@@ -144,6 +144,7 @@ must_fail "SSO without its client secret" helm template ci charts/gateway -n sne
 must_fail "SSO without its public URL" helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml --set sso.enabled=true --set sso.clientSecret.secretName=polis
 must_fail "a Polis URL with SSO off" helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml --set env.POLIS_PUBLIC_URL=https://sso.example.org
 must_fail "a projected token over the workload tokens" helm template ci charts/vault -n sneakers -f test/ci/standalone/vault.yaml --set projectedToken.enabled=true
+must_fail "an mfaMaxAge that isn't a Go duration" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.mfaMaxAge=thirty-minutes
 
 step "SSO wiring"
 helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml >"$out/sso-off.yaml"
@@ -151,6 +152,17 @@ helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml \
   --set sso.enabled=true --set sso.publicURL=https://sso.example.org \
   --set sso.clientSecret.secretName=polis >"$out/sso-on.yaml"
 python3 scripts/check-sso.py "$out/sso-off.yaml" "$out/sso-on.yaml"
+
+step "global.mfaMaxAge"
+helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.mfaMaxAge=90m >"$out/sneakers-mfa.yaml"
+python3 - "$out/sneakers-mfa.yaml" <<'PY'
+import sys, yaml
+docs = [d for d in yaml.safe_load_all(open(sys.argv[1])) if d]
+cms = {d["metadata"]["name"]: d for d in docs if d["kind"] == "ConfigMap"}
+for name in ("sneakers-vault", "sneakers-workflow", "sneakers-gateway"):
+    assert cms[name]["data"].get("MFA_MAX_AGE") == "90m", f"{name}: MFA_MAX_AGE did not take global.mfaMaxAge"
+print("ok: global.mfaMaxAge sets MFA_MAX_AGE on the vault, the workflow and the gateway")
+PY
 
 step "mcp.enabled"
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set mcp.enabled=false >"$out/sneakers-mcp-off.yaml"
