@@ -127,7 +127,8 @@ gateway:
 
 mcp:
   # One pod. Turn the MCP server off (enabled: false, and set
-  # gateway.env.MCP_HEALTH_URL to "") if no agent uses it.
+  # gateway.env.MCP_HEALTH_URL and web-staff.env.MCP_URL to "") if no agent
+  # uses it.
   replicas: 1
   resources:
     # Set aside for the pod by the scheduler.

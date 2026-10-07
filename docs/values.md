@@ -21,12 +21,14 @@ chart by `scripts/sync-schemas.sh`.
 | `rehearsal.apiServer.addresses` | `[]` | The Kubernetes API server's endpoint addresses as CIDRs (`kubectl get endpoints kubernetes -n default`). Only the services that check caller tokens may reach them, to fetch the cluster's signing keys. Required with rehearsal mode on. |
 | `rehearsal.apiServer.port` | `6443` | The API server endpoint port. |
 | `gateway.env.MCP_HEALTH_URL` | `http://sneakers-mcp:9101/livez` | Where the gateway's diagnostics query reads the MCP server's build (its `Sneakers-Version` and `Sneakers-Commit` headers). Set it to `""` with `mcp.enabled: false`, so mcp shows as not configured. |
+| `web-staff.env.MCP_URL` | `https://{{ .Values.global.host }}/mcp` | The MCP server's public address, shown on the staff app's Agents page. Set it to `""` with `mcp.enabled: false`, so the page shows it as not configured. |
 | `global.sso.enabled` | `false` | `SSO_ENABLED` for both web apps: shows the single sign-on button. Turn it on with the gateway's SSO settings. |
+| `global.mfaMaxAge` | `30m` | `MFA_MAX_AGE` on the vault, the workflow and the gateway: the one MFA step-up window. A Go duration, 0 to 4h; the values schema refuses anything else. |
 | `<service>.*` | | That service chart's values (next section). The umbrella sets each database DSN and points each `secretEnv` at the bundled Secrets. |
 | `postgres.enabled` | `true` | The bundled PostgreSQL (`charts/postgres`). |
 | `valkey.enabled` | `true` | The bundled Valkey ([valkey-helm](https://github.com/valkey-io/valkey-helm)); its values pass through. |
 | `kratos.enabled` | `true` | The bundled Ory Kratos ([ory/k8s](https://github.com/ory/k8s)); its values pass through. |
-| `hydra.enabled` | `false` | The bundled Ory Hydra ([ory/k8s](https://github.com/ory/k8s)); its values pass through. |
+| `hydra.enabled` | `false` | The bundled Ory Hydra ([ory/k8s](https://github.com/ory/k8s)); its values pass through. `hydra.maester.enabled` stays `false`: it would add the `OAuth2Client` CRD, and this chart installs no CRD of its own ([install.md](install.md#the-public-edge)). |
 | `bundledNetworkPolicies.enabled` | `true` | NetworkPolicies for the bundled Kratos and Hydra, whose charts ship none. See [install.md](install.md#service-to-service-traffic). |
 | `bundledNetworkPolicies.kratosPublicFrom` | `[]` | More peers for Kratos's public port, besides the gateway. |
 | `bundledNetworkPolicies.kratosAdminFrom` | `[]` | Extra peers (NetworkPolicy `from` entries) admitted to the Kratos admin port, besides the identity service, the gateway and Kratos itself. A migration adds the `sneakers-migrate` Jobs ([migrate.md](migrate.md)). |
@@ -94,6 +96,8 @@ All nine service charts take the same values. Each one also works on its own, ou
 | `networkPolicy.ingressFrom`, `networkPolicy.ingressPorts` | any pod in the cluster, on `http`, for gateway, mcp, sshbroker and the web apps; none for the rest | More peers, for the ingress controller. |
 | `networkPolicy.egress` | `[]` (DNS, the gateway and Hydra for mcp) | Egress rules. Empty means no egress policy. |
 | `ingress.*` | off | `enabled`, `className`, `host` (default `global.host` for the edge services), `annotations`, `tlsSecretName`, `paths` (each `{path, pathType, portName}`). |
+| `certManager.enabled` | `false` | `true` makes the chart create one `Certificate` for `ingress.host`, at `certManager.issuerRef`, writing `ingress.tlsSecretName`. Needs `ingress.enabled` and `ingress.tlsSecretName`. The chart never creates an Issuer, a ClusterIssuer or any cert-manager CRD or webhook. |
+| `certManager.issuerRef.kind`, `.name`, `.group` | `ClusterIssuer`, `""`, `cert-manager.io` | The existing Issuer or ClusterIssuer to use. `.name` is required when `certManager.enabled` is true. |
 | `migrations.job.*` | off | A pre-upgrade Job running the image with `args`. Off until the services have a migrate-only command; they migrate at start today. |
 | `podLabels`, `podAnnotations`, `priorityClassName`, `terminationGracePeriodSeconds`, `nodeSelector`, `tolerations`, `affinity` | | Pod placement and metadata. |
 | `topologySpreadConstraints` | spread over nodes, best effort | Values go through `tpl`. |

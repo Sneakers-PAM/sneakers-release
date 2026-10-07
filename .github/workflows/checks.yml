@@ -32,13 +32,15 @@ jobs:
       # filippo.io, c2sp.org, gonum.org: Go module paths (age and its test
       # vectors, gonum through the OpenTelemetry deps). The last one is not a
       # host: protoc's descriptor bytes in gen/go/thirdparty/vault run a message
-      # name into the go_package path.
+      # name into the go_package path. cert-manager.io: the Certificate CRD's
+      # apiVersion group, the bring-your-own-cert-manager opt-in.
       allowed-domains: >-
         valkey.io
         filippo.io
         c2sp.org
         gonum.org
         x1a9.sneakers.vault.v1.getheartbeatstatusforprincipalresponsebmzkgithub.com
+        cert-manager.io
   proto-sync:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
     permissions:

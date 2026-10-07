@@ -209,6 +209,30 @@ spec:
 {{- end -}}
 
 {{/*
+The chart never creates an Issuer, a ClusterIssuer or any cert-manager CRD or
+webhook: certManager.enabled only asks the cluster's existing cert-manager for
+one Certificate, pointed at issuerRef, writing the Secret ingress.tlsSecretName
+already names.
+*/}}
+{{- define "sneakers.certificate" -}}
+{{- if (.Values.certManager).enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "sneakers.fullname" . }}
+  labels:
+    {{- include "sneakers.labels" . | nindent 4 }}
+spec:
+  secretName: {{ .Values.ingress.tlsSecretName }}
+  dnsNames: [{{ tpl .Values.ingress.host . | quote }}]
+  issuerRef:
+    name: {{ .Values.certManager.issuerRef.name }}
+    kind: {{ .Values.certManager.issuerRef.kind | default "ClusterIssuer" }}
+    group: {{ .Values.certManager.issuerRef.group | default "cert-manager.io" }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Values the chart generates once (secretEnv entries with generate: true and no
 secretName). They are kept on upgrade and on uninstall: a lost root key makes
 every stored secret unreadable, so back this Secret up with the database.
@@ -312,6 +336,7 @@ spec:
   (include "sneakers.pdb" .)
   (include "sneakers.hpa" .)
   (include "sneakers.ingress" .)
+  (include "sneakers.certificate" .)
   (include "sneakers.migrationJob" .) }}
 {{- range $docs }}
 {{- if trim . }}

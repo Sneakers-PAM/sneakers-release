@@ -81,6 +81,10 @@ a synthetic source in the original schema and runs export, import and verify aga
 in rehearsal mode, with its negative tests. `go test ./...` runs the tool's tests; set
 `MIGRATE_TEST_PG` to an admin Postgres DSN for the integration tests.
 
+## 🙏 Acknowledgements
+
+Sneakers-PAM was originally written by [@Bugs5382](https://github.com/Bugs5382).
+
 ## ⚖️ License
 
 Apache-2.0 (c) 2026 The Sneakers-PAM Authors

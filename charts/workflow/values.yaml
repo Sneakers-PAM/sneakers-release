@@ -10,6 +10,9 @@ global:
   logFormat: json
   # OTLP gRPC collector (host:port) for traces and metrics. Empty: unset.
   otlpEndpoint: ""
+  # The one MFA step-up window (MFA_MAX_AGE): how long a fresh sign-in or
+  # step-up counts as fresh. A Go duration, 0 to 4h.
+  mfaMaxAge: 30m
 
 image:
   repository: ghcr.io/sneakers-pam/sneakers-workflow
@@ -53,6 +56,7 @@ probes:
 env:
   ENVIRONMENT: "{{ .Values.global.environment }}"
   OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.global.otlpEndpoint }}"
+  MFA_MAX_AGE: "{{ .Values.global.mfaMaxAge }}"
   GRPC_PORT: "9193"
   DATABASE_DSN: ""
   AUDIT_ADDR: sneakers-audit:9194
@@ -151,6 +155,17 @@ ingress:
   annotations: {}
   tlsSecretName: ""
   paths: []
+
+certManager:
+  # false: TLS comes from the Secret named in ingress.tlsSecretName, which you
+  # provide. true: the chart creates one Certificate per ingress.host from
+  # issuerRef; it never creates an Issuer, a ClusterIssuer or any
+  # cert-manager CRD or webhook.
+  enabled: false
+  issuerRef:
+    kind: ClusterIssuer
+    name: ""
+    group: cert-manager.io
 
 migrations:
   job:

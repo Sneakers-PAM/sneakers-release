@@ -10,6 +10,9 @@ global:
   logFormat: json
   # OTLP gRPC collector (host:port) for traces and metrics. Empty: unset.
   otlpEndpoint: ""
+  # The one MFA step-up window (MFA_MAX_AGE): how long a fresh sign-in or
+  # step-up counts as fresh. A Go duration, 0 to 4h.
+  mfaMaxAge: 30m
 
 image:
   repository: ghcr.io/sneakers-pam/sneakers-gateway
@@ -67,6 +70,7 @@ env:
   OAUTH_PUBLIC_URL: "https://{{ .Values.global.host }}"
   COOKIE_SECURE: "true"
   MFA_ENFORCED: "true"
+  MFA_MAX_AGE: "{{ .Values.global.mfaMaxAge }}"
   # Machine OIDC through Ory Hydra. Off until the hydra subchart (or your own
   # Hydra) is configured.
   HYDRA_ENABLED: "false"
@@ -199,6 +203,17 @@ ingress:
     - path: /setup
     - path: /oauth2
     - path: /.well-known/oauth-authorization-server
+
+certManager:
+  # false: TLS comes from the Secret named in ingress.tlsSecretName, which you
+  # provide. true: the chart creates one Certificate per ingress.host from
+  # issuerRef; it never creates an Issuer, a ClusterIssuer or any
+  # cert-manager CRD or webhook.
+  enabled: false
+  issuerRef:
+    kind: ClusterIssuer
+    name: ""
+    group: cert-manager.io
 
 migrations:
   job:

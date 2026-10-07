@@ -65,6 +65,9 @@ env:
   # when its image is built.
   STAFF_URL: /
   ADMIN_URL: /admin/
+  # The MCP server's public address, so the Agents page can show it. Set it
+  # to "" with mcp.enabled: false, so the page shows it as not configured.
+  MCP_URL: "https://{{ .Values.global.host }}/mcp"
   # The proxies whose X-Forwarded-* headers the app trusts: a hop count or the
   # ingress's address range. One ingress hop sits in front. Leave it empty
   # wherever clients reach the pod directly.
@@ -175,6 +178,17 @@ ingress:
   # The path isn't stripped: the app's base is fixed when its image is built.
   paths:
     - path: /
+
+certManager:
+  # false: TLS comes from the Secret named in ingress.tlsSecretName, which you
+  # provide. true: the chart creates one Certificate per ingress.host from
+  # issuerRef; it never creates an Issuer, a ClusterIssuer or any
+  # cert-manager CRD or webhook.
+  enabled: false
+  issuerRef:
+    kind: ClusterIssuer
+    name: ""
+    group: cert-manager.io
 
 migrations:
   job:

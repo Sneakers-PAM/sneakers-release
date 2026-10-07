@@ -122,6 +122,29 @@ see the request as secure.
 With single sign-on, set `global.sso.enabled: true` as well as the gateway's SSO settings: it
 shows the SSO sign-in in both apps.
 
+### TLS: bring your own ingress controller and cert-manager
+
+On a shared cluster, an ingress controller and cert-manager are cluster-scoped: there is one, and
+only one chart may install it. This chart never installs either. It only sets `ingressClassName`
+to the ingress controller already running on your cluster, and gets its TLS one of two ways:
+
+- **The Secret-only path (the default):** you provide the certificate yourself, in the Secret named
+  in `<service>.ingress.tlsSecretName`, however you manage it (a sealed Secret, an external-secrets
+  sync, or by hand). `certManager.enabled` stays `false`.
+- **Your existing cert-manager:** set `<service>.certManager.enabled: true` and
+  `<service>.certManager.issuerRef.name` (and `.kind`, `ClusterIssuer` or `Issuer`) to an Issuer or
+  ClusterIssuer already on your cluster. The chart then creates one `Certificate` per
+  `<service>.ingress.host`, pointed at that issuer, writing the same `tlsSecretName`. The chart
+  never creates the Issuer, the ClusterIssuer, or any cert-manager CRD or webhook; install
+  cert-manager and the issuer yourself first.
+
+This is per service (`web-staff`, `web-admin`, `gateway`, `mcp`, `sshbroker`), so you can point
+different public hosts at different issuers, or mix the Secret-only path for one with
+cert-manager for another.
+
+The bundled Ory Hydra chart's `maester` subcomponent, which would add the `OAuth2Client` CRD, stays
+off (`hydra.maester.enabled: false`) for the same reason: this chart installs no CRD of its own.
+
 ## Service-to-service traffic
 
 Every gRPC call between the services carries the caller's projected ServiceAccount token
