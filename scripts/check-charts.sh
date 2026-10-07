@@ -152,6 +152,19 @@ helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml \
   --set sso.clientSecret.secretName=polis >"$out/sso-on.yaml"
 python3 scripts/check-sso.py "$out/sso-off.yaml" "$out/sso-on.yaml"
 
+step "mcp.enabled"
+helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set mcp.enabled=false >"$out/sneakers-mcp-off.yaml"
+python3 - "$out/sneakers.yaml" "$out/sneakers-mcp-off.yaml" <<'PY'
+import sys, yaml
+on_docs = [d for d in yaml.safe_load_all(open(sys.argv[1])) if d]
+off_docs = [d for d in yaml.safe_load_all(open(sys.argv[2])) if d]
+on_names = {d["metadata"]["name"] for d in on_docs if d["kind"] in ("Deployment", "Service")}
+assert "sneakers-mcp" in on_names, "mcp.enabled: true renders no mcp Deployment or Service"
+off_names = {d["metadata"]["name"] for d in off_docs if d["kind"] in ("Deployment", "Service")}
+assert "sneakers-mcp" not in off_names, "mcp.enabled: false still renders mcp resources"
+print("ok: mcp.enabled renders the mcp resources on, and none off")
+PY
+
 step "web apps"
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml \
   --set gateway.ingress.enabled=true --set web-staff.ingress.enabled=true \
