@@ -75,6 +75,8 @@ type Config struct {
 	OwnerEmail string
 	Actor      string
 	Now        func() time.Time
+	// Plan is the owner's approved mapping file; required outside rehearsal.
+	Plan *mapping.Plan
 }
 
 // Outcome is the report plus the one value shown once: the owner's new
@@ -92,17 +94,18 @@ func Import(ctx context.Context, cfg Config, b *bundle.Bundle, d Deps, lg log.Lo
 	if cfg.Actor == "" {
 		cfg.Actor = "system:sneakers-migrate"
 	}
-	if (cfg.Wipe || cfg.OwnerEmail != "") && !cfg.Rehearsal {
-		return nil, codes.Wrap(codes.ModeRefused, errors.New("--wipe-target and --owner-email are only allowed with --rehearsal"))
+	if err := checkMode(cfg, b); err != nil {
+		return nil, err
 	}
 	mode := "cutover"
 	if cfg.Rehearsal {
 		mode = "rehearsal"
 	}
-	rep := &report.Import{BundleID: b.Manifest.BundleID, Mode: mode, StartedAt: cfg.Now().UTC().Format(time.RFC3339), Services: map[string]string{}, NotCarried: b.Manifest.NotCarried}
-	lg.Info("import started", log.F("bundle_id", b.Manifest.BundleID), log.F("mode", mode))
+	rep := &report.Import{BundleID: b.Manifest.BundleID, Mode: mode, StartedAt: cfg.Now().UTC().Format(time.RFC3339), Services: map[string]string{}, NotCarried: b.Manifest.NotCarried,
+		CurrentOnly: b.Manifest.CurrentOnly, SignInReset: b.Manifest.SignInReset}
+	lg.Info("import started", log.F("bundle_id", b.Manifest.BundleID), log.F("mode", mode), log.F("mapping", cfg.Plan != nil))
 
-	pre, err := mapping.Map(b, mapping.Context{Now: cfg.Now(), Actor: cfg.Actor, Rehearsal: cfg.Rehearsal})
+	pre, err := mapRows(b, mapping.Context{Now: cfg.Now(), Actor: cfg.Actor, Rehearsal: cfg.Rehearsal, Plan: cfg.Plan})
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +135,16 @@ func Import(ctx context.Context, cfg Config, b *bundle.Bundle, d Deps, lg log.Lo
 		return nil, err
 	}
 	if cfg.Wipe {
+		if !cfg.Rehearsal {
+			imported, err := importedBefore(ctx, dbs[schema.Audit].Querier())
+			if err != nil {
+				return nil, err
+			}
+			if !imported && len(st.foreign) > 0 {
+				return nil, codes.Wrap(codes.ModeRefused, fmt.Errorf("refusing to wipe: the target holds data that did not come from an import (%s); --wipe-target outside rehearsal mode only replaces an earlier import, so factory-reset the box instead", strings.Join(st.foreign, "; ")))
+			}
+			lg.Warn("re-import: wiping the earlier import", log.F("bundle_id", b.Manifest.BundleID))
+		}
 		if err := wipe(ctx, dbs, d.Kratos, lg); err != nil {
 			return nil, err
 		}
@@ -147,10 +160,11 @@ func Import(ctx context.Context, cfg Config, b *bundle.Bundle, d Deps, lg log.Lo
 	}
 	rep.KratosIdentities, rep.KratosCreated, rep.KratosReused = len(ids), created, reused
 
-	m, err := mapping.Map(b, mapping.Context{Now: cfg.Now(), Actor: cfg.Actor, KratosIDs: ids, Rehearsal: cfg.Rehearsal})
+	m, err := mapRows(b, mapping.Context{Now: cfg.Now(), Actor: cfg.Actor, KratosIDs: ids, Rehearsal: cfg.Rehearsal, Plan: cfg.Plan})
 	if err != nil {
 		return nil, err
 	}
+	rep.Remap = m.Remap
 	rep.Closed, rep.SSHTargetsToPin, rep.UsersWithoutSignIn = m.Closed, m.SSHTargets, m.Unlinked
 	if rep.VersionSamples, err = matchVersionSamples(b, m); err != nil {
 		return nil, err
@@ -178,6 +192,7 @@ func Import(ctx context.Context, cfg Config, b *bundle.Bundle, d Deps, lg log.Lo
 	}
 
 	want := m.Expected()
+	got := map[string]int{}
 	for _, t := range schema.Tables {
 		if !t.Carried() {
 			continue
@@ -186,12 +201,19 @@ func Import(ctx context.Context, cfg Config, b *bundle.Bundle, d Deps, lg log.Lo
 		if err != nil {
 			return nil, err
 		}
+		got[t.Stream()] = n
 		bt, _ := b.Manifest.Table(t.Stream())
 		rep.Tables = append(rep.Tables, report.Count{Table: t.Stream(), Bundle: bt.Rows, Expected: want[t.Stream()], Target: n})
 	}
+	rep.Parity = CheckParity(b.Manifest, want, got, m.Remap)
 
 	if rep.AuditEntries, err = appendAudit(ctx, dbs[schema.Audit].Querier(), d.Recorder, b, m, cfg, mode, rep.VersionSamples); err != nil {
 		return nil, err
+	}
+	if err := ParityError(rep.Parity); err != nil {
+		lg.Error(err, "import parity failed")
+		rep.FinishedAt = cfg.Now().UTC().Format(time.RFC3339)
+		return &Outcome{Report: rep}, err
 	}
 
 	out := &Outcome{Report: rep}
@@ -379,22 +401,21 @@ func wipe(ctx context.Context, dbs map[schema.Service]*postgres.DB, kr Kratos, l
 func importKratos(ctx context.Context, b *bundle.Bundle, kr Kratos, lg log.Logger) (map[string]string, int, int, error) {
 	ids := map[string]string{}
 	var created, reused int
-	err := b.Each(schema.KratosStream, func(raw []byte) error {
+	// An identity imported without credentials has no identifier Kratos can
+	// search by, so a resumed import finds the earlier ones by address.
+	have, err := byEmail(ctx, kr)
+	if err != nil {
+		return nil, 0, 0, fmt.Errorf("target Kratos: %w", err)
+	}
+	err = b.Each(schema.KratosStream, func(raw []byte) error {
 		var src kratos.Identity
 		if err := json.Unmarshal(raw, &src); err != nil {
 			return err
 		}
-		email := traitEmail(src)
-		if email != "" {
-			nid, err := kr.FindByIdentifier(ctx, email)
-			switch {
-			case err == nil:
-				ids[src.ID] = nid
-				reused++
-				return nil
-			case !errors.Is(err, kratos.ErrNotFound):
-				return err
-			}
+		if nid, ok := have[strings.ToLower(traitEmail(src))]; ok && traitEmail(src) != "" {
+			ids[src.ID] = nid
+			reused++
+			return nil
 		}
 		nid, err := kr.CreateFrom(ctx, src)
 		if err != nil {
@@ -581,6 +602,14 @@ func appendAudit(ctx context.Context, q postgres.Querier, rec Recorder, b *bundl
 	for k, v := range m.Closed {
 		sum["closed_"+strings.ReplaceAll(k, " ", "_")] = fmt.Sprint(v)
 	}
+	sum["current_only"], sum["sign_in_reset"] = fmt.Sprint(b.Manifest.CurrentOnly), fmt.Sprint(b.Manifest.SignInReset)
+	if r := m.Remap; r != nil {
+		sum["mapping_sha256"] = r.MappingSHA256
+		sum["mapping_secrets_dropped"], sum["mapping_secrets_moved"] = fmt.Sprint(r.SecretsDropped), fmt.Sprint(r.SecretsMoved)
+		sum["mapping_secrets_renamed"], sum["mapping_secrets_retyped"] = fmt.Sprint(r.SecretsRenamed), fmt.Sprint(r.SecretsRetyped)
+		sum["mapping_folders_created"], sum["mapping_folders_moved"] = fmt.Sprint(r.FoldersCreated), fmt.Sprint(r.FoldersMoved)
+		sum["mapping_folders_dropped"] = fmt.Sprint(r.FoldersDropped)
+	}
 	if err := emit("migration.import", "bundle:"+b.Manifest.BundleID, sum); err != nil {
 		return n, err
 	}
@@ -588,9 +617,13 @@ func appendAudit(ctx context.Context, q postgres.Querier, rec Recorder, b *bundl
 }
 
 func ownerPassword(ctx context.Context, kr Kratos, email string) (string, error) {
-	id, err := kr.FindByIdentifier(ctx, email)
+	have, err := byEmail(ctx, kr)
 	if err != nil {
 		return "", fmt.Errorf("owner account %s: %w", email, err)
+	}
+	id, ok := have[strings.ToLower(email)]
+	if !ok {
+		return "", fmt.Errorf("owner account %s: %w", email, kratos.ErrNotFound)
 	}
 	pw, err := kratos.RandomPassword(24)
 	if err != nil {
@@ -600,4 +633,96 @@ func ownerPassword(ctx context.Context, kr Kratos, email string) (string, error)
 		return "", fmt.Errorf("owner account %s: %w", email, err)
 	}
 	return pw, nil
+}
+
+// checkMode refuses the flag combinations a mode doesn't allow.
+func checkMode(cfg Config, b *bundle.Bundle) error {
+	if b.Manifest.Sanitised && !cfg.Rehearsal {
+		return codes.Wrap(codes.ModeRefused, errors.New("the bundle is sanitised (fake values for a lab dry run); import it with --rehearsal only"))
+	}
+	if cfg.Rehearsal {
+		return nil
+	}
+	if cfg.Plan == nil {
+		return codes.Wrap(codes.ModeRefused, errors.New("an import outside rehearsal mode needs the owner's approved mapping file (--mapping)"))
+	}
+	if cfg.OwnerEmail != "" && !b.Manifest.SignInReset {
+		return codes.Wrap(codes.ModeRefused, errors.New("--owner-email outside rehearsal mode needs a bundle exported with --reset-sign-in, where nobody keeps a password"))
+	}
+	return nil
+}
+
+// mapRows maps the bundle, marking a mapping file that doesn't fit it.
+func mapRows(b *bundle.Bundle, c mapping.Context) (*mapping.Result, error) {
+	m, err := mapping.Map(b, c)
+	if errors.Is(err, mapping.ErrMapping) {
+		return nil, codes.Wrap(codes.MappingInvalid, err)
+	}
+	return m, err
+}
+
+// importedBefore reports whether the target's audit chain records an import.
+func importedBefore(ctx context.Context, q postgres.Querier) (bool, error) {
+	var n int
+	if err := q.QueryRow(ctx, "SELECT count(*) FROM public.audit_records WHERE action = 'migration.import'").Scan(&n); err != nil {
+		return false, fmt.Errorf("read the target audit chain: %w", err)
+	}
+	return n > 0, nil
+}
+
+func byEmail(ctx context.Context, kr Kratos) (map[string]string, error) {
+	list, err := kr.List(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, id := range list {
+		if e := strings.ToLower(traitEmail(id)); e != "" {
+			out[e] = id.ID
+		}
+	}
+	return out, nil
+}
+
+// CheckParity compares each category's source, bundle, mapped and target
+// counts: what the source held, less what the mapping dropped, plus the
+// folders it made, must be what the target holds.
+func CheckParity(m bundle.Manifest, expected, target map[string]int, remap *mapping.RemapStats) []report.Parity {
+	src := map[string]int{}
+	for _, p := range m.Parity {
+		src[p.Stream] = p.Source
+	}
+	var out []report.Parity
+	for _, c := range schema.ParityCategories {
+		bt, _ := m.Table(c.Stream)
+		p := report.Parity{Name: c.Name, Source: bt.Rows, Bundle: bt.Rows, Expected: expected[c.Stream], Target: target[c.Stream]}
+		if n, ok := src[c.Stream]; ok {
+			p.Source = n
+		}
+		if remap != nil {
+			switch c.Name {
+			case "secrets":
+				p.Dropped = remap.SecretsDropped
+			case "folders":
+				p.Dropped, p.Created = remap.FoldersDropped, remap.FoldersCreated
+			}
+		}
+		p.OK = p.Source == p.Bundle && p.Bundle-p.Dropped+p.Created == p.Expected && p.Expected == p.Target
+		out = append(out, p)
+	}
+	return out
+}
+
+// ParityError is the loud failure for a parity table with a mismatch.
+func ParityError(ps []report.Parity) error {
+	var bad []string
+	for _, p := range ps {
+		if !p.OK {
+			bad = append(bad, fmt.Sprintf("%s: source %d, dropped %d, created %d, expected %d, target %d", p.Name, p.Source, p.Dropped, p.Created, p.Expected, p.Target))
+		}
+	}
+	if len(bad) == 0 {
+		return nil
+	}
+	return codes.Wrap(codes.ParityMismatch, fmt.Errorf("import parity failed (%s); fix the cause and re-import with --wipe-target", strings.Join(bad, "; ")))
 }

@@ -27,7 +27,7 @@ func TestHelpAndVersion(t *testing.T) {
 		t.Fatalf("help: %d %q", code, out)
 	}
 	code, out, _ := runArgs(t, "version")
-	if code != exitOK || !strings.Contains(out, "bundle format sneakers-migrate-bundle 1.0") || !strings.Contains(out, "source profile original-v1") {
+	if code != exitOK || !strings.Contains(out, "bundle format sneakers-migrate-bundle 1.1") || !strings.Contains(out, "source profile original-v1") {
 		t.Fatalf("version: %d %q", code, out)
 	}
 }
@@ -46,8 +46,11 @@ func TestUsageErrors(t *testing.T) {
 	}
 }
 
-func TestRehearsalOnlyFlagsAreRefused(t *testing.T) {
+// Outside rehearsal mode an import needs the owner's mapping file, whatever
+// else it is asked to do.
+func TestImportOutsideRehearsalNeedsAMapping(t *testing.T) {
 	for _, args := range [][]string{
+		{"import", "--bundle", "b", "--identity", "i"},
 		{"import", "--bundle", "b", "--identity", "i", "--wipe-target"},
 		{"import", "--bundle", "b", "--identity", "i", "--owner-email", "owner@example.org"},
 	} {

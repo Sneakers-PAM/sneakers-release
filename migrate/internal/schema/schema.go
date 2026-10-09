@@ -149,3 +149,19 @@ func Lookup(stream string) (Table, bool) {
 
 // KratosStream carries the Kratos identities.
 const KratosStream = "kratos.identities"
+
+// Category is one thing the parity report counts, and the stream it lives in.
+type Category struct {
+	Name   string
+	Stream string
+}
+
+// ParityCategories are counted in the source, the bundle and the target.
+var ParityCategories = []Category{
+	{Name: "folders", Stream: "vault.folders"},
+	{Name: "secrets", Stream: "vault.secrets"},
+	{Name: "types", Stream: "vault.secret_types"},
+	{Name: "users", Stream: "identity.users"},
+	{Name: "targets", Stream: "vault.targets"},
+	{Name: "connections", Stream: "vault.connections"},
+}

@@ -28,7 +28,9 @@ fails when the two disagree.
 - 📌 **Pinned:** every third-party chart and image is pinned by version and digest.
 - 🔁 **Migration:** `sneakers-migrate` (`migrate/`) exports an install of the original system to one
   encrypted bundle, imports it into a fresh install and verifies counts, the audit chain, sample
-  reveals and targets.
+  reveals and targets. For the move onto the appliance it re-maps folders, names and types from an
+  approved mapping file, carries current values only, resets every sign-in and checks parity
+  ([docs/migrate-appliance.md](docs/migrate-appliance.md)).
 
 ## 🚀 Install with Helm
 

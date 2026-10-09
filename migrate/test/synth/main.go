@@ -25,6 +25,7 @@ type options struct {
 	schemaDir string
 	keysOut   string
 	summary   string
+	shape     string
 	opts      synth.Options
 }
 
@@ -55,6 +56,7 @@ the Kratos admin API at SOURCE_KRATOS_ADMIN_URL with invented data.`,
 	f.IntVarP(&o.opts.Secrets, "secrets", "n", 200, "secrets to create")
 	f.IntVarP(&o.opts.AuditRecords, "audit-records", "a", 1000, "audit records to chain")
 	f.StringVarP(&o.opts.OwnerEmail, "owner-email", "e", "owner@example.org", "the root user's address")
+	f.StringVarP(&o.shape, "shape", "p", "", "a JSON vault layout (synth.Shape) instead of the default tree")
 	_ = cmd.MarkFlagRequired("keys-out")
 	return cmd
 }
@@ -73,6 +75,16 @@ func (o *options) run(ctx context.Context) error {
 	kurl := os.Getenv("SOURCE_KRATOS_ADMIN_URL")
 	if kurl == "" {
 		return fmt.Errorf("SOURCE_KRATOS_ADMIN_URL is not set")
+	}
+	if o.shape != "" {
+		raw, err := os.ReadFile(o.shape) // #nosec G304 G703 -- the operator names the shape file
+		if err != nil {
+			return err
+		}
+		o.opts.Shape = &synth.Shape{}
+		if err := json.Unmarshal(raw, o.opts.Shape); err != nil {
+			return fmt.Errorf("shape: %w", err)
+		}
 	}
 	if err := synth.Migrate(dsn, dirs); err != nil {
 		return err

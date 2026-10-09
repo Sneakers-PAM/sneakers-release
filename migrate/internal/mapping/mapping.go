@@ -27,6 +27,9 @@ type Context struct {
 	// KratosIDs maps each source Kratos identity id to the new one.
 	KratosIDs map[string]string
 	Rehearsal bool
+	// Plan re-maps folders, names and types and drops what it says; nil
+	// carries everything as it is.
+	Plan *Plan
 }
 
 // Event is one migration audit entry to append after the import.
@@ -47,6 +50,8 @@ type Result struct {
 	Unlinked []string
 	// Closed counts what was closed by migration, by kind.
 	Closed map[string]int
+	// Remap is what the plan changed; nil without a plan.
+	Remap *RemapStats
 }
 
 // Workflow approval statuses and vault use and rotation states, as stored.
@@ -89,6 +94,11 @@ func Map(b *bundle.Bundle, c Context) (*Result, error) {
 		return nil, err
 	}
 	r.workflow(c)
+	if c.Plan != nil {
+		if err := r.applyPlan(c.Plan); err != nil {
+			return nil, err
+		}
+	}
 	sort.Strings(r.SSHTargets)
 	sort.Strings(r.Unlinked)
 	return r, nil

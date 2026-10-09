@@ -38,6 +38,8 @@ func rootWith(e env) *cobra.Command {
 
   keygen   make the import key pair on the target side
   export   read the source and write one encrypted bundle
+  review   list a bundle's secrets by folder, name and type
+  mapping  convert a proposal sheet into a mapping file, or check one
   import   load the bundle into a fresh target install
   verify   check the target against the bundle
 
@@ -61,6 +63,6 @@ Connection settings and keys come from the environment; see docs/migrate.md.`,
 		}
 		return log.NewLoggerWithOptions("sneakers-migrate", log.WithOutput(out), log.WithDefaultFormat(log.FormatConsole), log.WithDefaultLevel(level))
 	}
-	cmd.AddCommand(KeygenCmd(), ExportCmd(e, lg), ImportCmd(e, lg), VerifyCmd(e, lg), VersionCmd())
+	cmd.AddCommand(KeygenCmd(), ExportCmd(e, lg), ReviewCmd(), MappingCmd(), ImportCmd(e, lg), VerifyCmd(e, lg), VersionCmd())
 	return cmd
 }

@@ -17,7 +17,9 @@ const (
 	TargetNotEmpty = 2002
 	ModeRefused    = 2003
 	TargetKey      = 2004
+	MappingInvalid = 2005
 	VerifyMismatch = 3001
+	ParityMismatch = 3002
 	BundleDamaged  = 4001
 	BundleKey      = 4002
 	BundleVersion  = 4003
@@ -32,7 +34,9 @@ var Entries = []apperr.Entry{
 	{Code: TargetNotEmpty, Title: "target", Cause: "the target already holds data that is not this bundle's"},
 	{Code: ModeRefused, Title: "mode", Cause: "the flag is only allowed in rehearsal mode"},
 	{Code: TargetKey, Title: "target", Cause: "a target key the import needs is missing or invalid"},
+	{Code: MappingInvalid, Title: "mapping", Cause: "the mapping file is invalid or does not fit the bundle"},
 	{Code: VerifyMismatch, Title: "verify", Cause: "the target does not match the bundle"},
+	{Code: ParityMismatch, Title: "parity", Cause: "the counts after an export or an import do not match the source"},
 	{Code: BundleDamaged, Title: "bundle", Cause: "the bundle is damaged or does not match its manifest"},
 	{Code: BundleKey, Title: "bundle", Cause: "the bundle does not open with the given identity"},
 	{Code: BundleVersion, Title: "bundle", Cause: "the bundle is from another major version"},
