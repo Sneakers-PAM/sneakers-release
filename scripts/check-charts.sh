@@ -307,6 +307,38 @@ python3 scripts/check-edges.py <"$out/sneakers-hydra.yaml"
 
 step "release manifest"
 python3 scripts/check-manifest.py
+# Each service's build block: the source commit the appliance release builds
+# its image from. A broken one is refused, as is an install test that builds
+# a different commit, target or build argument.
+bad_manifest() {
+  python3 - "$out/bad-release.yaml" "$1" <<'PY'
+import sys, yaml
+out, what = sys.argv[1:3]
+m = yaml.safe_load(open("manifest/release.yaml"))
+svc = m["spec"]["services"]
+if what == "no-build":
+    del svc["vault"]["build"]
+elif what == "short-commit":
+    svc["vault"]["build"]["commit"] = svc["vault"]["build"]["commit"][:12]
+elif what == "other-repo":
+    svc["vault"]["build"]["repository"] = "Sneakers-PAM/sneakers-audit"
+elif what == "no-dockerfile":
+    svc["audit"]["build"]["dockerfile"] = ""
+elif what == "other-commit":
+    svc["web-admin"]["build"]["commit"] = "0" * 40
+elif what == "other-target":
+    svc["workflow"]["build"]["target"] = "seed"
+elif what == "other-args":
+    svc["web-staff"]["build"]["args"] = {"APP": "admin"}
+elif what == "unknown-key":
+    svc["mcp"]["build"]["ref"] = "main"
+yaml.safe_dump(m, open(out, "w"), sort_keys=False)
+PY
+  python3 scripts/check-manifest.py "$out/bad-release.yaml"
+}
+for what in no-build short-commit other-repo no-dockerfile other-commit other-target other-args unknown-key; do
+  must_fail "a service build block: ${what}" bad_manifest "$what"
+done
 
 echo
 echo "all chart checks passed"

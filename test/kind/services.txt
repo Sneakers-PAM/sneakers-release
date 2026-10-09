@@ -1,14 +1,16 @@
 # The service images the install test builds, one per line:
 #   <image name> <repository> <git ref> <Dockerfile target, or - for the default> [build args, KEY=value,...]
-# The refs are each service repository's merge commit on main.
-sneakers-identity  Sneakers-PAM/sneakers-identity   2e299766110cda6ee65758bfda0858c228e09efa  -
-sneakers-vault     Sneakers-PAM/sneakers-vault      1325b7c0772a907008bbb6f67ccd9bda6ac05216  vault
-sneakers-workflow  Sneakers-PAM/sneakers-vault      1325b7c0772a907008bbb6f67ccd9bda6ac05216  workflow
-sneakers-audit     Sneakers-PAM/sneakers-audit      31747b864ffb25ca86676de7213dc75b9b7db64e  -
-sneakers-notify    Sneakers-PAM/sneakers-notify     03bd7b091f4135c871d8bebf60295713e5da4b0d  -
-sneakers-connector Sneakers-PAM/sneakers-connector  0286ce153bfec51ddeff78d775b779ff51192517  -
-sneakers-sshbroker Sneakers-PAM/sneakers-sshbroker  7a4916a1f84936468e9d3500bcda93e44ead7e49  -
-sneakers-gateway   Sneakers-PAM/sneakers-gateway    b67bc89d1ab7d2b0b238b560fbdb725de0ef8917  -
-sneakers-mcp       Sneakers-PAM/sneakers-mcp        01c1f6a365a54b01ac052b41ef6cd4cd27dda42e  -
-sneakers-web-staff Sneakers-PAM/sneakers-web        ab8b2c8144c4fa3485470166dd434c01ec6b17ac  -  APP=staff
-sneakers-web-admin Sneakers-PAM/sneakers-web        ab8b2c8144c4fa3485470166dd434c01ec6b17ac  -  APP=admin
+# The refs are each service repository's merge commit on main: the same commits,
+# targets and build args as each service's build block in manifest/release.yaml
+# (scripts/check-manifest.py checks it), so the install test builds what ships.
+sneakers-identity  Sneakers-PAM/sneakers-identity   8bd01bf333d1fd051009ad5567e82900b424091e  -
+sneakers-vault     Sneakers-PAM/sneakers-vault      2644629a50c138764f89d897bcc4b2e6c78e2924  vault
+sneakers-workflow  Sneakers-PAM/sneakers-vault      2644629a50c138764f89d897bcc4b2e6c78e2924  workflow
+sneakers-audit     Sneakers-PAM/sneakers-audit      1ecfc74f492fa9f02cc1865d3e17a1ce4060443b  -
+sneakers-notify    Sneakers-PAM/sneakers-notify     78096c74497678a94ff2be507ba92bb4f7610814  -
+sneakers-connector Sneakers-PAM/sneakers-connector  be456ff05e19b96c8b8978785c6fd7a437524bbb  -
+sneakers-sshbroker Sneakers-PAM/sneakers-sshbroker  7a45ea63e1a9a8f1f7c709c8bf38e5647f551d80  -
+sneakers-gateway   Sneakers-PAM/sneakers-gateway    74d4c5553443cdff2a8401fb11bd7f238c6ed948  -
+sneakers-mcp       Sneakers-PAM/sneakers-mcp        98cfa73752ed4616f0977abf3e307471fa90607b  -
+sneakers-web-staff Sneakers-PAM/sneakers-web        9c24045aaa1d4a1288176934d9ee9557aa250b32  -  APP=staff
+sneakers-web-admin Sneakers-PAM/sneakers-web        9c24045aaa1d4a1288176934d9ee9557aa250b32  -  APP=admin

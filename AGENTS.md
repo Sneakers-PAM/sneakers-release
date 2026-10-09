@@ -14,6 +14,10 @@ Two things to know before changing it:
 
 - The manifest and the charts pin the same versions. `scripts/check-manifest.py` fails CI when
   they differ, so change both together.
+- Each service in the manifest has a `build` block: the repository, the full commit, the Dockerfile
+  and its context (plus the target and build args). The appliance's release workflow builds the
+  service images from it. `test/kind/services.txt` builds the same commits, and
+  `scripts/check-manifest.py` fails when the two disagree, so bump both together.
 - The service charts share their templates (`charts/sneakers-lib`) and one values schema
   (`charts/sneakers-lib/service.schema.json`). Edit the schema there and run
   `scripts/sync-schemas.sh`.
