@@ -57,7 +57,7 @@ func outputFile(path string, stdout, stderr io.Writer) (io.Writer, io.Writer, fu
 	if path == "" {
 		return stdout, stderr, func(int) {}, nil
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 -- the runner names the file
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 G703 -- the runner names the file
 	if err != nil {
 		return nil, nil, nil, err
 	}

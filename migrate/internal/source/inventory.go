@@ -145,7 +145,7 @@ func inventoryRows(ctx context.Context, q postgres.Querier, s schema.Service, in
 		}
 		return rs.Err()
 	case schema.Vault:
-		for stream, sql := range map[string]string{
+		for stream, sql := range map[string]string{ // #nosec G101 -- name-only queries, no credential
 			"vault.folders":      "SELECT json_build_object('id', id, 'data', json_build_object('name', data->'name', 'parentId', data->'parentId', 'scope', data->'scope', 'ownerUserId', data->'ownerUserId'))::text FROM public.folders ORDER BY id",
 			"vault.secrets":      "SELECT json_build_object('id', id, 'data', json_build_object('name', data->'name', 'folderId', data->'folderId', 'typeId', data->'typeId', 'retired', data->'retired'))::text FROM public.secrets ORDER BY id",
 			"vault.secret_types": "SELECT json_build_object('id', id, 'data', json_build_object('name', data->'name'))::text FROM public.secret_types ORDER BY id",
