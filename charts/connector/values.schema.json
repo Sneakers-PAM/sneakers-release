@@ -122,6 +122,15 @@
       "additionalProperties": { "$ref": "#/definitions/secretRef" }
     },
     "envFromSecrets": { "type": "array", "items": { "type": "string" } },
+    "envFromConfigMaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": { "name": { "type": "string", "minLength": 1 }, "optional": { "type": "boolean" } }
+      }
+    },
     "extraEnv": { "type": "array", "items": { "type": "object", "required": ["name"] } },
     "args": { "type": "array", "items": { "type": "string" } },
     "resources": {

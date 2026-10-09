@@ -123,6 +123,27 @@ spec:
       image: docker.io/oryd/hydra
       version: v2.3.0
       digest: sha256:b94007e19a1f7f78157e7f4ea340da8a55b5f104a0f1198755c256f38ef32b4b
+  # The platform the appliance runs the charts on. No chart installs these:
+  # the appliance's own stacks do, from the images the product bundle carries
+  # (its bundle check refuses a bundle without them). On your own cluster,
+  # bring your own ingress controller and cert-manager.
+  platform:
+    traefik:
+      image: docker.io/library/traefik
+      version: v3.7.14
+      digest: sha256:e849695bc5c317da0cec22bfee4794fd9e15871fe554f864d31b625983e883ff
+    cert-manager-controller:
+      image: quay.io/jetstack/cert-manager-controller
+      version: v1.21.2
+      digest: sha256:70f532fd9cfde0b09d55687200942399d89838bc2d5d5b45152eb799a15912b8
+    cert-manager-webhook:
+      image: quay.io/jetstack/cert-manager-webhook
+      version: v1.21.2
+      digest: sha256:a60e2dac46dbb8a7f3df95c54ce941012f54c2fe022f0ee55aaa1ab40ed957ae
+    cert-manager-cainjector:
+      image: quay.io/jetstack/cert-manager-cainjector
+      version: v1.21.2
+      digest: sha256:c85268c64f2e0e76684bf5fe8906caff34b82523561c6affe0fae3546bd87562
   tools:
     # The helm test pod.
     curl:
