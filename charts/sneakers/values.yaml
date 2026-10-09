@@ -23,6 +23,13 @@ global:
   # the gateway): how long a fresh sign-in or step-up counts as fresh. A Go
   # duration, 0 to 4h.
   mfaMaxAge: 30m
+  # The cluster's service account token issuer, which the services check
+  # each other's workload tokens against (WORKLOAD_OIDC_ISSUER). Empty: each
+  # service's workloadIdentity.issuer, https://kubernetes.default.svc.cluster.local
+  # (kubeadm, k3s, kind). Set it once here when the cluster's issuer differs:
+  # k0s (and the appliance) is https://kubernetes.default.svc. Read yours with
+  # `kubectl get --raw /.well-known/openid-configuration`.
+  workloadIdentityIssuer: ""
 
 # Rehearsal mode, for a migration rehearsal (docs/migrate.md). Every pod in
 # the namespace may reach only the other pods and the cluster DNS, and the chart

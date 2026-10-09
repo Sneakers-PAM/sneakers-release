@@ -184,9 +184,19 @@ If you expose Kratos's public API through your ingress, add the ingress controll
 `bundledNetworkPolicies.kratosPublicFrom`.
 
 The callees fetch the cluster's signing keys from `https://kubernetes.default.svc/openid/v1/jwks`
-with their own API token. If your cluster's issuer differs (check with
-`kubectl get --raw /.well-known/openid-configuration`), set
-`<service>.workloadIdentity.issuer` and `jwksURL` on vault, workflow, sshbroker, audit, notify and
+with their own API token, and check each token's issuer. The default issuer,
+`https://kubernetes.default.svc.cluster.local`, is kubeadm's, k3s's and kind's. **On k0s (and the
+appliance) the issuer is `https://kubernetes.default.svc`**, so set it once for every service:
+
+```yaml
+global:
+  workloadIdentityIssuer: https://kubernetes.default.svc
+```
+
+With the wrong issuer every service-to-service call is refused. Check yours with
+`kubectl get --raw /.well-known/openid-configuration` (its `issuer`). `global.workloadIdentityIssuer`
+wins over each service's `workloadIdentity.issuer` when it's set; a cluster whose JWKS is somewhere
+else also sets `<service>.workloadIdentity.jwksURL` on vault, workflow, sshbroker, audit, notify and
 identity.
 
 ## Bring your own

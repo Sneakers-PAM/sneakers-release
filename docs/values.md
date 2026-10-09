@@ -23,6 +23,7 @@ chart by `scripts/sync-schemas.sh`.
 | `gateway.env.MCP_HEALTH_URL` | `http://sneakers-mcp:9101/livez` | Where the gateway's diagnostics query reads the MCP server's build (its `Sneakers-Version` and `Sneakers-Commit` headers). Set it to `""` with `mcp.enabled: false`, so mcp shows as not configured. |
 | `web-staff.env.MCP_URL` | `https://{{ .Values.global.host }}/mcp` | The MCP server's public address, shown on the staff app's Agents page. Set it to `""` with `mcp.enabled: false`, so the page shows it as not configured. |
 | `global.sso.enabled` | `false` | `SSO_ENABLED` for both web apps: shows the single sign-on button. Turn it on with the gateway's SSO settings. |
+| `global.workloadIdentityIssuer` | empty | The cluster's service account token issuer for every service (`WORKLOAD_OIDC_ISSUER`), winning over each service's `workloadIdentity.issuer` when set. Empty keeps each chart's, `https://kubernetes.default.svc.cluster.local`. k0s and the appliance: `https://kubernetes.default.svc` ([install.md](install.md)). https only. |
 | `global.mfaMaxAge` | `30m` | `MFA_MAX_AGE` on the vault, the workflow and the gateway: the one MFA step-up window. A Go duration, 0 to 4h; the values schema refuses anything else. |
 | `<service>.*` | | That service chart's values (next section). The umbrella sets each database DSN and points each `secretEnv` at the bundled Secrets. |
 | `postgres.enabled` | `true` | The bundled PostgreSQL (`charts/postgres`). |
