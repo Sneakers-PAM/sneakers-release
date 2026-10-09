@@ -64,6 +64,17 @@ if not re.match(r"^v\d+\.\d+\.\d+\+k0s\.\d+$", k0s["version"]):
 for arch, sha in k0s["sha256"].items():
     if not re.match(r"^[a-f0-9]{64}$", sha):
         errors.append(f"k0s {arch} checksum is not a sha256")
+# k0s's own images (pause, kube-proxy, CoreDNS, kube-router and its CNI
+# node image): an airgapped node, such as the appliance, loads them from the
+# bundle instead of pulling them.
+K0S_IMAGES = {"pause", "kube-proxy", "coredns", "kube-router", "cni-node"}
+pinned = {}
+for im in k0s.get("images") or []:
+    pinned[im["image"].rsplit("/", 1)[-1]] = im
+    if not DIGEST.match(im.get("digest", "")):
+        errors.append(f"k0s image {im['image']}: digest {im.get('digest')!r} is not a sha256 digest")
+for name in sorted(K0S_IMAGES - pinned.keys()):
+    errors.append(f"spec.kubernetes.k0s.images pins no {name} image")
 
 for e in errors:
     print(f"manifest: {e}", file=sys.stderr)

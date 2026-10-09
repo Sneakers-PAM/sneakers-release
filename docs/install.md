@@ -18,7 +18,7 @@ same pinned release, but some things the appliance does for you become yours:
 ## Requirements
 
 - Kubernetes 1.36 or newer, the version the release is tested on (`manifest/release.yaml` pins
-  the k0s version the appliance uses).
+  the k0s version the appliance uses, and k0s's own images by digest for an airgapped node).
 - A CNI that enforces NetworkPolicies, or the policies the chart creates do nothing.
 - A default StorageClass, or `postgres.persistence.storageClass` and
   `valkey.dataStorage.className` set, for the bundled PostgreSQL and Valkey.

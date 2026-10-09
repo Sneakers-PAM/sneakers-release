@@ -12,11 +12,12 @@ organization secret.
 |---|---|---|---|
 | `production` | the release signing job of a `v*` tag run, once it exists | required reviewer Bugs5382; deployments from `v*` tags only (a custom tag policy); no admin bypass | none yet |
 
-- No workflow here signs a release yet: the `release.yaml` signature and the image
-  countersignatures the appliance build reads (`release.yaml.sigstore.json` and one
-  `<digest>.sigstore.json` per image) are still to be published. The workflow that signs them
-  will run its signing job in `production` and list the secret names it reads in this table; the
-  owner sets their values, and nothing in CI writes, reads back or copies them.
+- No workflow here signs a release. The appliance takes `manifest/release.yaml` from this
+  repository at a full commit it pins (its `build/release/pins.env`), not from a release asset,
+  and its own release job countersigns that file and every image it pins with the appliance's
+  release key, then publishes the signatures on the appliance's Release. A signing workflow added
+  here later runs its signing job in `production` and lists the secret names it reads in this
+  table; the owner sets their values, and nothing in CI writes, reads back or copies them.
 - Self-review stays allowed: the owner pushes the tag and is the only reviewer, so blocking
   self-review would leave a release no one can approve. Admins can't bypass the review.
 - There's no `lab` environment: no lab build here runs in Actions with keys of its own. The
