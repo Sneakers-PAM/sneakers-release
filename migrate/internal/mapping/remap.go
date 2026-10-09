@@ -97,9 +97,12 @@ type SecretRule struct {
 
 // Plan is a parsed mapping file.
 type Plan struct {
-	Format   string       `json:"format"`
-	Version  int          `json:"version"`
-	Unlisted string       `json:"unlisted"`
+	Format   string `json:"format"`
+	Version  int    `json:"version"`
+	Unlisted string `json:"unlisted"`
+	// BundleID keys the file to the one bundle it was written for; an import
+	// outside rehearsal mode needs it to match.
+	BundleID string       `json:"bundle_id,omitempty"`
 	Folders  []FolderRule `json:"folders,omitempty"`
 	Types    []TypeRule   `json:"types,omitempty"`
 	Secrets  []SecretRule `json:"secrets,omitempty"`

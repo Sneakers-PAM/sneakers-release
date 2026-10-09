@@ -235,9 +235,14 @@ func newRigOn(t *testing.T, set func(*source.Config), mk func(*testing.T) (map[s
 	return &rig{src: src, bundle: b, dsn: dsn, db: dbs, vault: vault, audit: audit, kratos: kf, totp: tc}
 }
 
-// keepAll is a mapping file that carries everything as it is: an import
-// outside rehearsal mode needs one.
+// keepAll is a mapping file that carries everything as it is.
 var keepAll = mustPlan(`{"format": "sneakers-migrate-mapping", "version": 1, "unlisted": "keep"}`)
+
+// keep is keepAll keyed to the rig's bundle, as an import outside
+// rehearsal mode needs.
+func (r *rig) keep() *mapping.Plan {
+	return mustPlan(fmt.Sprintf(`{"format": "sneakers-migrate-mapping", "version": 1, "unlisted": "keep", "bundle_id": %q}`, r.bundle.Manifest.BundleID))
+}
 
 func mustPlan(body string) *mapping.Plan {
 	p, err := mapping.ParsePlan([]byte(body))
@@ -247,8 +252,12 @@ func mustPlan(body string) *mapping.Plan {
 	return p
 }
 
+// cfg imports outside rehearsal mode a bundle that may be imported so (a
+// current-only sign-in reset), and any other, or a sanitised one, in
+// rehearsal mode.
 func (r *rig) cfg() target.Config {
-	return target.Config{DSN: r.dsn, TOTP: r.totp, Plan: keepAll}
+	m := r.bundle.Manifest
+	return target.Config{DSN: r.dsn, TOTP: r.totp, Plan: r.keep(), Rehearsal: !(m.CurrentOnly && m.SignInReset) || m.Sanitised}
 }
 
 func (r *rig) deps() target.Deps {
@@ -267,7 +276,7 @@ func (r *rig) verifyIt(t *testing.T) bool {
 
 func (r *rig) verifyReport(t *testing.T) *report.Verify {
 	t.Helper()
-	return r.verifyWith(t, verify.Config{DSN: r.dsn, Plan: keepAll})
+	return r.verifyWith(t, verify.Config{DSN: r.dsn, Plan: r.keep()})
 }
 
 func (r *rig) verifyWith(t *testing.T, cfg verify.Config) *report.Verify {
@@ -374,7 +383,7 @@ func TestImportThenVerify(t *testing.T) {
 }
 
 func TestImportRefusesAForeignTarget(t *testing.T) {
-	r := newRig(t)
+	r := newRigWith(t, func(c *source.Config) { c.CurrentOnly, c.ResetSignIn = true, true })
 	ctx := context.Background()
 	if _, err := r.db[schema.Identity].Querier().Exec(ctx, "INSERT INTO users (id, name, email) VALUES ('usr-x', 'Someone', 'someone@example.org')"); err != nil {
 		t.Fatal(err)
@@ -386,11 +395,6 @@ func TestImportRefusesAForeignTarget(t *testing.T) {
 	wipe.Wipe = true
 	if _, err := r.importIt(t, wipe); code(err) != codes.ModeRefused {
 		t.Fatalf("wipe outside rehearsal: err = %v, want ModeRefused", err)
-	}
-	owner := r.cfg()
-	owner.OwnerEmail = "owner@example.org"
-	if _, err := r.importIt(t, owner); code(err) != codes.ModeRefused {
-		t.Fatalf("owner password outside rehearsal: err = %v, want ModeRefused", err)
 	}
 	rehearsal := r.cfg()
 	rehearsal.Rehearsal, rehearsal.Wipe, rehearsal.OwnerEmail = true, true, "owner@example.org"
@@ -634,7 +638,7 @@ func assertSecurityReview(t *testing.T, rep *report.Import) {
 func TestImportAppliesTheMappingWithParity(t *testing.T) {
 	r := newRigWith(t, func(c *source.Config) { c.CurrentOnly, c.ResetSignIn = true, true })
 	p := mustPlan(`{
-	  "format": "sneakers-migrate-mapping", "version": 1, "unlisted": "keep",
+	  "format": "sneakers-migrate-mapping", "version": 1, "unlisted": "keep", "bundle_id": "` + r.bundle.Manifest.BundleID + `",
 	  "folders": [{"from": "Infrastructure/Linux", "to": "Servers/Linux"}],
 	  "secrets": [
 	    {"id": "sec-0021", "from": {"folder": "Databases/Production"}, "to": {"folder": "Servers/Unsorted", "name": "renamed by the mapping"}},
@@ -703,7 +707,7 @@ func TestImportAppliesTheMappingWithParity(t *testing.T) {
 	if !rep2.OK || !checkOK(t, rep2, "sign-in reset") || !checkOK(t, rep2, "parity") {
 		t.Fatal("verify failed after a mapped import")
 	}
-	if rep3 := r.verifyWith(t, verify.Config{DSN: r.dsn, Plan: keepAll}); rep3.OK || checkOK(t, rep3, "mapping") {
+	if rep3 := r.verifyWith(t, verify.Config{DSN: r.dsn, Plan: r.keep()}); rep3.OK || checkOK(t, rep3, "mapping") {
 		t.Fatal("verify passed with another mapping file than the import's")
 	}
 
@@ -725,7 +729,7 @@ func TestImportAppliesTheMappingWithParity(t *testing.T) {
 func TestImportRefusesWithoutAMapping(t *testing.T) {
 	r := newRig(t)
 	cfg := r.cfg()
-	cfg.Plan = nil
+	cfg.Plan, cfg.Rehearsal = nil, false
 	_, err := r.importIt(t, cfg)
 	if code(err) != codes.ModeRefused || !strings.Contains(err.Error(), "mapping") {
 		t.Fatalf("err = %v, want ModeRefused naming the mapping file", err)
@@ -739,10 +743,24 @@ func TestImportRefusesWithoutAMapping(t *testing.T) {
 	if err := r.db[schema.Vault].Querier().QueryRow(context.Background(), "SELECT count(*) FROM secrets").Scan(&n); err != nil || n != 0 {
 		t.Fatalf("a refused mapping wrote %d secrets (%v)", n, err)
 	}
-	owner := r.cfg()
-	owner.OwnerEmail = "owner@example.org"
-	if _, err := r.importIt(t, owner); code(err) != codes.ModeRefused {
-		t.Fatalf("owner password without a sign-in reset: err = %v, want ModeRefused", err)
+	full := r.cfg()
+	full.Rehearsal, full.OwnerEmail = false, "owner@example.org"
+	if _, err := r.importIt(t, full); code(err) != codes.ModeRefused || !strings.Contains(err.Error(), "--reset-sign-in") {
+		t.Fatalf("a bundle with history and passwords outside rehearsal: err = %v, want ModeRefused", err)
+	}
+}
+
+func TestImportRefusesAMappingForAnotherBundle(t *testing.T) {
+	r := newRigWith(t, func(c *source.Config) { c.CurrentOnly, c.ResetSignIn = true, true })
+	other := r.cfg()
+	other.Plan = mustPlan(`{"format": "sneakers-migrate-mapping", "version": 1, "unlisted": "keep", "bundle_id": "another"}`)
+	if _, err := r.importIt(t, other); code(err) != codes.MappingInvalid || !strings.Contains(err.Error(), "for bundle another") {
+		t.Fatalf("err = %v, want MappingInvalid", err)
+	}
+	unkeyed := r.cfg()
+	unkeyed.Plan = keepAll
+	if _, err := r.importIt(t, unkeyed); code(err) != codes.MappingInvalid || !strings.Contains(err.Error(), "bundle_id") {
+		t.Fatalf("err = %v, want MappingInvalid", err)
 	}
 }
 
@@ -762,8 +780,10 @@ func TestParityFailsLoudly(t *testing.T) {
 }
 
 func TestSanitisedBundleImportsInRehearsalOnly(t *testing.T) {
-	r := newRigWith(t, func(c *source.Config) { c.Sanitise = true })
-	if _, err := r.importIt(t, r.cfg()); code(err) != codes.ModeRefused {
+	r := newRigWith(t, func(c *source.Config) { c.Sanitise, c.CurrentOnly = true, true })
+	out := r.cfg()
+	out.Rehearsal = false
+	if _, err := r.importIt(t, out); code(err) != codes.ModeRefused {
 		t.Fatalf("sanitised bundle outside rehearsal: err = %v, want ModeRefused", err)
 	}
 	cfg := r.cfg()

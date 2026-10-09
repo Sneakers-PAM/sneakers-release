@@ -680,14 +680,20 @@ func checkMode(cfg Config, b *bundle.Bundle) error {
 	if b.Manifest.Sanitised && !cfg.Rehearsal {
 		return codes.Wrap(codes.ModeRefused, errors.New("the bundle is sanitised (fake values for a lab dry run); import it with --rehearsal only"))
 	}
+	if cfg.Plan != nil && cfg.Plan.BundleID != "" && cfg.Plan.BundleID != b.Manifest.BundleID {
+		return codes.Wrap(codes.MappingInvalid, fmt.Errorf("the mapping file is for bundle %s, not %s; convert or check it against this bundle", cfg.Plan.BundleID, b.Manifest.BundleID))
+	}
 	if cfg.Rehearsal {
 		return nil
 	}
 	if cfg.Plan == nil {
 		return codes.Wrap(codes.ModeRefused, errors.New("an import outside rehearsal mode needs the owner's approved mapping file (--mapping)"))
 	}
-	if cfg.OwnerEmail != "" && !b.Manifest.SignInReset {
-		return codes.Wrap(codes.ModeRefused, errors.New("--owner-email outside rehearsal mode needs a bundle exported with --reset-sign-in, where nobody keeps a password"))
+	if !b.Manifest.CurrentOnly || !b.Manifest.SignInReset {
+		return codes.Wrap(codes.ModeRefused, errors.New("an import outside rehearsal mode takes a bundle exported with --current-only and --reset-sign-in: every sign-in is reset and each secret carries its current value only"))
+	}
+	if cfg.Plan.BundleID == "" {
+		return codes.Wrap(codes.MappingInvalid, errors.New("the mapping file names no bundle_id; outside rehearsal mode it must be keyed to this bundle (review --template and mapping --tsv write it)"))
 	}
 	return nil
 }

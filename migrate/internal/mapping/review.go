@@ -67,8 +67,8 @@ func Review(r *Result) (*ReviewReport, error) {
 
 // Template is a mapping file that keeps every secret where and as it is,
 // one entry per secret, for the owner's decisions to be written into.
-func (rv *ReviewReport) Template() *Plan {
-	p := &Plan{Format: MappingFormat, Version: MappingVersion, Unlisted: UnlistedRefuse}
+func (rv *ReviewReport) Template(bundleID string) *Plan {
+	p := &Plan{Format: MappingFormat, Version: MappingVersion, Unlisted: UnlistedRefuse, BundleID: bundleID}
 	for _, it := range rv.Secrets {
 		p.Secrets = append(p.Secrets, SecretRule{ID: it.ID,
 			From: Ref{Folder: it.Folder, Owner: it.Owner, Name: it.Name, Type: it.Type},

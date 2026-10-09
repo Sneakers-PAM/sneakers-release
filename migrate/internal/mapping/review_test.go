@@ -49,7 +49,7 @@ func TestReviewListsNamesOnlyAndMakesATemplate(t *testing.T) {
 		t.Fatal("the review carries a secret value")
 	}
 
-	tpl, err := json.Marshal(rv.Template())
+	tpl, err := json.Marshal(rv.Template("b-1"))
 	if err != nil {
 		t.Fatal(err)
 	}

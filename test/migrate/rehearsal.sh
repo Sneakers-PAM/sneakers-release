@@ -14,8 +14,10 @@
 #      verify.
 #
 # APPLIANCE=1 runs the appliance move instead: the export carries current
-# values only and resets every sign-in, and the import runs outside rehearsal
-# mode with the mapping file in MAPPING, then a re-import over it. SYNTH_ARGS
+# values only and resets every sign-in, the proposal sheet in MAPPING_SHEET
+# (with the type rules in MAPPING_TYPES and new folders under MAPPING_PARENT)
+# is converted into a mapping file for the bundle, and the import runs outside
+# rehearsal mode with it, then a re-import over it. SYNTH_ARGS
 # passes extra flags to migrate/test/synth (a --shape file, say).
 #
 # Only counts and results are kept (in $WORK_DIR/results.txt); the source, its
@@ -65,7 +67,7 @@ src_pw="$(openssl rand -hex 16)"
 appliance="${APPLIANCE:-0}"
 export_flags=""
 if [ "$appliance" = 1 ]; then
-  [ -f "${MAPPING:-}" ] || fail "APPLIANCE=1 needs MAPPING, a mapping file"
+  [ -f "${MAPPING_SHEET:-}" ] || fail "APPLIANCE=1 needs MAPPING_SHEET, a proposal sheet"
   export_flags="--current-only --reset-sign-in"
 fi
 
@@ -145,7 +147,12 @@ note "bundle: $(stat -c %s "$work/bundle.age") bytes, encrypted"
 sed -n '/^parity/,$p' "$work/export.txt" >>"$results"
 bundle_files=(--from-file=bundle.age="$work/bundle.age")
 if [ "$appliance" = 1 ]; then
-  cp "$MAPPING" "$work/mapping.json"
+  step "the mapping file: the proposal sheet converted against this bundle"
+  cp "$MAPPING_SHEET" "$work/sheet.tsv"
+  map_flags=(--tsv /work/sheet.tsv --personal "$owner" --out /work/mapping.json)
+  if [ -n "${MAPPING_TYPES:-}" ]; then cp "$MAPPING_TYPES" "$work/types.json"; map_flags+=(--types /work/types.json); fi
+  if [ -n "${MAPPING_PARENT:-}" ]; then map_flags+=(--new-folder-parent "$MAPPING_PARENT"); fi
+  docker run --rm --user "$(id -u):$(id -g)" -v "$work:/work" "$image" mapping --bundle /work/bundle.age --identity /work/import.key "${map_flags[@]}" | tee -a "$results"
   bundle_files+=(--from-file=mapping.json="$work/mapping.json")
 fi
 kubectl -n "$ns" create secret generic sneakers-migrate-bundle "${bundle_files[@]}" >/dev/null

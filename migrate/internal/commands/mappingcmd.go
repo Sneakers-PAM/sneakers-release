@@ -6,6 +6,7 @@ package commands
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"time"
 
@@ -75,6 +76,12 @@ prints what would change; an error names the rule that doesn't fit.`,
 			}
 			st := m.Remap
 			pr := report.NewPrinter(cmd.OutOrStdout())
+			if plan.BundleID != "" && plan.BundleID != b.Manifest.BundleID {
+				return codes.Wrap(codes.MappingInvalid, fmt.Errorf("the mapping file is for bundle %s, not %s", plan.BundleID, b.Manifest.BundleID))
+			}
+			if plan.BundleID == "" {
+				pr.F("note: the file names no bundle_id; an import outside rehearsal mode needs one\n")
+			}
 			pr.F("mapping %s fits bundle %s\n", plan.SHA256, b.Manifest.BundleID)
 			pr.F("  folders: %d moved, %d created, %d dropped\n  secrets: %d moved, %d renamed, %d retyped, %d dropped, %d not listed (kept as they are)\n",
 				st.FoldersMoved, st.FoldersCreated, st.FoldersDropped, st.SecretsMoved, st.SecretsRenamed, st.SecretsRetyped, st.SecretsDropped, st.SecretsKept)
@@ -125,6 +132,7 @@ func convertSheet(b *bundle.Bundle, o *mappingOptions) error {
 	if err != nil {
 		return codes.Wrap(codes.MappingInvalid, err)
 	}
+	p.BundleID = b.Manifest.BundleID
 	f, err := createExclusive(o.out)
 	if err != nil {
 		return err

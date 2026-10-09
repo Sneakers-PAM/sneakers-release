@@ -66,7 +66,7 @@ decisions to be written into; docs/migrate.md#the-mapping-file has the format.`,
 				}
 				enc := json.NewEncoder(f)
 				enc.SetIndent("", "  ")
-				if err := enc.Encode(rv.Template()); err != nil {
+				if err := enc.Encode(rv.Template(b.Manifest.BundleID)); err != nil {
 					_ = f.Close()
 					return err
 				}

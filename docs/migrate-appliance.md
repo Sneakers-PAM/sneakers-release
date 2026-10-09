@@ -82,6 +82,8 @@ value. Decide the new structure from it, then write the mapping file:
 
 Upload the mapping file and run **Check mapping**: it applies the file to the bundle in memory and
 lists what would move, be renamed, retyped, created or dropped, or names the rule that doesn't fit.
+The file is keyed to the bundle it was made from (`bundle_id`), so keep the approved sheet or
+template edits: at the cutover they are converted again against the final bundle.
 
 ## 4. Rehearsal on the target appliance
 
@@ -98,7 +100,7 @@ counted in the source, less what the mapping dropped, against what the box holds
 2. **Final export** from the frozen system, to the target's import key:
    `export --current-only --reset-sign-in`. Compare its parity report with the inventory.
 3. Upload it, run **Review** again: only items that changed since the mapping was approved need a
-   new decision. **Check mapping**.
+   new decision. Convert the approved sheet against this bundle and **Check mapping**.
 4. **Import** (no rehearsal) with the mapping file and the first admin's email. The import prints the
    first admin's one-time password once; it is never stored. A parity mismatch fails the import:
    fix the cause and re-import.

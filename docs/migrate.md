@@ -102,8 +102,9 @@ checksum or count.
   identity service's `subject` follows them.
 - Applies the mapping file (`--mapping`, below) after the old-to-new mapping, before anything is
   written. A mapping that doesn't fit the bundle stops the import with nothing written (exit code 3,
-  error 2005). Outside rehearsal mode the mapping file is required; one that keeps everything is
-  three lines.
+  error 2005). Outside rehearsal mode the mapping file is required and must be keyed to the
+  bundle, and the bundle must be exported with `--current-only --reset-sign-in`: a real import
+  always resets every sign-in and carries current values only. Rehearsal mode takes any bundle.
 - Maps the old layout to the new one (below), then has the target vault re-seal every secret
   version through its `SealForImport` RPC, so the target root key never leaves the vault. TOTP
   secrets are re-encrypted under the target identity's `TOTP_ENC_KEY`. WebAuthn credentials are
@@ -185,6 +186,9 @@ its SHA-256 on the audit chain).
 - **Paths** run from the root, as a string split on `/` or, for a name that holds a `/`, a list of
   names. `from` always names the bundle's own tree; `to` names the tree as the rules leave it.
   Personal folders share a path (each user's is called the same), so `owner` (an email) picks one.
+- **`bundle_id`** keys the file to one bundle. An import outside rehearsal mode needs it, and any
+  import refuses a file keyed to another bundle. `review --template` and `mapping --tsv` write it,
+  so at the cutover the approved sheet is converted again against the final bundle.
 - **`unlisted`** is required: `keep` leaves every secret the file doesn't name where and as it is
   (other users' personal folders, say), `refuse` stops the import if any secret isn't named.
 - **Folder rules** run first, in order. A move or rename keeps the folder's id, so its access rules
@@ -346,9 +350,10 @@ test/migrate/rehearsal.sh
    heartbeat work is claimed, an import into a target holding another user is refused (exit 3), and
    a tampered audit record fails verify (exit 4).
 
-`APPLIANCE=1 MAPPING=<mapping file>` runs the appliance move instead: the export is current-only
-with a sign-in reset, the import runs outside rehearsal mode with the mapping file and a first-admin
-password, then a re-import with `--wipe-target`, a second verify, and an import without the mapping
+`APPLIANCE=1 MAPPING_SHEET=<proposal sheet>` runs the appliance move instead: the export is
+current-only with a sign-in reset, the sheet is converted into a mapping file for the bundle (with
+`MAPPING_TYPES` and `MAPPING_PARENT` for `--types` and `--new-folder-parent`), the import runs
+outside rehearsal mode with it and a first-admin password, then a re-import with `--wipe-target`, a second verify, and an import without the mapping
 file that must be refused. `SYNTH_ARGS` passes flags to `migrate/test/synth`, such as
 `--shape <file>` for a layout in the shape of a real inventory (`synth.Shape`: the same counts of
 folders, types, secrets, targets and connections, with invented names).
