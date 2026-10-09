@@ -67,6 +67,10 @@ secretEnv:
     required: true
 # Secrets loaded whole as environment variables.
 envFromSecrets: []
+# ConfigMaps loaded whole as environment variables, after the chart's own, so
+# their keys win over env. Each is {name, optional}; optional: true lets the
+# pod start while the ConfigMap is absent.
+envFromConfigMaps: []
 # Extra container env, Kubernetes format.
 extraEnv: []
 args: []

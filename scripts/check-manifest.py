@@ -102,6 +102,19 @@ for name, part in spec["thirdParty"].items():
         expect(f"{name} image tag", local["tag"], str(part["version"]))
         expect(f"{name} image digest", local["digest"], part["digest"])
 
+# The platform the appliance runs under the charts: the bundle carries these
+# images too, and the appliance's bundle check refuses one that's missing.
+PLATFORM = {"traefik", "cert-manager-controller", "cert-manager-webhook", "cert-manager-cainjector"}
+platform = spec.get("platform") or {}
+missing = PLATFORM - set(platform)
+if missing:
+    errors.append(f"spec.platform has no pin for {', '.join(sorted(missing))}")
+for name, part in platform.items():
+    if not DIGEST.match(part.get("digest", "")):
+        errors.append(f"platform {name}: digest {part.get('digest')!r} is not a sha256 digest")
+    if not part.get("image") or not part.get("version"):
+        errors.append(f"platform {name}: needs an image and a version")
+
 curl = spec["tools"]["curl"]
 test_image = values["tests"]["image"]
 expect("test image", test_image["repository"], curl["image"])

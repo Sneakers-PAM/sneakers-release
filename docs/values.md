@@ -77,6 +77,7 @@ All nine service charts take the same values. Each one also works on its own, ou
 | `requiredEnv` | `[DATABASE_DSN]` where there is a database | Keys of `env` that must not be empty. |
 | `secretEnv.<VAR>` | per service | A setting read from a Secret: `secretName`, `key` (default: the variable name), `required`. With `generate: true` and no `secretName` the chart creates the value once (`bytes` random bytes, base64) in `sneakers-<service>-generated`, kept on upgrade and uninstall. |
 | `envFromSecrets` | `[]` | Secrets loaded whole as environment variables. |
+| `envFromConfigMaps` | `[]` | ConfigMaps loaded whole as environment variables, each `{name, optional}`. They load after the chart's own ConfigMap, so their keys override `env`; with `optional: true` the pod starts while the ConfigMap is absent. |
 | `extraEnv` | `[]` | More container env, in Kubernetes form. |
 | `resources` | 50m and 64Mi requested, 1 CPU and 512Mi limit | Requests and limits; both are required. |
 | `podSecurityContext` | non-root (65532), `RuntimeDefault` seccomp | `runAsNonRoot` must stay true. |

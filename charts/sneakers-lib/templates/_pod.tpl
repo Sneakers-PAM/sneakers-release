@@ -138,6 +138,13 @@ spec:
         - secretRef:
             name: {{ tpl . $ }}
         {{- end }}
+        {{- range .Values.envFromConfigMaps }}
+        - configMapRef:
+            name: {{ tpl .name $ }}
+            {{- if .optional }}
+            optional: true
+            {{- end }}
+        {{- end }}
       {{- with include "sneakers.env" . }}
       env:
         {{- . | nindent 8 }}

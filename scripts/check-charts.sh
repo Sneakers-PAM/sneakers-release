@@ -237,6 +237,24 @@ assert "sneakers-mcp" not in off_names, "mcp.enabled: false still renders mcp re
 print("ok: mcp.enabled renders the mcp resources on, and none off")
 PY
 
+step "envFromConfigMaps"
+helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml \
+  --set-json 'envFromConfigMaps=[{"name":"sneakers-mcp","optional":true}]' >"$out/gateway-cm-on.yaml"
+python3 - "$out/gateway.yaml" "$out/gateway-cm-on.yaml" <<'PY'
+import sys, yaml
+def env_from(path):
+    for d in yaml.safe_load_all(open(path)):
+        if d and d["kind"] == "Deployment":
+            return d["spec"]["template"]["spec"]["containers"][0]["envFrom"]
+    raise SystemExit(f"{path}: no Deployment")
+off, on = env_from(sys.argv[1]), env_from(sys.argv[2])
+assert off == [{"configMapRef": {"name": "sneakers-gateway"}}], f"the default envFrom: {off}"
+# Later envFrom sources win, so a listed ConfigMap overrides the chart's own settings.
+assert on[0] == off[0] and on[-1] == {"configMapRef": {"name": "sneakers-mcp", "optional": True}}, f"envFromConfigMaps: {on}"
+print("ok: envFromConfigMaps loads each ConfigMap after the chart's own, optional when asked, and the default adds none")
+PY
+must_fail "an envFromConfigMaps entry with no name" helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml --set-json 'envFromConfigMaps=[{"optional":true}]'
+
 step "web apps"
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml \
   --set gateway.ingress.enabled=true --set web-staff.ingress.enabled=true \
