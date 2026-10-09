@@ -119,13 +119,14 @@ func Import(ctx context.Context, cfg Config, b *bundle.Bundle, d Deps, lg log.Lo
 			db.Close()
 		}
 	}()
+	versions := map[schema.Service]int64{}
 	for _, s := range schema.Services {
 		db, err := postgres.New(ctx, cfg.DSN[s])
 		if err != nil {
 			return nil, fmt.Errorf("connect to the target %s database: %w", s, err)
 		}
 		dbs[s] = db
-		if err := checkTargetVersion(ctx, db.Querier(), s); err != nil {
+		if versions[s], err = checkTargetVersion(ctx, db.Querier(), s); err != nil {
 			return nil, err
 		}
 	}
@@ -184,6 +185,7 @@ func Import(ctx context.Context, cfg Config, b *bundle.Bundle, d Deps, lg log.Lo
 		if err := prepare(ctx, s, m, cfg, d.Sealer, lg); err != nil {
 			return nil, err
 		}
+		fillNewColumns(s, versions[s], m)
 		if err := write(ctx, dbs[s], s, m); err != nil {
 			return nil, fmt.Errorf("import %s: %w", s, err)
 		}
@@ -239,17 +241,43 @@ func Import(ctx context.Context, cfg Config, b *bundle.Bundle, d Deps, lg log.Lo
 // after the source chain, not take its first sequence numbers.
 var writeOrder = []schema.Service{schema.Audit, schema.Identity, schema.Vault, schema.Workflow}
 
-func checkTargetVersion(ctx context.Context, q postgres.Querier, s schema.Service) error {
+func checkTargetVersion(ctx context.Context, q postgres.Querier, s schema.Service) (int64, error) {
 	var version int64
 	var dirty bool
 	query := "SELECT version, dirty FROM public." + schema.VersionTable(s) // #nosec G202 -- a fixed table name
 	if err := q.QueryRow(ctx, query).Scan(&version, &dirty); err != nil {
-		return codes.Wrap(codes.TargetVersion, fmt.Errorf("the target %s database has no migration version (has the service started once?): %w", s, err))
+		return 0, codes.Wrap(codes.TargetVersion, fmt.Errorf("the target %s database has no migration version (has the service started once?): %w", s, err))
 	}
-	if dirty || version != schema.TargetVersion {
-		return codes.Wrap(codes.TargetVersion, fmt.Errorf("the target %s database is at migration %d (dirty %t); this tool writes baseline %d", s, version, dirty, schema.TargetVersion))
+	if dirty || !schema.WritesTarget(s, version) {
+		return 0, codes.Wrap(codes.TargetVersion, fmt.Errorf("the target %s database is at migration %d (dirty %t); this tool writes %v", s, version, dirty, schema.TargetVersions[s]))
 	}
-	return nil
+	return version, nil
+}
+
+// fillNewColumns gives rows that predate a target migration its new
+// columns' values: jsonb_populate_recordset leaves a missing key NULL, not
+// the column's default.
+func fillNewColumns(s schema.Service, version int64, m *mapping.Result) {
+	switch {
+	case s == schema.Identity && version >= 2:
+		for _, t := range m.Rows["identity.user_tokens"] {
+			if _, ok := t["client_kind"]; ok {
+				continue
+			}
+			// The earlier system kept no kind; its MCP tokens name the MCP
+			// as their client, and everything else is a command-line token.
+			t["client_kind"] = "cli"
+			if strings.Contains(strings.ToLower(fmt.Sprint(t["client_name"])), "mcp") {
+				t["client_kind"] = "mcp"
+			}
+		}
+	case s == schema.Vault && version >= 2:
+		for _, e := range m.Rows["vault.break_glass_events"] {
+			if _, ok := e["session_id"]; !ok {
+				e["session_id"] = ""
+			}
+		}
+	}
 }
 
 func count(ctx context.Context, q postgres.Querier, table string) (int, error) {
@@ -364,8 +392,20 @@ func traitEmail(id kratos.Identity) string {
 func wipe(ctx context.Context, dbs map[schema.Service]*postgres.DB, kr Kratos, lg log.Logger) error {
 	for _, s := range schema.Services {
 		var names []string
-		for _, t := range append(schema.Of(s), schema.TargetOnly...) {
-			if t.Service == s && t.Kind != schema.Replaced {
+		for _, t := range schema.Of(s) {
+			if t.Kind != schema.Replaced {
+				names = append(names, "public."+t.Name)
+			}
+		}
+		for _, t := range schema.TargetOnly {
+			var exists bool
+			if t.Service != s {
+				continue
+			}
+			if err := dbs[s].Querier().QueryRow(ctx, "SELECT to_regclass($1) IS NOT NULL", "public."+t.Name).Scan(&exists); err != nil {
+				return fmt.Errorf("wipe %s: %w", s, err)
+			}
+			if exists {
 				names = append(names, "public."+t.Name)
 			}
 		}

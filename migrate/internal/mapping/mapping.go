@@ -99,6 +99,9 @@ func Map(b *bundle.Bundle, c Context) (*Result, error) {
 			return nil, err
 		}
 	}
+	if err := r.placeSecrets(); err != nil {
+		return nil, err
+	}
 	sort.Strings(r.SSHTargets)
 	sort.Strings(r.Unlinked)
 	return r, nil

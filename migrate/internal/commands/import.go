@@ -52,11 +52,12 @@ Environment: TARGET_IDENTITY_DSN, TARGET_VAULT_DSN, TARGET_WORKFLOW_DSN,
 TARGET_AUDIT_DSN, TARGET_KRATOS_ADMIN_URL, TARGET_VAULT_ADDR, TARGET_AUDIT_ADDR,
 TARGET_TOTP_ENC_KEY, and optionally MIGRATE_PRINCIPAL and WORKLOAD_TOKEN_FILE.`,
 		Args: cobra.NoArgs,
-		PreRunE: func(_ *cobra.Command, _ []string) error {
+		PreRunE: func(cmd *cobra.Command, _ []string) error {
 			if o.bundle == "" || o.identity == "" {
 				return usage("--bundle and --identity are required")
 			}
 			if !o.rehearsal && o.mapping == "" {
+				cmd.SilenceUsage = true
 				return codes.Wrap(codes.ModeRefused, errors.New("an import outside rehearsal mode needs the owner's approved mapping file (--mapping)"))
 			}
 			return nil

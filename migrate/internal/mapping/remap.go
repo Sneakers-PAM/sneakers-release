@@ -846,3 +846,52 @@ func (x *remapper) warnDuplicates() {
 		x.stats.Warnings = append(x.stats.Warnings, fmt.Sprintf("%d secrets share the name %q in folder %q", seen[k], parts[1], x.path(parts[0]).String()))
 	}
 }
+
+// placeSecrets numbers the active secrets of every folder where one has no
+// place yet (the earlier system kept none): 1-based and dense, by any place
+// already held, then name (case-insensitive), then id, as the vault's own
+// backfill does. A retired secret has no place.
+func (r *Result) placeSecrets() error {
+	x := &remapper{r: r, folders: map[string]*folderNode{}, secrets: map[string]*secretNode{}, email: map[string]string{}, types: map[string]map[string]any{}, touched: map[string]bool{}}
+	if err := x.load(); err != nil {
+		return err
+	}
+	for _, id := range x.sOrder {
+		d := x.secrets[id].data
+		retired, _ := d["retired"].(bool)
+		if retired {
+			delete(d, "position")
+			continue
+		}
+		if num(d["position"]) == 0 {
+			x.touched[str(d, "folderId")] = true
+		}
+	}
+	by := map[string][]*secretNode{}
+	for _, id := range x.sOrder {
+		s := x.secrets[id]
+		if retired, _ := s.data["retired"].(bool); !retired && x.touched[str(s.data, "folderId")] {
+			by[str(s.data, "folderId")] = append(by[str(s.data, "folderId")], s)
+		}
+	}
+	for _, list := range by {
+		sort.SliceStable(list, func(i, j int) bool {
+			pi, pj := num(list[i].data["position"]), num(list[j].data["position"])
+			if (pi == 0) != (pj == 0) {
+				return pi != 0
+			}
+			if pi != pj {
+				return pi < pj
+			}
+			ni, nj := strings.ToLower(str(list[i].data, "name")), strings.ToLower(str(list[j].data, "name"))
+			if ni != nj {
+				return ni < nj
+			}
+			return list[i].id < list[j].id
+		})
+		for i, s := range list {
+			s.data["position"] = i + 1
+		}
+	}
+	return nil
+}

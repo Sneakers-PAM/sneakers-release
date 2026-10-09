@@ -92,7 +92,11 @@ checksum or count.
   groups, service accounts, secrets, secret versions, folders, targets, approval requests, leases
   or audit records, and no Kratos identities. A production install is empty until its first-run
   setup, so import before setup: the bundle brings the root user, the built-in types and settings.
-- Checks every target database is at baseline version 1.
+- Checks every target database is at a migration version it writes: the baselines (version 1) and
+  the service migrations after them (identity 2, vault 2 and 3). Rows that predate a migration get
+  its new columns: a personal token's client kind (`mcp` when its client name says MCP, else `cli`),
+  a break-glass event's empty session, and each active secret's place in its folder (1-based, by
+  name, as the vault's own backfill numbers them).
 - Creates each Kratos identity with its traits, state, addresses and password hash, so people keep
   their password (with a sign-in reset bundle, without any credential). Kratos assigns new ids; the
   identity service's `subject` follows them.
@@ -341,6 +345,13 @@ test/migrate/rehearsal.sh
    namespace can, the connector, SSH broker and MCP server aren't deployed and no rotation or
    heartbeat work is claimed, an import into a target holding another user is refused (exit 3), and
    a tampered audit record fails verify (exit 4).
+
+`APPLIANCE=1 MAPPING=<mapping file>` runs the appliance move instead: the export is current-only
+with a sign-in reset, the import runs outside rehearsal mode with the mapping file and a first-admin
+password, then a re-import with `--wipe-target`, a second verify, and an import without the mapping
+file that must be refused. `SYNTH_ARGS` passes flags to `migrate/test/synth`, such as
+`--shape <file>` for a layout in the shape of a real inventory (`synth.Shape`: the same counts of
+folders, types, secrets, targets and connections, with invented names).
 
 Only counts and results are kept, in `$WORK_DIR/results.txt`; the source, its keys and the bundle
 are removed when it ends. The source-schema fixture is the Sneakers-PAM baselines plus the two

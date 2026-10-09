@@ -200,6 +200,12 @@ func newRig(t *testing.T) *rig {
 // newRigWith exports with the source settings changed by set.
 func newRigWith(t *testing.T, set func(*source.Config)) *rig {
 	t.Helper()
+	return newRigOn(t, set, testenv.NewTarget)
+}
+
+// newRigOn exports with set, onto a target made by mk.
+func newRigOn(t *testing.T, set func(*source.Config), mk func(*testing.T) (map[schema.Service]string, map[schema.Service]*postgres.DB)) *rig {
+	t.Helper()
 	src := testenv.NewSource(t, synth.Options{Users: 10, Secrets: 40, AuditRecords: 120})
 	sc := src.Config
 	set(&sc)
@@ -217,7 +223,7 @@ func newRigWith(t *testing.T, set func(*source.Config)) *rig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dsn, dbs := testenv.NewTarget(t)
+	dsn, dbs := mk(t)
 	key := make([]byte, 32)
 	_, _ = rand.Read(key)
 	tc, _ := totpcipher.New(key)
@@ -767,5 +773,40 @@ func TestSanitisedBundleImportsInRehearsalOnly(t *testing.T) {
 	}
 	if !r.verifyIt(t) {
 		t.Fatal("verify failed on a sanitised rehearsal import")
+	}
+}
+
+// The services' migrations after their baselines: personal tokens gain a
+// client kind, break-glass events a session, and secrets a place in their
+// folder. Import fills each for rows that predate it.
+func TestImportIntoTheNewestLayout(t *testing.T) {
+	r := newRigOn(t, func(c *source.Config) { c.CurrentOnly, c.ResetSignIn = true, true }, testenv.NewLatestTarget)
+	if _, err := r.importIt(t, r.cfg()); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	ctx := context.Background()
+	var mcp, cli int
+	if err := r.db[schema.Identity].Querier().QueryRow(ctx, "SELECT count(*) FILTER (WHERE client_kind = 'mcp'), count(*) FILTER (WHERE client_kind = 'cli') FROM user_tokens").Scan(&mcp, &cli); err != nil {
+		t.Fatal(err)
+	}
+	if mcp == 0 || mcp+cli != r.src.Summary.Rows["identity.user_tokens"] {
+		t.Fatalf("client kinds: %d mcp, %d cli", mcp, cli)
+	}
+	var unplaced, dense int
+	if err := r.db[schema.Vault].Querier().QueryRow(ctx, `SELECT
+	  (SELECT count(*) FROM secrets WHERE NOT coalesce((data->>'retired')::boolean, false) AND coalesce((data->>'position')::int, 0) = 0),
+	  (SELECT count(*) FROM (SELECT data->>'folderId' f, max((data->>'position')::int) m, count(*) n FROM secrets WHERE NOT coalesce((data->>'retired')::boolean, false) GROUP BY 1) x WHERE m <> n)`).Scan(&unplaced, &dense); err != nil {
+		t.Fatal(err)
+	}
+	if unplaced != 0 || dense != 0 {
+		t.Fatalf("%d active secrets without a place, %d folders not numbered 1..n", unplaced, dense)
+	}
+	if !r.verifyIt(t) {
+		t.Fatal("verify failed on the newest layout")
+	}
+	owner := r.cfg()
+	owner.Wipe = true
+	if _, err := r.importIt(t, owner); err != nil {
+		t.Fatalf("re-import on the newest layout: %v", err)
 	}
 }
