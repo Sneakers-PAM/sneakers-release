@@ -257,7 +257,7 @@ func mustPlan(body string) *mapping.Plan {
 // rehearsal mode.
 func (r *rig) cfg() target.Config {
 	m := r.bundle.Manifest
-	return target.Config{DSN: r.dsn, TOTP: r.totp, Plan: r.keep(), Rehearsal: !(m.CurrentOnly && m.SignInReset) || m.Sanitised}
+	return target.Config{DSN: r.dsn, TOTP: r.totp, Plan: r.keep(), Rehearsal: !m.CurrentOnly || !m.SignInReset || m.Sanitised}
 }
 
 func (r *rig) deps() target.Deps {
