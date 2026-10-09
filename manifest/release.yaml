@@ -211,6 +211,22 @@ spec:
       image: quay.io/jetstack/cert-manager-cainjector
       version: v1.21.2
       digest: sha256:c85268c64f2e0e76684bf5fe8906caff34b82523561c6affe0fae3546bd87562
+  # Images a product runs as one-off Jobs, not as a chart's workload: the
+  # appliance's Import page runs each sneakers-migrate step as a Job from
+  # this image. Built by the appliance's release from the build block, like
+  # the services (this repository's migrate/Dockerfile at a commit of its
+  # own main), and its digest filled in the same way.
+  jobs:
+    migrate:
+      image: ghcr.io/sneakers-pam/sneakers-migrate
+      source: https://github.com/Sneakers-PAM/sneakers-release
+      version: 0.1.0
+      digest: sha256:TBD-at-release
+      build:
+        repository: Sneakers-PAM/sneakers-release
+        commit: 59056d56b316b32d768bebd608399d0a97b269ee
+        dockerfile: migrate/Dockerfile
+        context: .
   tools:
     # The helm test pod.
     curl:

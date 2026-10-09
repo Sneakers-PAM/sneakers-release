@@ -332,11 +332,17 @@ elif what == "other-args":
     svc["web-staff"]["build"]["args"] = {"APP": "admin"}
 elif what == "unknown-key":
     svc["mcp"]["build"]["ref"] = "main"
+elif what == "no-migrate":
+    del m["spec"]["jobs"]["migrate"]
+elif what == "migrate-short-commit":
+    m["spec"]["jobs"]["migrate"]["build"]["commit"] = "59056d5"
+elif what == "migrate-other-repo":
+    m["spec"]["jobs"]["migrate"]["build"]["repository"] = "Sneakers-PAM/sneakers-vault"
 yaml.safe_dump(m, open(out, "w"), sort_keys=False)
 PY
   python3 scripts/check-manifest.py "$out/bad-release.yaml"
 }
-for what in no-build short-commit other-repo no-dockerfile other-commit other-target other-args unknown-key; do
+for what in no-build short-commit other-repo no-dockerfile other-commit other-target other-args unknown-key no-migrate migrate-short-commit migrate-other-repo; do
   must_fail "a service build block: ${what}" bad_manifest "$what"
 done
 
