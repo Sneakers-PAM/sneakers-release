@@ -2,9 +2,15 @@
 # applied whole, never in part. The charts in charts/ pin the same versions;
 # scripts/check-manifest.py fails CI when the two disagree.
 #
-# Service image digests are placeholders until the first release: the images
-# are built and pushed to GHCR on tag, and the release replaces each
-# sha256:TBD-at-release with the digest that was pushed and signed.
+# Service image digests are placeholders until the first release. Each
+# service's build block names the source its image is built from: the
+# repository, the full commit, the Dockerfile and its context, and the
+# target and build arguments when it has them. The appliance's release
+# workflow builds every service image from that block, pushes it to GHCR by
+# digest and puts the digest in place of sha256:TBD-at-release in the
+# release.yaml it ships and countersigns. test/kind/services.txt builds the
+# same commits for the install test; scripts/check-manifest.py fails when the
+# two disagree.
 apiVersion: sneakers-pam/v1alpha1
 kind: Release
 metadata:
@@ -20,56 +26,117 @@ spec:
       source: https://github.com/Sneakers-PAM/sneakers-identity
       version: 0.1.0
       digest: sha256:TBD-at-release
+      build:
+        repository: Sneakers-PAM/sneakers-identity
+        commit: 8bd01bf333d1fd051009ad5567e82900b424091e
+        dockerfile: Dockerfile
+        context: .
     vault:
       image: ghcr.io/sneakers-pam/sneakers-vault
       source: https://github.com/Sneakers-PAM/sneakers-vault
       version: 0.1.0
       digest: sha256:TBD-at-release
+      build:
+        repository: Sneakers-PAM/sneakers-vault
+        commit: 2644629a50c138764f89d897bcc4b2e6c78e2924
+        dockerfile: Dockerfile
+        context: .
+        target: vault
     workflow:
       image: ghcr.io/sneakers-pam/sneakers-workflow
       source: https://github.com/Sneakers-PAM/sneakers-vault
       version: 0.1.0
       digest: sha256:TBD-at-release
+      build:
+        repository: Sneakers-PAM/sneakers-vault
+        commit: 2644629a50c138764f89d897bcc4b2e6c78e2924
+        dockerfile: Dockerfile
+        context: .
+        target: workflow
     audit:
       image: ghcr.io/sneakers-pam/sneakers-audit
       source: https://github.com/Sneakers-PAM/sneakers-audit
       version: 0.1.0
       digest: sha256:TBD-at-release
+      build:
+        repository: Sneakers-PAM/sneakers-audit
+        commit: 1ecfc74f492fa9f02cc1865d3e17a1ce4060443b
+        dockerfile: Dockerfile
+        context: .
     notify:
       image: ghcr.io/sneakers-pam/sneakers-notify
       source: https://github.com/Sneakers-PAM/sneakers-notify
       version: 0.1.0
       digest: sha256:TBD-at-release
+      build:
+        repository: Sneakers-PAM/sneakers-notify
+        commit: 78096c74497678a94ff2be507ba92bb4f7610814
+        dockerfile: Dockerfile
+        context: .
     connector:
       image: ghcr.io/sneakers-pam/sneakers-connector
       source: https://github.com/Sneakers-PAM/sneakers-connector
       version: 0.1.0
       digest: sha256:TBD-at-release
+      build:
+        repository: Sneakers-PAM/sneakers-connector
+        commit: be456ff05e19b96c8b8978785c6fd7a437524bbb
+        dockerfile: Dockerfile
+        context: .
     sshbroker:
       image: ghcr.io/sneakers-pam/sneakers-sshbroker
       source: https://github.com/Sneakers-PAM/sneakers-sshbroker
       version: 0.1.0
       digest: sha256:TBD-at-release
+      build:
+        repository: Sneakers-PAM/sneakers-sshbroker
+        commit: 7a45ea63e1a9a8f1f7c709c8bf38e5647f551d80
+        dockerfile: Dockerfile
+        context: .
     gateway:
       image: ghcr.io/sneakers-pam/sneakers-gateway
       source: https://github.com/Sneakers-PAM/sneakers-gateway
       version: 0.1.0
       digest: sha256:TBD-at-release
+      build:
+        repository: Sneakers-PAM/sneakers-gateway
+        commit: 74d4c5553443cdff2a8401fb11bd7f238c6ed948
+        dockerfile: Dockerfile
+        context: .
     mcp:
       image: ghcr.io/sneakers-pam/sneakers-mcp
       source: https://github.com/Sneakers-PAM/sneakers-mcp
       version: 0.1.0
       digest: sha256:TBD-at-release
+      build:
+        repository: Sneakers-PAM/sneakers-mcp
+        commit: 98cfa73752ed4616f0977abf3e307471fa90607b
+        dockerfile: Dockerfile
+        context: .
     web-staff:
       image: ghcr.io/sneakers-pam/sneakers-web-staff
       source: https://github.com/Sneakers-PAM/sneakers-web
       version: 0.1.0
       digest: sha256:TBD-at-release
+      build:
+        repository: Sneakers-PAM/sneakers-web
+        commit: 9c24045aaa1d4a1288176934d9ee9557aa250b32
+        dockerfile: Dockerfile
+        context: .
+        args:
+          APP: staff
     web-admin:
       image: ghcr.io/sneakers-pam/sneakers-web-admin
       source: https://github.com/Sneakers-PAM/sneakers-web
       version: 0.1.0
       digest: sha256:TBD-at-release
+      build:
+        repository: Sneakers-PAM/sneakers-web
+        commit: 9c24045aaa1d4a1288176934d9ee9557aa250b32
+        dockerfile: Dockerfile
+        context: .
+        args:
+          APP: admin
   kubernetes:
     k0s:
       version: v1.36.4+k0s.1

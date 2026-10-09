@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Fail when manifest/release.yaml and the charts pin different versions."""
+"""Fail when manifest/release.yaml and the charts pin different versions.
+
+Usage: check-manifest.py [release.yaml] (default manifest/release.yaml).
+"""
 import re
 import sys
 from pathlib import Path
@@ -8,6 +11,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
+COMMIT = re.compile(r"^[a-f0-9]{40}$")
+BUILD_KEYS = {"repository", "commit", "dockerfile", "context", "target", "args"}
 PLACEHOLDER = "sha256:TBD-at-release"
 errors = []
 
@@ -21,7 +26,7 @@ def expect(what, got, want):
         errors.append(f"{what}: charts have {got!r}, the manifest has {want!r}")
 
 
-manifest = load("manifest/release.yaml")
+manifest = yaml.safe_load(Path(sys.argv[1] if len(sys.argv) > 1 else ROOT / "manifest/release.yaml").read_text())
 spec = manifest["spec"]
 umbrella = load("charts/sneakers/Chart.yaml")
 values = load("charts/sneakers/values.yaml")
@@ -30,6 +35,50 @@ expect("umbrella chart version", umbrella["version"], manifest["metadata"]["vers
 expect("spec.charts.sneakers.version", umbrella["version"], spec["charts"]["sneakers"]["version"])
 
 deps = {d["name"]: d for d in umbrella["dependencies"]}
+
+
+def kind_services():
+    """test/kind/services.txt: image name -> (repository, ref, target, args)."""
+    out = {}
+    for line in (ROOT / "test/kind/services.txt").read_text().splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        f = line.split()
+        args = dict(kv.split("=", 1) for kv in f[4].split(",")) if len(f) > 4 else {}
+        out[f[0]] = (f[1], f[2], None if f[3] == "-" else f[3], args)
+    return out
+
+
+kind = kind_services()
+
+
+def check_build(name, svc):
+    """The build block the appliance release builds the image from."""
+    b = svc.get("build")
+    if not isinstance(b, dict):
+        errors.append(f"{name}: no build block (repository, commit, dockerfile, context)")
+        return
+    for k in sorted(set(b) - BUILD_KEYS):
+        errors.append(f"{name}: build.{k} isn't a build key ({', '.join(sorted(BUILD_KEYS))})")
+    repo = b.get("repository", "")
+    if svc.get("source") != f"https://github.com/{repo}":
+        errors.append(f"{name}: build.repository {repo!r} isn't the source {svc.get('source')!r}")
+    if not COMMIT.match(str(b.get("commit", ""))):
+        errors.append(f"{name}: build.commit {b.get('commit')!r} isn't a full commit")
+    for k in ("dockerfile", "context"):
+        if not isinstance(b.get(k), str) or not b[k] or b[k].startswith("/") or ".." in b[k].split("/"):
+            errors.append(f"{name}: build.{k} {b.get(k)!r} isn't a path in the repository")
+    args = b.get("args") or {}
+    if not isinstance(args, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in args.items()):
+        errors.append(f"{name}: build.args is a map of strings")
+        args = {}
+    image = svc["image"].rsplit("/", 1)[-1]
+    if image not in kind:
+        errors.append(f"{name}: test/kind/services.txt doesn't build {image}")
+        return
+    want = (repo, b.get("commit"), b.get("target"), args)
+    if kind[image] != want:
+        errors.append(f"{name}: test/kind/services.txt builds {kind[image]}, the manifest {want}")
 for name, svc in spec["services"].items():
     chart = load(f"charts/{name}/Chart.yaml")
     svc_values = load(f"charts/{name}/values.yaml")
@@ -38,6 +87,7 @@ for name, svc in spec["services"].items():
     expect(f"{name} chart in the umbrella", deps[name]["version"], chart["version"])
     if svc["digest"] != PLACEHOLDER and not DIGEST.match(svc["digest"]):
         errors.append(f"{name}: digest {svc['digest']!r} is neither a sha256 digest nor {PLACEHOLDER}")
+    check_build(name, svc)
 
 for name, part in spec["thirdParty"].items():
     if not DIGEST.match(part["digest"]):
