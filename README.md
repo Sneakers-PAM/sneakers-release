@@ -87,6 +87,13 @@ in rehearsal mode, with its negative tests. `go test ./...` runs the tool's test
 
 Sneakers-PAM was originally written by [@Bugs5382](https://github.com/Bugs5382).
 
+## 🔐 Export compliance
+
+Sneakers-PAM is published from the United States and uses only standard, publicly available
+cryptography; see [CRYPTO.md](CRYPTO.md). You are responsible for complying with applicable
+export control and sanctions laws, including not using, exporting or re-exporting it in violation
+of those laws or if you are on a restricted-party list.
+
 ## ⚖️ License
 
 Apache-2.0 (c) 2026 The Sneakers-PAM Authors
