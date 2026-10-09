@@ -9,8 +9,11 @@ package testenv
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"testing"
 
 	postgres "github.com/Bugs5382/go-postgres"
@@ -113,6 +116,38 @@ func NewTarget(t *testing.T) (map[schema.Service]string, map[schema.Service]*pos
 		for _, sql := range append(toTarget[s], "UPDATE public."+schema.VersionTable(s)+" SET version = 1") {
 			if _, err := dbs[s].Querier().Exec(ctx, sql); err != nil {
 				t.Fatalf("%s: %s: %v", s, sql, err)
+			}
+		}
+	}
+	return dsn, dbs
+}
+
+// NewLatestTarget returns empty target databases at the newest layout: the
+// baselines plus the service migrations in testdata/target-migrations, with
+// each version table at the last one applied.
+func NewLatestTarget(t *testing.T) (map[schema.Service]string, map[schema.Service]*postgres.DB) {
+	t.Helper()
+	dsn, dbs := NewTarget(t)
+	_, file, _, _ := runtime.Caller(0)
+	dir := filepath.Join(filepath.Dir(file), "..", "..", "testdata", "target-migrations")
+	ctx := context.Background()
+	for _, s := range schema.Services {
+		files, _ := filepath.Glob(filepath.Join(dir, string(s), "*.up.sql"))
+		sort.Strings(files)
+		for _, f := range files {
+			sql, err := os.ReadFile(f) // #nosec G304 -- a test fixture
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := dbs[s].Querier().Exec(ctx, string(sql)); err != nil {
+				t.Fatalf("%s: %v", f, err)
+			}
+			var v int
+			if _, err := fmt.Sscanf(filepath.Base(f), "%04d_", &v); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := dbs[s].Querier().Exec(ctx, fmt.Sprintf("UPDATE public.%s SET version = %d", schema.VersionTable(s), v)); err != nil {
+				t.Fatal(err)
 			}
 		}
 	}

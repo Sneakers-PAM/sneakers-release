@@ -13,6 +13,13 @@
 #      a target holding other data is refused, a tampered audit record fails
 #      verify.
 #
+# APPLIANCE=1 runs the appliance move instead: the export carries current
+# values only and resets every sign-in, the proposal sheet in MAPPING_SHEET
+# (with the type rules in MAPPING_TYPES and new folders under MAPPING_PARENT)
+# is converted into a mapping file for the bundle, and the import runs outside
+# rehearsal mode with it, then a re-import over it. SYNTH_ARGS
+# passes extra flags to migrate/test/synth (a --shape file, say).
+#
 # Only counts and results are kept (in $WORK_DIR/results.txt); the source, its
 # keys and the bundle are removed on exit unless KEEP=1.
 set -euo pipefail
@@ -57,6 +64,12 @@ cleanup() {
 trap cleanup EXIT
 
 src_pw="$(openssl rand -hex 16)"
+appliance="${APPLIANCE:-0}"
+export_flags=""
+if [ "$appliance" = 1 ]; then
+  [ -f "${MAPPING_SHEET:-}" ] || fail "APPLIANCE=1 needs MAPPING_SHEET, a proposal sheet"
+  export_flags="--current-only --reset-sign-in"
+fi
 
 step "source: Postgres and Kratos (original schema)"
 docker network create "$prefix-net" >/dev/null
@@ -94,7 +107,7 @@ host_dsn() { echo "postgres://postgres:${src_pw}@127.0.0.1:${pg_port}/src_$1?ssl
 SOURCE_IDENTITY_DSN="$(host_dsn identity)" SOURCE_VAULT_DSN="$(host_dsn vault)" \
   SOURCE_WORKFLOW_DSN="$(host_dsn workflow)" SOURCE_AUDIT_DSN="$(host_dsn audit)" \
   SOURCE_KRATOS_ADMIN_URL="http://127.0.0.1:${k_port}" \
-  go run ./migrate/test/synth -s "$schema_dir" -k "$work/source-keys.json" -o "$work/source-summary.json" -e "$owner"
+  go run ./migrate/test/synth -s "$schema_dir" -k "$work/source-keys.json" -o "$work/source-summary.json" -e "$owner" ${SYNTH_ARGS:-}
 python3 - "$work/source-summary.json" <<'PY' | tee -a "$results"
 import json, sys
 s = json.load(open(sys.argv[1]))
@@ -129,9 +142,20 @@ docker run --rm --network "$prefix-net" --user "$(id -u):$(id -g)" -v "$work:/wo
   -e SOURCE_KRATOS_ADMIN_URL="http://${prefix}-kratos:4434" \
   -e SOURCE_VAULT_ROOT_KEK="$(keys SOURCE_VAULT_ROOT_KEK)" -e SOURCE_DEV_KEK_SEED="$(keys SOURCE_DEV_KEK_SEED)" \
   -e SOURCE_TOTP_ENC_KEY="$(keys SOURCE_TOTP_ENC_KEY)" \
-  "$image" export --recipient "$recipient" --out /work/bundle.age | tee "$work/export.txt"
+  "$image" export --recipient "$recipient" --out /work/bundle.age ${export_flags} | tee "$work/export.txt"
 note "bundle: $(stat -c %s "$work/bundle.age") bytes, encrypted"
-kubectl -n "$ns" create secret generic sneakers-migrate-bundle --from-file=bundle.age="$work/bundle.age" >/dev/null
+sed -n '/^parity/,$p' "$work/export.txt" >>"$results"
+bundle_files=(--from-file=bundle.age="$work/bundle.age")
+if [ "$appliance" = 1 ]; then
+  step "the mapping file: the proposal sheet converted against this bundle"
+  cp "$MAPPING_SHEET" "$work/sheet.tsv"
+  map_flags=(--tsv /work/sheet.tsv --personal "$owner" --out /work/mapping.json)
+  if [ -n "${MAPPING_TYPES:-}" ]; then cp "$MAPPING_TYPES" "$work/types.json"; map_flags+=(--types /work/types.json); fi
+  if [ -n "${MAPPING_PARENT:-}" ]; then map_flags+=(--new-folder-parent "$MAPPING_PARENT"); fi
+  docker run --rm --user "$(id -u):$(id -g)" -v "$work:/work" "$image" mapping --bundle /work/bundle.age --identity /work/import.key "${map_flags[@]}" | tee -a "$results"
+  bundle_files+=(--from-file=mapping.json="$work/mapping.json")
+fi
+kubectl -n "$ns" create secret generic sneakers-migrate-bundle "${bundle_files[@]}" >/dev/null
 
 # run_job <name> <expected exit code> <command args as YAML flow items>
 run_job() {
@@ -147,7 +171,7 @@ run_job() {
   done
   # The rehearsal owner password line is shown once, on the terminal of a
   # real run; the CI log never carries it.
-  kubectl -n "$ns" logs "job/$name" | grep -v "(shown once)" | tee "$work/$name.log"
+  kubectl -n "$ns" logs "job/$name" | grep -v "shown once" | tee "$work/$name.log"
   [ -n "$code" ] || fail "$name did not finish"
   [ "$code" = "$want" ] || fail "$name exited $code, want $want"
   note "$name: exit $code (as expected)"
@@ -157,18 +181,41 @@ psql_target() { # db sql
   kubectl -n "$ns" exec sneakers-postgres-0 -- sh -c "PGPASSWORD=\"\$POSTGRES_PASSWORD\" psql -U \"\$POSTGRES_USER\" -tA -d $1 -c \"$2\""
 }
 
-step "import (Job, rehearsal mode)"
-run_job sneakers-migrate-import 0 '"import", "--bundle", "/bundle/bundle.age", "--identity", "/key/import.key", "--rehearsal", "--owner-email", "'"$owner"'"'
-grep -q "^rehearsal sign-in for $owner" <(kubectl -n "$ns" logs job/sneakers-migrate-import) || fail "the owner password was not shown"
+if [ "$appliance" = 1 ]; then
+  step "import (Job, the appliance move: mapping file, sign-in reset)"
+  import_args='"import", "--bundle", "/bundle/bundle.age", "--identity", "/key/import.key", "--mapping", "/bundle/mapping.json", "--owner-email", "'"$owner"'"'
+  verify_args='"verify", "--bundle", "/bundle/bundle.age", "--identity", "/key/import.key", "--mapping", "/bundle/mapping.json"'
+else
+  step "import (Job, rehearsal mode)"
+  import_args='"import", "--bundle", "/bundle/bundle.age", "--identity", "/key/import.key", "--rehearsal", "--owner-email", "'"$owner"'"'
+  verify_args='"verify", "--bundle", "/bundle/bundle.age", "--identity", "/key/import.key"'
+fi
+run_job sneakers-migrate-import 0 "$import_args"
+grep -q "^first sign-in for $owner" <(kubectl -n "$ns" logs job/sneakers-migrate-import) || fail "the owner password was not shown"
 note "owner sign-in password: shown once, kept out of this log"
+sed -n '/^parity/,/^  connections/p' "$work/sneakers-migrate-import.log" >>"$results"
+grep -E "^(mapping |sign-in:|secret history:)" "$work/sneakers-migrate-import.log" >>"$results" || true
 
 step "restart the vault so it loads the imported state"
 kubectl -n "$ns" rollout restart deployment/sneakers-vault >/dev/null
 kubectl -n "$ns" rollout status deployment/sneakers-vault --timeout 5m
 
 step "verify (Job)"
-run_job sneakers-migrate-verify 0 '"verify", "--bundle", "/bundle/bundle.age", "--identity", "/key/import.key"'
+run_job sneakers-migrate-verify 0 "$verify_args"
 sed -n '/^verify /,$p' "$work/sneakers-migrate-verify.log" >>"$results"
+
+if [ "$appliance" = 1 ]; then
+  step "re-import over the earlier import (no rollback: fix and re-import)"
+  run_job sneakers-migrate-reimport 0 "${import_args}"', "--wipe-target"'
+  grep -q "re-import" "$work/sneakers-migrate-reimport.log" || true
+  kubectl -n "$ns" rollout restart deployment/sneakers-vault >/dev/null
+  kubectl -n "$ns" rollout status deployment/sneakers-vault --timeout 5m
+  run_job sneakers-migrate-verify-again 0 "$verify_args"
+  note "re-import with --wipe-target, then verify: passed"
+  step "negative: an import without the mapping file is refused"
+  run_job sneakers-migrate-import-nomap 3 '"import", "--bundle", "/bundle/bundle.age", "--identity", "/key/import.key"'
+  grep -q "mapping file" "$work/sneakers-migrate-import-nomap.log" || fail "the refusal did not name the mapping file"
+fi
 
 step "negative: rehearsal mode blocks egress"
 test_image="$(python3 - <<'PY'
@@ -210,7 +257,8 @@ claims="$(psql_target sneakers_vault "SELECT (SELECT count(*) FROM rotation_sche
 kek_days="$(psql_target sneakers_vault "SELECT coalesce(data->>'kekRotationDays', '0') FROM security_settings")"
 note "connector, SSH broker and MCP not deployed; rotation and heartbeat claims after the run: ${claims}; KEK rotation days: ${kek_days}"
 [ "$claims" = 0 ] || fail "rotation or heartbeat work was claimed in rehearsal mode"
-[ "$kek_days" = 0 ] || fail "KEK rotation is on in rehearsal mode"
+# The appliance move imports outside rehearsal mode, which keeps the setting.
+[ "$appliance" = 1 ] || [ "$kek_days" = 0 ] || fail "KEK rotation is on in rehearsal mode"
 
 step "negative: an import into a target holding other data is refused"
 psql_target sneakers_identity "INSERT INTO users (id, name, email) VALUES ('usr-foreign', 'Foreign User', 'foreign@example.org')" >/dev/null
@@ -220,7 +268,7 @@ psql_target sneakers_identity "DELETE FROM users WHERE id = 'usr-foreign'" >/dev
 
 step "negative: a tampered audit record fails verify"
 psql_target sneakers_audit "UPDATE audit_records SET subject = 'tampered' WHERE seq = 500" >/dev/null
-run_job sneakers-migrate-verify-tampered 4 '"verify", "--bundle", "/bundle/bundle.age", "--identity", "/key/import.key"'
+run_job sneakers-migrate-verify-tampered 4 "$verify_args"
 grep -q "audit chain" "$work/sneakers-migrate-verify-tampered.log" || fail "verify did not name the audit chain"
 note "tampered record: $(grep -m1 'FAIL\] audit chain' "$work/sneakers-migrate-verify-tampered.log" | sed 's/^ *//')"
 

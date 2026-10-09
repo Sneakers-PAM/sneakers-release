@@ -55,6 +55,8 @@ type KratosLister interface {
 type Config struct {
 	DSN map[schema.Service]string
 	Now func() time.Time
+	// Plan is the mapping file the import applied; nil if it had none.
+	Plan *mapping.Plan
 }
 
 // Run verifies the target and returns the report. An error means verify could
@@ -77,11 +79,20 @@ func Run(ctx context.Context, cfg Config, b *bundle.Bundle, v VaultReader, a Cha
 		}
 		dbs[s] = db
 	}
-	m, err := mapping.Map(b, mapping.Context{Now: time.Now(), Actor: "system:sneakers-migrate"})
+	m, err := mapping.Map(b, mapping.Context{Now: time.Now(), Actor: "system:sneakers-migrate", Plan: cfg.Plan})
 	if err != nil {
 		return nil, err
 	}
+	if err := mappingApplied(ctx, rep, b, cfg.Plan, dbs[schema.Audit].Querier()); err != nil {
+		return nil, err
+	}
 	if err := counts(ctx, rep, b, m, dbs, kr); err != nil {
+		return nil, err
+	}
+	if err := signIn(ctx, rep, b, dbs[schema.Identity].Querier(), kr); err != nil {
+		return nil, err
+	}
+	if err := tokens(ctx, rep, m, dbs[schema.Identity].Querier()); err != nil {
 		return nil, err
 	}
 	if err := auditChain(ctx, rep, b, dbs[schema.Audit].Querier(), a); err != nil {
@@ -144,6 +155,198 @@ func counts(ctx context.Context, rep *report.Verify, b *bundle.Bundle, m *mappin
 		rep.Failures = append(rep.Failures, bad...)
 	}
 	rep.Add("counts", len(bad) == 0, detail)
+
+	got := map[string]int{}
+	for _, c := range rep.Counts {
+		got[c.Table] = c.Target
+	}
+	rep.Parity = parity(b.Manifest, want, got, m.Remap)
+	var pbad []string
+	for _, p := range rep.Parity {
+		if !p.OK {
+			pbad = append(pbad, fmt.Sprintf("%s: source %d, dropped %d, created %d, expected %d, target %d", p.Name, p.Source, p.Dropped, p.Created, p.Expected, p.Target))
+		}
+	}
+	pdetail := fmt.Sprintf("%d categories: the source, less what the mapping dropped, is what the target holds", len(rep.Parity))
+	if len(pbad) > 0 {
+		pdetail = strings.Join(pbad, "; ")
+		rep.Failures = append(rep.Failures, pbad...)
+	}
+	rep.Add("parity", len(pbad) == 0, pdetail)
+	return nil
+}
+
+// parity mirrors the import's parity table.
+func parity(m bundle.Manifest, expected, target map[string]int, remap *mapping.RemapStats) []report.Parity {
+	src := map[string]int{}
+	for _, p := range m.Parity {
+		src[p.Stream] = p.Source
+	}
+	var out []report.Parity
+	for _, c := range schema.ParityCategories {
+		bt, _ := m.Table(c.Stream)
+		p := report.Parity{Name: c.Name, Source: bt.Rows, Bundle: bt.Rows, Expected: expected[c.Stream], Target: target[c.Stream]}
+		if n, ok := src[c.Stream]; ok {
+			p.Source = n
+		}
+		if remap != nil {
+			switch c.Name {
+			case "secrets":
+				p.Dropped = remap.SecretsDropped
+			case "folders":
+				p.Dropped, p.Created = remap.FoldersDropped, remap.FoldersCreated
+			}
+		}
+		p.OK = p.Source == p.Bundle && p.Bundle-p.Dropped+p.Created == p.Expected && p.Expected == p.Target
+		out = append(out, p)
+	}
+	return out
+}
+
+// mappingApplied checks the import applied this mapping file: its hash is
+// in the import's audit summary (or neither has one).
+func mappingApplied(ctx context.Context, rep *report.Verify, b *bundle.Bundle, p *mapping.Plan, aq postgres.Querier) error {
+	var recorded string
+	err := aq.QueryRow(ctx, "SELECT coalesce(attributes->>'mapping_sha256', '') FROM public.audit_records WHERE action = 'migration.import' AND attributes->>'bundle_id' = $1 ORDER BY seq LIMIT 1", b.Manifest.BundleID).Scan(&recorded)
+	if err != nil && !errors.Is(err, postgres.ErrNoRows) {
+		return fmt.Errorf("read the import's audit summary: %w", err)
+	}
+	given := ""
+	if p != nil {
+		given = p.SHA256
+	}
+	ok := recorded == given
+	detail := "no mapping file, as the import"
+	switch {
+	case !ok:
+		detail = fmt.Sprintf("the import applied mapping %q, verify was given %q", recorded, given)
+		rep.Failures = append(rep.Failures, "mapping: "+detail)
+	case given != "":
+		detail = "the import applied this mapping file (" + given + ")"
+	}
+	rep.Add("mapping", ok, detail)
+	return nil
+}
+
+// signIn checks a sign-in reset held: no second factor and no password
+// came across, apart from the one first-admin password import may set.
+func signIn(ctx context.Context, rep *report.Verify, b *bundle.Bundle, iq postgres.Querier, kr KratosLister) error {
+	if !b.Manifest.SignInReset {
+		return nil
+	}
+	var totp, passkeys int
+	if err := iq.QueryRow(ctx, "SELECT (SELECT count(*) FROM public.user_totp), (SELECT count(*) FROM public.user_webauthn_credentials)").Scan(&totp, &passkeys); err != nil {
+		return fmt.Errorf("count second factors: %w", err)
+	}
+	ids, err := kr.List(ctx, true)
+	if err != nil {
+		return fmt.Errorf("target Kratos: %w", err)
+	}
+	withPassword := 0
+	for _, id := range ids {
+		if id.PasswordHash() != "" {
+			withPassword++
+		}
+	}
+	ok := totp == 0 && passkeys == 0 && withPassword <= 1
+	detail := fmt.Sprintf("%d identities, %d with a password (at most the first admin's), no TOTP seed or passkey carried", len(ids), withPassword)
+	if !ok {
+		detail = fmt.Sprintf("%d TOTP seeds, %d passkeys and %d passwords on the target after a sign-in reset", totp, passkeys, withPassword)
+		rep.Failures = append(rep.Failures, "sign-in reset: "+detail)
+	}
+	rep.Add("sign-in reset", ok, detail)
+	return nil
+}
+
+// tokens checks every active personal token from the bundle still
+// authenticates on the target, by id: the same stored hash, not revoked or
+// expired, and its user present, enabled and linked to a sign-in identity.
+// The token itself is never needed or printed.
+func tokens(ctx context.Context, rep *report.Verify, m *mapping.Result, iq postgres.Querier) error {
+	users := map[string]mapping.Row{}
+	for _, u := range m.Rows["identity.users"] {
+		users[fmt.Sprint(u["id"])] = u
+	}
+	type target struct {
+		hash, user string
+		revoked    bool
+		expires    *time.Time
+	}
+	have := map[string]target{}
+	rows, err := iq.Query(ctx, "SELECT id, token_hash, user_id, revoked_at IS NOT NULL, expires_at FROM public.user_tokens")
+	if err != nil {
+		return fmt.Errorf("read the target personal tokens: %w", err)
+	}
+	for rows.Next() {
+		var id string
+		var t target
+		if err := rows.Scan(&id, &t.hash, &t.user, &t.revoked, &t.expires); err != nil {
+			rows.Close()
+			return err
+		}
+		have[id] = t
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	subjects := map[string]bool{}
+	disabled := map[string]bool{}
+	urows, err := iq.Query(ctx, "SELECT id, subject, disabled_at IS NOT NULL FROM public.users")
+	if err != nil {
+		return fmt.Errorf("read the target users: %w", err)
+	}
+	for urows.Next() {
+		var id, subject string
+		var off bool
+		if err := urows.Scan(&id, &subject, &off); err != nil {
+			urows.Close()
+			return err
+		}
+		subjects[id], disabled[id] = subject != "", off
+	}
+	urows.Close()
+	if err := urows.Err(); err != nil {
+		return err
+	}
+	now := time.Now()
+	var okN, skipped int
+	var bad []string
+	for _, t := range m.Rows["identity.user_tokens"] {
+		id := fmt.Sprint(t["id"])
+		if t["revoked_at"] != nil && fmt.Sprint(t["revoked_at"]) != "" {
+			skipped++
+			continue
+		}
+		if exp, err := time.Parse(time.RFC3339Nano, fmt.Sprint(t["expires_at"])); err == nil && exp.Before(now) {
+			skipped++
+			continue
+		}
+		g, found := have[id]
+		user := fmt.Sprint(t["user_id"])
+		switch {
+		case !found:
+			bad = append(bad, id+": missing from the target")
+		case g.hash != fmt.Sprint(t["token_hash"]):
+			bad = append(bad, id+": stored differently from the source")
+		case g.revoked || (g.expires != nil && g.expires.Before(now)):
+			bad = append(bad, id+": revoked or expired on the target")
+		case disabled[user]:
+			skipped++
+		case !subjects[user]:
+			bad = append(bad, id+": its user has no sign-in identity")
+		default:
+			okN++
+		}
+	}
+	sort.Strings(bad)
+	detail := fmt.Sprintf("%d active personal tokens authenticate (checked by id); %d skipped (revoked, expired or a disabled user)", okN, skipped)
+	if len(bad) > 0 {
+		detail = strings.Join(bad, "; ")
+		rep.Failures = append(rep.Failures, bad...)
+	}
+	rep.Tokens = report.Tokens{OK: okN, Skipped: skipped, Failing: bad}
+	rep.Add("personal tokens", len(bad) == 0, detail)
 	return nil
 }
 

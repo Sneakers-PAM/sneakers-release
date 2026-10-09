@@ -47,14 +47,28 @@ type Config struct {
 	TOTP      *totpcipher.Cipher
 	Samples   []string // designated test secrets; empty: pick SampleCount
 	SampleMax int
+	// CurrentOnly carries each secret's current version only.
+	CurrentOnly bool
+	// ResetSignIn leaves every password hash, TOTP seed and passkey behind:
+	// users set a new password and enrol a second factor on the target.
+	ResetSignIn bool
+	// Sanitise keeps the shape and replaces every secret value, token hash
+	// and target address with a generated fake, for a lab dry run. It
+	// implies ResetSignIn.
+	Sanitise bool
 }
 
 // Export reads the source and returns the bundle.
 func Export(ctx context.Context, cfg Config, kr Kratos, lg log.Logger) (*bundle.Bundle, error) {
 	start := time.Now()
 	b := bundle.New(schema.SourceProfile.Name)
-	lg.Info("export started", log.F("bundle_id", b.Manifest.BundleID), log.F("profile", schema.SourceProfile.Name))
-	x := &exporter{cfg: cfg, b: b, lg: lg, raw: map[string][][]byte{}}
+	if cfg.Sanitise {
+		cfg.ResetSignIn = true
+	}
+	b.Manifest.CurrentOnly, b.Manifest.SignInReset, b.Manifest.Sanitised = cfg.CurrentOnly, cfg.ResetSignIn, cfg.Sanitise
+	lg.Info("export started", log.F("bundle_id", b.Manifest.BundleID), log.F("profile", schema.SourceProfile.Name),
+		log.F("current_only", cfg.CurrentOnly), log.F("reset_sign_in", cfg.ResetSignIn))
+	x := &exporter{cfg: cfg, b: b, lg: lg, raw: map[string][][]byte{}, counted: map[string]int{}}
 	for _, s := range schema.Services {
 		if err := x.service(ctx, s); err != nil {
 			return nil, err
@@ -67,6 +81,9 @@ func Export(ctx context.Context, cfg Config, kr Kratos, lg log.Logger) (*bundle.
 		return nil, err
 	}
 	if err := x.samples(); err != nil {
+		return nil, err
+	}
+	if err := x.parity(); err != nil {
 		return nil, err
 	}
 	b.Manifest.NotCarried = append(b.Manifest.NotCarried, bundle.NotCarried{
@@ -88,6 +105,8 @@ type exporter struct {
 	raw  map[string][][]byte
 	// sealedOpen counts opened records per key ref, for the log.
 	refs map[string]int
+	// counted is each parity category's count(*) in the source snapshot.
+	counted map[string]int
 }
 
 func (x *exporter) service(ctx context.Context, s schema.Service) error {
@@ -113,12 +132,34 @@ func (x *exporter) service(ctx context.Context, s schema.Service) error {
 				return err
 			}
 		}
+		for _, c := range schema.ParityCategories {
+			if lt, ok := schema.Lookup(c.Stream); ok && lt.Service == s {
+				var n int
+				if err := tx.QueryRow(ctx, "SELECT count(*) FROM public."+lt.Name).Scan(&n); err != nil { // #nosec G202 -- names come from the fixed table list
+					return fmt.Errorf("count %s: %w", c.Stream, err)
+				}
+				x.counted[c.Stream] = n
+			}
+		}
 		for _, t := range schema.Of(s) {
 			rows, err := readTable(ctx, tx, t)
 			if err != nil {
 				return err
 			}
 			x.raw[t.Stream()] = rows
+			if left := x.leaveBehind(t, rows); left != nil {
+				x.b.Stream(t.Stream())
+				x.b.Manifest.NotCarried = append(x.b.Manifest.NotCarried, *left)
+				x.lg.Info("rows left behind", log.F("table", t.Stream()), log.F("rows", left.Rows), log.F("reason", left.Reason))
+				continue
+			}
+			if t.Stream() == "vault.secret_versions" && x.cfg.CurrentOnly {
+				var older int
+				rows, older = currentVersions(rows)
+				x.b.Manifest.NotCarried = append(x.b.Manifest.NotCarried, bundle.NotCarried{Name: "vault.secret_versions.history", Rows: older,
+					Reason: "older and staged versions; each secret carries its current value only"})
+				x.lg.Info("secret history left behind", log.F("versions", older))
+			}
 			if !t.Carried() {
 				reason := "transient (pending codes or ceremony state)"
 				if t.Kind == schema.Replaced {
@@ -217,12 +258,58 @@ func (x *exporter) write(t schema.Table, rows [][]byte) error {
 				return err
 			}
 		default:
+			if x.cfg.Sanitise {
+				var err error
+				if raw, err = sanitiseRow(t.Stream(), raw); err != nil {
+					return err
+				}
+			}
 			if err := s.AddRaw(raw); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// fake returns a random printable string as long as v, keeping line breaks
+// so a multi-line value stays multi-line.
+func fake(v string) string {
+	const alphabet = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	b := []byte(v)
+	r := make([]byte, len(b))
+	_, _ = rand.Read(r)
+	for i := range b {
+		if b[i] != '\n' {
+			b[i] = alphabet[int(r[i])%len(alphabet)]
+		}
+	}
+	return string(b)
+}
+
+// sanitiseRow replaces the hashes and addresses a plain row carries.
+func sanitiseRow(stream string, raw []byte) ([]byte, error) {
+	var row map[string]any
+	if err := bundle.Decode(raw, &row); err != nil {
+		return nil, err
+	}
+	switch stream {
+	case "identity.user_tokens", "identity.api_tokens":
+		if h, ok := row["token_hash"].(string); ok {
+			row["token_hash"] = fake(h)
+		}
+	case "vault.targets":
+		if d, ok := row["data"].(map[string]any); ok {
+			for _, k := range []string{"hostname", "address", "ip"} {
+				if _, ok := d[k]; ok {
+					d[k] = "t-" + strings.ToLower(fake("xxxxxxxx")) + ".sanitised.example.org"
+				}
+			}
+		}
+	default:
+		return raw, nil
+	}
+	return json.Marshal(row)
 }
 
 // openSealed replaces the stored envelope with the opened fields.
@@ -244,6 +331,11 @@ func (x *exporter) openSealed(t schema.Table, raw []byte) (map[string]any, error
 		return nil, codes.Wrap(codes.SourceValue, fmt.Errorf("%s %s (key %s): %w", t.Stream(), rowID(row), rec.KeyRef, err))
 	}
 	x.refs[rec.KeyRef]++
+	if x.cfg.Sanitise {
+		for k, v := range fields {
+			fields[k] = fake(v)
+		}
+	}
 	delete(row, "record")
 	row["fields"] = fields
 	return row, nil
@@ -281,11 +373,26 @@ func (x *exporter) kratos(ctx context.Context, kr Kratos) error {
 		return fmt.Errorf("source Kratos: %w", err)
 	}
 	x.b.Manifest.SourceVersion["kratos"] = v
-	ids, err := kr.List(ctx, true)
+	ids, err := kr.List(ctx, !x.cfg.ResetSignIn)
 	if err != nil {
 		return fmt.Errorf("source Kratos: %w", err)
 	}
 	s := x.b.Stream(schema.KratosStream)
+	if x.cfg.ResetSignIn {
+		for _, id := range ids {
+			id.Credentials = nil
+			if err := s.Add(id); err != nil {
+				return err
+			}
+		}
+		x.b.Manifest.NotCarried = append(x.b.Manifest.NotCarried, bundle.NotCarried{Name: "kratos.credentials.password", Rows: len(ids),
+			Reason: "sign-in reset: no identity carries a password; every user sets a new one on the target"})
+		x.lg.Info("source Kratos exported without credentials", log.F("identities", len(ids)), log.F("kratos_version", v))
+		for s, ver := range schema.SourceProfile.Versions {
+			x.b.Manifest.SourceVersion[string(s)] = strconv.FormatInt(ver, 10)
+		}
+		return nil
+	}
 	other := map[string]int{}
 	for _, id := range ids {
 		for typ := range id.Credentials {
@@ -491,4 +598,77 @@ func spread(ids []string, n int) []string {
 		out = append(out, ids[int(float64(i)*step)])
 	}
 	return out
+}
+
+// leaveBehind says why a carried table's rows stay in the source, or nil.
+func (x *exporter) leaveBehind(t schema.Table, rows [][]byte) *bundle.NotCarried {
+	if !x.cfg.ResetSignIn {
+		return nil
+	}
+	switch t.Stream() {
+	case "identity.user_totp":
+		return &bundle.NotCarried{Name: t.Stream(), Rows: len(rows), Reason: "sign-in reset: every user enrols a second factor again"}
+	case "identity.user_webauthn_credentials":
+		return &bundle.NotCarried{Name: t.Stream(), Rows: len(rows), Reason: "sign-in reset: every user registers their passkeys again"}
+	}
+	return nil
+}
+
+// currentVersions keeps each secret's active version (its newest unstaged
+// one when none is marked active) and returns how many it left out.
+func currentVersions(rows [][]byte) ([][]byte, int) {
+	type ver struct {
+		SecretID  string `json:"secret_id"`
+		VersionNo int    `json:"version_no"`
+		Active    bool   `json:"active"`
+		Staged    bool   `json:"staged"`
+	}
+	best := map[string]int{}
+	parsed := make([]ver, len(rows))
+	for i, raw := range rows {
+		_ = json.Unmarshal(raw, &parsed[i])
+		v := parsed[i]
+		if v.Staged {
+			continue
+		}
+		j, ok := best[v.SecretID]
+		switch {
+		case !ok:
+			best[v.SecretID] = i
+		case v.Active && !parsed[j].Active:
+			best[v.SecretID] = i
+		case v.Active == parsed[j].Active && v.VersionNo > parsed[j].VersionNo:
+			best[v.SecretID] = i
+		}
+	}
+	keep := map[int]bool{}
+	for _, i := range best {
+		keep[i] = true
+	}
+	out := make([][]byte, 0, len(best))
+	for i, raw := range rows {
+		if keep[i] {
+			out = append(out, raw)
+		}
+	}
+	return out, len(rows) - len(out)
+}
+
+// parity records each category's source count next to the bundle's and
+// stops when they differ.
+func (x *exporter) parity() error {
+	var bad []string
+	for _, c := range schema.ParityCategories {
+		rows := x.b.Stream(c.Stream).Rows()
+		p := bundle.ParityCount{Name: c.Name, Stream: c.Stream, Source: x.counted[c.Stream], Bundle: rows}
+		x.b.Manifest.Parity = append(x.b.Manifest.Parity, p)
+		if p.Source != p.Bundle {
+			bad = append(bad, fmt.Sprintf("%s: source %d, bundle %d", c.Name, p.Source, p.Bundle))
+		}
+	}
+	if len(bad) > 0 {
+		return codes.Wrap(codes.ParityMismatch, fmt.Errorf("export parity failed: %s", strings.Join(bad, "; ")))
+	}
+	x.lg.Info("export parity matches the source", log.F("categories", len(x.b.Manifest.Parity)))
+	return nil
 }

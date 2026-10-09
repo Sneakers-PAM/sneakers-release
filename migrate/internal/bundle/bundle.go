@@ -31,7 +31,7 @@ import (
 // any minor version of their own major.
 const (
 	Format        = "sneakers-migrate-bundle"
-	FormatVersion = "1.0"
+	FormatVersion = "1.1"
 	formatMajor   = "1"
 	manifestName  = "manifest.json"
 	streamPrefix  = "streams/"
@@ -65,6 +65,24 @@ type Manifest struct {
 	SampleKey     []byte            `json:"sample_key,omitempty"`
 	Samples       []Sample          `json:"samples,omitempty"`
 	NotCarried    []NotCarried      `json:"not_carried,omitempty"`
+	// CurrentOnly: each secret carries its current value only, no history.
+	CurrentOnly bool `json:"current_only,omitempty"`
+	// SignInReset: no password hash, TOTP seed or passkey travels; every
+	// user sets a password and enrols a second factor again.
+	SignInReset bool `json:"sign_in_reset,omitempty"`
+	// Sanitised: every value is a generated fake (a lab dry run).
+	Sanitised bool `json:"sanitised,omitempty"`
+	// Parity is each category's count in the source next to the bundle's.
+	Parity []ParityCount `json:"parity,omitempty"`
+}
+
+// ParityCount is one category (folders, secrets, ...) counted in the source
+// and in the bundle.
+type ParityCount struct {
+	Name   string `json:"name"`
+	Stream string `json:"stream"`
+	Source int    `json:"source"`
+	Bundle int    `json:"bundle"`
 }
 
 // Table is one stream: its row count and the sha256 of its bytes.

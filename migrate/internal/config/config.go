@@ -63,6 +63,15 @@ func need(missing []string) error {
 	return fmt.Errorf("missing environment: %s", strings.Join(missing, ", "))
 }
 
+// LoadInventory reads what the inventory needs: the four source DSNs and,
+// when set, the Kratos admin URL. No key.
+func LoadInventory(get Getenv) (Source, error) {
+	s := Source{KratosAdminURL: get("SOURCE_KRATOS_ADMIN_URL")}
+	var missing []string
+	s.DSN, missing = dsns(get, "SOURCE")
+	return s, need(missing)
+}
+
 // LoadSource reads SOURCE_*: the four database DSNs, the Kratos admin URL,
 // the vault root key, and the optional dev seed and TOTP key.
 func LoadSource(get Getenv) (Source, error) {

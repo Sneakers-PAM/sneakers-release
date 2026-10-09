@@ -23,6 +23,7 @@ import (
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/envelope"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/kratos"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/kratos/kratostest"
+	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/mapping"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/report"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/rpc"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/schema"
@@ -193,8 +194,22 @@ type rig struct {
 
 func newRig(t *testing.T) *rig {
 	t.Helper()
+	return newRigWith(t, func(*source.Config) {})
+}
+
+// newRigWith exports with the source settings changed by set.
+func newRigWith(t *testing.T, set func(*source.Config)) *rig {
+	t.Helper()
+	return newRigOn(t, set, testenv.NewTarget)
+}
+
+// newRigOn exports with set, onto a target made by mk.
+func newRigOn(t *testing.T, set func(*source.Config), mk func(*testing.T) (map[schema.Service]string, map[schema.Service]*postgres.DB)) *rig {
+	t.Helper()
 	src := testenv.NewSource(t, synth.Options{Users: 10, Secrets: 40, AuditRecords: 120})
-	b, err := source.Export(context.Background(), src.Config, kratos.New(src.Kratos.URL), log.Nop())
+	sc := src.Config
+	set(&sc)
+	b, err := source.Export(context.Background(), sc, kratos.New(src.Kratos.URL), log.Nop())
 	if err != nil {
 		t.Fatalf("export: %v", err)
 	}
@@ -208,7 +223,7 @@ func newRig(t *testing.T) *rig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dsn, dbs := testenv.NewTarget(t)
+	dsn, dbs := mk(t)
 	key := make([]byte, 32)
 	_, _ = rand.Read(key)
 	tc, _ := totpcipher.New(key)
@@ -220,8 +235,29 @@ func newRig(t *testing.T) *rig {
 	return &rig{src: src, bundle: b, dsn: dsn, db: dbs, vault: vault, audit: audit, kratos: kf, totp: tc}
 }
 
+// keepAll is a mapping file that carries everything as it is.
+var keepAll = mustPlan(`{"format": "sneakers-migrate-mapping", "version": 1, "unlisted": "keep"}`)
+
+// keep is keepAll keyed to the rig's bundle, as an import outside
+// rehearsal mode needs.
+func (r *rig) keep() *mapping.Plan {
+	return mustPlan(fmt.Sprintf(`{"format": "sneakers-migrate-mapping", "version": 1, "unlisted": "keep", "bundle_id": %q}`, r.bundle.Manifest.BundleID))
+}
+
+func mustPlan(body string) *mapping.Plan {
+	p, err := mapping.ParsePlan([]byte(body))
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
+// cfg imports outside rehearsal mode a bundle that may be imported so (a
+// current-only sign-in reset), and any other, or a sanitised one, in
+// rehearsal mode.
 func (r *rig) cfg() target.Config {
-	return target.Config{DSN: r.dsn, TOTP: r.totp}
+	m := r.bundle.Manifest
+	return target.Config{DSN: r.dsn, TOTP: r.totp, Plan: r.keep(), Rehearsal: !m.CurrentOnly || !m.SignInReset || m.Sanitised}
 }
 
 func (r *rig) deps() target.Deps {
@@ -240,7 +276,12 @@ func (r *rig) verifyIt(t *testing.T) bool {
 
 func (r *rig) verifyReport(t *testing.T) *report.Verify {
 	t.Helper()
-	rep, err := verify.Run(context.Background(), verify.Config{DSN: r.dsn}, r.bundle, r.vault, r.audit, kratos.New(r.kratos.URL), log.Nop())
+	return r.verifyWith(t, verify.Config{DSN: r.dsn, Plan: r.keep()})
+}
+
+func (r *rig) verifyWith(t *testing.T, cfg verify.Config) *report.Verify {
+	t.Helper()
+	rep, err := verify.Run(context.Background(), cfg, r.bundle, r.vault, r.audit, kratos.New(r.kratos.URL), log.Nop())
 	if err != nil {
 		t.Fatalf("verify: %v", err)
 	}
@@ -342,7 +383,7 @@ func TestImportThenVerify(t *testing.T) {
 }
 
 func TestImportRefusesAForeignTarget(t *testing.T) {
-	r := newRig(t)
+	r := newRigWith(t, func(c *source.Config) { c.CurrentOnly, c.ResetSignIn = true, true })
 	ctx := context.Background()
 	if _, err := r.db[schema.Identity].Querier().Exec(ctx, "INSERT INTO users (id, name, email) VALUES ('usr-x', 'Someone', 'someone@example.org')"); err != nil {
 		t.Fatal(err)
@@ -354,11 +395,6 @@ func TestImportRefusesAForeignTarget(t *testing.T) {
 	wipe.Wipe = true
 	if _, err := r.importIt(t, wipe); code(err) != codes.ModeRefused {
 		t.Fatalf("wipe outside rehearsal: err = %v, want ModeRefused", err)
-	}
-	owner := r.cfg()
-	owner.OwnerEmail = "owner@example.org"
-	if _, err := r.importIt(t, owner); code(err) != codes.ModeRefused {
-		t.Fatalf("owner password outside rehearsal: err = %v, want ModeRefused", err)
 	}
 	rehearsal := r.cfg()
 	rehearsal.Rehearsal, rehearsal.Wipe, rehearsal.OwnerEmail = true, true, "owner@example.org"
@@ -594,5 +630,203 @@ func assertSecurityReview(t *testing.T, rep *report.Import) {
 		if !strings.Contains(text.String(), want) {
 			t.Fatalf("the text report lacks %q", want)
 		}
+	}
+}
+
+// The appliance migration: current values only, every sign-in reset, the
+// owner's mapping applied, and parity checked on the way in.
+func TestImportAppliesTheMappingWithParity(t *testing.T) {
+	r := newRigWith(t, func(c *source.Config) { c.CurrentOnly, c.ResetSignIn = true, true })
+	p := mustPlan(`{
+	  "format": "sneakers-migrate-mapping", "version": 1, "unlisted": "keep", "bundle_id": "` + r.bundle.Manifest.BundleID + `",
+	  "folders": [{"from": "Infrastructure/Linux", "to": "Servers/Linux"}],
+	  "secrets": [
+	    {"id": "sec-0021", "from": {"folder": "Databases/Production"}, "to": {"folder": "Servers/Unsorted", "name": "renamed by the mapping"}},
+	    {"id": "sec-0026", "from": {}, "drop": true}
+	  ]
+	}`)
+	cfg := r.cfg()
+	cfg.Plan = p
+	out, err := r.importIt(t, cfg)
+	if err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	rep := out.Report
+	if rep.Remap == nil || rep.Remap.SecretsDropped != 1 || rep.Remap.SecretsMoved != 1 || rep.Remap.FoldersCreated != 2 || rep.Remap.FoldersMoved != 1 {
+		t.Fatalf("remap = %+v", rep.Remap)
+	}
+	par := map[string]report.Parity{}
+	for _, c := range rep.Parity {
+		par[c.Name] = c
+		if c.Expected != c.Target || !c.OK {
+			t.Fatalf("parity %s = %+v", c.Name, c)
+		}
+	}
+	sec, _ := r.bundle.Manifest.Table("vault.secrets")
+	fol, _ := r.bundle.Manifest.Table("vault.folders")
+	if par["secrets"].Source != sec.Rows || par["secrets"].Dropped != 1 || par["secrets"].Expected != sec.Rows-1 ||
+		par["folders"].Created != 2 || par["folders"].Expected != fol.Rows+2 || len(par) != 6 {
+		t.Fatalf("parity = %+v", rep.Parity)
+	}
+	var text strings.Builder
+	if err := rep.Text(&text); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text.String(), "parity (source / dropped / created / expected / target):") {
+		t.Fatalf("the text report has no parity table:\n%s", text.String())
+	}
+
+	ctx := context.Background()
+	var totp, passkeys, versions, secrets int
+	_ = r.db[schema.Identity].Querier().QueryRow(ctx, "SELECT count(*) FROM user_totp").Scan(&totp)
+	_ = r.db[schema.Identity].Querier().QueryRow(ctx, "SELECT count(*) FROM user_webauthn_credentials").Scan(&passkeys)
+	_ = r.db[schema.Vault].Querier().QueryRow(ctx, "SELECT count(*) FROM secret_versions").Scan(&versions)
+	_ = r.db[schema.Vault].Querier().QueryRow(ctx, "SELECT count(*) FROM secrets").Scan(&secrets)
+	if totp != 0 || passkeys != 0 || versions != secrets {
+		t.Fatalf("totp %d, passkeys %d, versions %d for %d secrets", totp, passkeys, versions, secrets)
+	}
+	ids, err := kratos.New(r.kratos.URL).List(ctx, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ids {
+		if id.PasswordHash() != "" || r.kratos.Passwords[id.ID] != "" {
+			t.Fatal("an imported identity has a password after a sign-in reset")
+		}
+	}
+	var name, folder string
+	if err := r.db[schema.Vault].Querier().QueryRow(ctx, "SELECT data->>'name', data->>'folderId' FROM secrets WHERE id = 'sec-0021'").Scan(&name, &folder); err != nil || name != "renamed by the mapping" || !strings.HasPrefix(folder, "folder-mig-") {
+		t.Fatalf("sec-0021 = %q in %q (%v)", name, folder, err)
+	}
+	var hash string
+	if err := r.db[schema.Audit].Querier().QueryRow(ctx, "SELECT attributes->>'mapping_sha256' FROM audit_records WHERE action = 'migration.import'").Scan(&hash); err != nil || hash != p.SHA256 {
+		t.Fatalf("audit summary mapping_sha256 = %q (%v)", hash, err)
+	}
+
+	rep2 := r.verifyWith(t, verify.Config{DSN: r.dsn, Plan: p})
+	if !rep2.OK || !checkOK(t, rep2, "sign-in reset") || !checkOK(t, rep2, "parity") {
+		t.Fatal("verify failed after a mapped import")
+	}
+	if rep3 := r.verifyWith(t, verify.Config{DSN: r.dsn, Plan: r.keep()}); rep3.OK || checkOK(t, rep3, "mapping") {
+		t.Fatal("verify passed with another mapping file than the import's")
+	}
+
+	// The first admin's way in: one account gets a one-time password.
+	owner := r.cfg()
+	owner.Plan, owner.Wipe, owner.OwnerEmail = p, true, "owner@example.org"
+	again, err := r.importIt(t, owner)
+	if err != nil {
+		t.Fatalf("re-import with a wipe: %v", err)
+	}
+	if !again.Report.Wiped || len(again.OwnerPassword) != 24 {
+		t.Fatalf("wiped %v, owner password length %d", again.Report.Wiped, len(again.OwnerPassword))
+	}
+	if !r.verifyWith(t, verify.Config{DSN: r.dsn, Plan: p}).OK {
+		t.Fatal("verify failed after a re-import")
+	}
+}
+
+func TestImportRefusesWithoutAMapping(t *testing.T) {
+	r := newRig(t)
+	cfg := r.cfg()
+	cfg.Plan, cfg.Rehearsal = nil, false
+	_, err := r.importIt(t, cfg)
+	if code(err) != codes.ModeRefused || !strings.Contains(err.Error(), "mapping") {
+		t.Fatalf("err = %v, want ModeRefused naming the mapping file", err)
+	}
+	bad := r.cfg()
+	bad.Plan = mustPlan(`{"format": "sneakers-migrate-mapping", "version": 1, "unlisted": "refuse"}`)
+	if _, err := r.importIt(t, bad); code(err) != codes.MappingInvalid {
+		t.Fatalf("err = %v, want MappingInvalid", err)
+	}
+	var n int
+	if err := r.db[schema.Vault].Querier().QueryRow(context.Background(), "SELECT count(*) FROM secrets").Scan(&n); err != nil || n != 0 {
+		t.Fatalf("a refused mapping wrote %d secrets (%v)", n, err)
+	}
+	full := r.cfg()
+	full.Rehearsal, full.OwnerEmail = false, "owner@example.org"
+	if _, err := r.importIt(t, full); code(err) != codes.ModeRefused || !strings.Contains(err.Error(), "--reset-sign-in") {
+		t.Fatalf("a bundle with history and passwords outside rehearsal: err = %v, want ModeRefused", err)
+	}
+}
+
+func TestImportRefusesAMappingForAnotherBundle(t *testing.T) {
+	r := newRigWith(t, func(c *source.Config) { c.CurrentOnly, c.ResetSignIn = true, true })
+	other := r.cfg()
+	other.Plan = mustPlan(`{"format": "sneakers-migrate-mapping", "version": 1, "unlisted": "keep", "bundle_id": "another"}`)
+	if _, err := r.importIt(t, other); code(err) != codes.MappingInvalid || !strings.Contains(err.Error(), "for bundle another") {
+		t.Fatalf("err = %v, want MappingInvalid", err)
+	}
+	unkeyed := r.cfg()
+	unkeyed.Plan = keepAll
+	if _, err := r.importIt(t, unkeyed); code(err) != codes.MappingInvalid || !strings.Contains(err.Error(), "bundle_id") {
+		t.Fatalf("err = %v, want MappingInvalid", err)
+	}
+}
+
+func TestParityFailsLoudly(t *testing.T) {
+	m := bundle.Manifest{Parity: []bundle.ParityCount{{Name: "secrets", Stream: "vault.secrets", Source: 5, Bundle: 5}}}
+	m.Tables = []bundle.Table{{Name: "vault.secrets", Rows: 5}}
+	got := target.CheckParity(m, map[string]int{"vault.secrets": 5}, map[string]int{"vault.secrets": 4}, &mapping.RemapStats{})
+	for _, p := range got {
+		if (p.Name == "secrets") == p.OK || (p.Name == "secrets" && p.Target != 4) {
+			t.Fatalf("parity = %+v", got)
+		}
+	}
+	err := target.ParityError(got)
+	if code(err) != codes.ParityMismatch || !strings.Contains(err.Error(), "secrets") || !strings.Contains(err.Error(), "re-import") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestSanitisedBundleImportsInRehearsalOnly(t *testing.T) {
+	r := newRigWith(t, func(c *source.Config) { c.Sanitise, c.CurrentOnly = true, true })
+	out := r.cfg()
+	out.Rehearsal = false
+	if _, err := r.importIt(t, out); code(err) != codes.ModeRefused {
+		t.Fatalf("sanitised bundle outside rehearsal: err = %v, want ModeRefused", err)
+	}
+	cfg := r.cfg()
+	cfg.Rehearsal = true
+	if _, err := r.importIt(t, cfg); err != nil {
+		t.Fatalf("sanitised bundle in rehearsal: %v", err)
+	}
+	if !r.verifyIt(t) {
+		t.Fatal("verify failed on a sanitised rehearsal import")
+	}
+}
+
+// The services' migrations after their baselines: personal tokens gain a
+// client kind, break-glass events a session, and secrets a place in their
+// folder. Import fills each for rows that predate it.
+func TestImportIntoTheNewestLayout(t *testing.T) {
+	r := newRigOn(t, func(c *source.Config) { c.CurrentOnly, c.ResetSignIn = true, true }, testenv.NewLatestTarget)
+	if _, err := r.importIt(t, r.cfg()); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	ctx := context.Background()
+	var mcp, cli int
+	if err := r.db[schema.Identity].Querier().QueryRow(ctx, "SELECT count(*) FILTER (WHERE client_kind = 'mcp'), count(*) FILTER (WHERE client_kind = 'cli') FROM user_tokens").Scan(&mcp, &cli); err != nil {
+		t.Fatal(err)
+	}
+	if mcp == 0 || mcp+cli != r.src.Summary.Rows["identity.user_tokens"] {
+		t.Fatalf("client kinds: %d mcp, %d cli", mcp, cli)
+	}
+	var unplaced, dense int
+	if err := r.db[schema.Vault].Querier().QueryRow(ctx, `SELECT
+	  (SELECT count(*) FROM secrets WHERE NOT coalesce((data->>'retired')::boolean, false) AND coalesce((data->>'position')::int, 0) = 0),
+	  (SELECT count(*) FROM (SELECT data->>'folderId' f, max((data->>'position')::int) m, count(*) n FROM secrets WHERE NOT coalesce((data->>'retired')::boolean, false) GROUP BY 1) x WHERE m <> n)`).Scan(&unplaced, &dense); err != nil {
+		t.Fatal(err)
+	}
+	if unplaced != 0 || dense != 0 {
+		t.Fatalf("%d active secrets without a place, %d folders not numbered 1..n", unplaced, dense)
+	}
+	if !r.verifyIt(t) {
+		t.Fatal("verify failed on the newest layout")
+	}
+	owner := r.cfg()
+	owner.Wipe = true
+	if _, err := r.importIt(t, owner); err != nil {
+		t.Fatalf("re-import on the newest layout: %v", err)
 	}
 }

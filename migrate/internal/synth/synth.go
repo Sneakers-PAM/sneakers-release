@@ -41,6 +41,8 @@ type Options struct {
 	Seed         uint64
 	// OwnerEmail is the root user's address.
 	OwnerEmail string
+	// Shape lays the vault out to a plan (Shape); nil is the default tree.
+	Shape *Shape
 }
 
 func (o *Options) defaults() {
@@ -197,7 +199,11 @@ func Seed(ctx context.Context, dbs map[schema.Service]*postgres.DB, kr KratosSee
 	if err := g.identity(ctx, dbs[schema.Identity], kr); err != nil {
 		return nil, fmt.Errorf("seed identity: %w", err)
 	}
-	if err := g.vault(ctx, dbs[schema.Vault], ringRows); err != nil {
+	seedVault := g.vault
+	if opts.Shape != nil {
+		seedVault = g.vaultShaped
+	}
+	if err := seedVault(ctx, dbs[schema.Vault], ringRows); err != nil {
 		return nil, fmt.Errorf("seed vault: %w", err)
 	}
 	if err := g.workflow(ctx, dbs[schema.Workflow]); err != nil {

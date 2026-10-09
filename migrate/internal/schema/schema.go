@@ -66,6 +66,27 @@ var SourceProfile = Profile{
 // TargetVersion is the migration version of every target baseline.
 const TargetVersion int64 = 1
 
+// TargetVersions are the target migration versions this tool writes, per
+// service: the baseline and the migrations after it whose new columns it
+// fills (identity 2: a personal token's client kind; vault 2: a break-glass
+// event's session; vault 3: a secret's place in its folder).
+var TargetVersions = map[Service][]int64{
+	Identity: {1, 2},
+	Vault:    {1, 2, 3},
+	Workflow: {1},
+	Audit:    {1},
+}
+
+// WritesTarget reports whether the tool writes a service at this version.
+func WritesTarget(s Service, v int64) bool {
+	for _, x := range TargetVersions[s] {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
 // VersionTable is the golang-migrate version table of a service's own
 // migrations. The workflow database also holds the go-saga engine's tables,
 // whose version is in schema_migrations, so the workflow service keeps its
@@ -121,6 +142,7 @@ var Tables = []Table{
 // empty after import and are cleared by a rehearsal wipe.
 var TargetOnly = []Table{
 	{Service: Vault, Name: "target_ssh_host_keys", Key: []string{"target_id", "ordinal"}},
+	{Service: Vault, Name: "break_glass_sessions", Key: []string{"id"}},
 }
 
 // Of returns a service's tables in insert order.
@@ -149,3 +171,19 @@ func Lookup(stream string) (Table, bool) {
 
 // KratosStream carries the Kratos identities.
 const KratosStream = "kratos.identities"
+
+// Category is one thing the parity report counts, and the stream it lives in.
+type Category struct {
+	Name   string
+	Stream string
+}
+
+// ParityCategories are counted in the source, the bundle and the target.
+var ParityCategories = []Category{
+	{Name: "folders", Stream: "vault.folders"},
+	{Name: "secrets", Stream: "vault.secrets"},
+	{Name: "types", Stream: "vault.secret_types"},
+	{Name: "users", Stream: "identity.users"},
+	{Name: "targets", Stream: "vault.targets"},
+	{Name: "connections", Stream: "vault.connections"},
+}

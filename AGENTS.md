@@ -38,12 +38,14 @@ Two things to know before changing it:
   manifest, defaults, edges, web and resources checks, `sync-schemas.sh`
 - `test/ci/` - values for rendering in CI; `test/kind/` - the install test
 - `migrate/` - `sneakers-migrate` (Go, cobra): `cmd/sneakers-migrate`, `internal/` (one package per
-  job: bundle, envelope, chain, kratos, source, mapping, settings, target, verify, report), `test/synth` (the
-  synthetic source), `testdata/source-schema`, `deploy/` (the Job manifests, the rehearsal egress policy and the migrate callers values), `Dockerfile`
+  job: bundle, envelope, chain, kratos, source, mapping (with the mapping file, the review and the
+  proposal-sheet converter), settings, target, verify, report, synth), `test/synth` (the synthetic
+  source, `--shape` for an inventory-shaped layout), `testdata/source-schema`, `deploy/` (the Job manifests, the rehearsal egress policy and the migrate callers values), `Dockerfile`
 - `gen/go/thirdparty/` - vault and audit client stubs from the protos pinned in `proto-refs.env`
   (`scripts/proto-generate.sh`); never import another service's Go module
 - `test/migrate/` - the migration rehearsal and its rehearsal-mode values
-- `docs/` - install, values, migrate and the manual release checks
+- `docs/` - install, values, migrate (with migrate-appliance, the move onto the appliance) and the
+  manual release checks
 
 ## Build, test, lint
 

@@ -14,6 +14,7 @@ import (
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/codes"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/config"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/kratos"
+	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/mapping"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/rpc"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -49,6 +50,22 @@ func readBundle(bundlePath, identityPath string) (*bundle.Bundle, error) {
 		return nil, codes.Wrap(codes.BundleDamaged, err)
 	}
 	return b, nil
+}
+
+// readPlan reads the mapping file, if one is named.
+func readPlan(path string) (*mapping.Plan, error) {
+	if path == "" {
+		return nil, nil
+	}
+	raw, err := os.ReadFile(path) // #nosec G304 -- the operator names the mapping file
+	if err != nil {
+		return nil, err
+	}
+	p, err := mapping.ParsePlan(raw)
+	if err != nil {
+		return nil, codes.Wrap(codes.MappingInvalid, err)
+	}
+	return p, nil
 }
 
 // targetConns holds the target's vault and audit services.

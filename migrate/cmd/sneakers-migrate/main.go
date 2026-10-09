@@ -38,9 +38,34 @@ const (
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	code := run(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	stdout, stderr, done, err := outputFile(os.Getenv("MIGRATE_OUTPUT_FILE"), os.Stdout, os.Stderr)
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "sneakers-migrate: MIGRATE_OUTPUT_FILE:", err)
+		os.Exit(exitError)
+	}
+	code := run(ctx, os.Args[1:], stdout, stderr)
+	done(code)
 	stop()
 	os.Exit(code)
+}
+
+// outputFile copies everything the command prints into path as well, and
+// writes its exit code to path.exit when it ends, so a runner that only
+// shares a directory with the command (the appliance's Import page) can
+// show the run. An empty path changes nothing.
+func outputFile(path string, stdout, stderr io.Writer) (io.Writer, io.Writer, func(int), error) {
+	if path == "" {
+		return stdout, stderr, func(int) {}, nil
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 G703 -- the runner names the file
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	done := func(code int) {
+		_ = f.Close()
+		_ = os.WriteFile(path+".exit", []byte(fmt.Sprintf("%d\n", code)), 0o600) // #nosec G703 -- next to the runner's file
+	}
+	return io.MultiWriter(stdout, f), io.MultiWriter(stderr, f), done, nil
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
