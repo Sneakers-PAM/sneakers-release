@@ -36,7 +36,8 @@
           "additionalProperties": false,
           "properties": { "enabled": { "type": "boolean" } }
         },
-        "mfaMaxAge": { "$ref": "#/definitions/goDuration" }
+        "mfaMaxAge": { "$ref": "#/definitions/goDuration" },
+        "workloadIdentityIssuer": { "type": "string", "pattern": "^(https://.+)?$" }
       }
     },
     "image": {

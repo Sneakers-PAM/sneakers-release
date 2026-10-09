@@ -167,6 +167,31 @@ for name in ("sneakers-vault", "sneakers-workflow", "sneakers-gateway"):
 print("ok: global.mfaMaxAge sets MFA_MAX_AGE on the vault, the workflow and the gateway")
 PY
 
+step "global.workloadIdentityIssuer"
+helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml >"$out/sneakers-issuer-default.yaml"
+helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.workloadIdentityIssuer=https://kubernetes.default.svc >"$out/sneakers-issuer-k0s.yaml"
+python3 - "$out/sneakers-issuer-default.yaml" "$out/sneakers-issuer-k0s.yaml" <<'PY'
+import sys, yaml
+
+def issuers(path):
+    out = {}
+    for d in yaml.safe_load_all(open(path)):
+        if not d or d["kind"] not in ("Deployment", "StatefulSet"):
+            continue
+        for c in d["spec"]["template"]["spec"]["containers"]:
+            for e in c.get("env") or []:
+                if e["name"] == "WORKLOAD_OIDC_ISSUER":
+                    out[d["metadata"]["name"]] = e["value"]
+    return out
+
+default, k0s = issuers(sys.argv[1]), issuers(sys.argv[2])
+assert default, "no service checks workload tokens"
+assert set(default.values()) == {"https://kubernetes.default.svc.cluster.local"}, f"the default issuers: {default}"
+assert set(k0s) == set(default) and set(k0s.values()) == {"https://kubernetes.default.svc"}, f"global.workloadIdentityIssuer didn't reach every verifier: {k0s}"
+print(f"ok: global.workloadIdentityIssuer sets WORKLOAD_OIDC_ISSUER on all {len(k0s)} verifiers, and the default stays each chart's")
+PY
+must_fail "a workloadIdentityIssuer that isn't https" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.workloadIdentityIssuer=http://kubernetes.default.svc
+
 step "cert-manager"
 # Rendered into its own subdirectory, out of kubeconform's "$out"/*.yaml glob:
 # kubeconform has no schema for the cert-manager.io CRD kinds (the same reason

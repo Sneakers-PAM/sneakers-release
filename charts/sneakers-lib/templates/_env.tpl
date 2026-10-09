@@ -109,7 +109,10 @@ workload identity settings and the CA bundle paths, then extraEnv. Used by the D
 {{- $dir := include "sneakers.verifierDir" $ }}
 {{- $allowed := list }}
 {{- range .callers }}{{ $allowed = append $allowed (printf "%s/sneakers-%s" $.Release.Namespace .) }}{{ end }}
-{{- $env = append $env (dict "name" "WORKLOAD_OIDC_ISSUER" "value" .issuer) }}
+{{- /* global.workloadIdentityIssuer, when set, is the cluster's issuer for every service (k0s: https://kubernetes.default.svc). */}}
+{{- $issuer := .issuer }}
+{{- with $.Values.global }}{{ with .workloadIdentityIssuer }}{{ $issuer = . }}{{ end }}{{ end }}
+{{- $env = append $env (dict "name" "WORKLOAD_OIDC_ISSUER" "value" $issuer) }}
 {{- $env = append $env (dict "name" "WORKLOAD_OIDC_JWKS_URL" "value" .jwksURL) }}
 {{- $env = append $env (dict "name" "WORKLOAD_OIDC_CA_FILE" "value" (printf "%s/ca.crt" $dir)) }}
 {{- $env = append $env (dict "name" "WORKLOAD_OIDC_BEARER_FILE" "value" (printf "%s/token" $dir)) }}
