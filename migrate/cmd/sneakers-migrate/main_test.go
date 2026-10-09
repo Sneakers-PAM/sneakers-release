@@ -100,3 +100,19 @@ func TestExitCodeRanges(t *testing.T) {
 		t.Fatal("an uncoded error is a general error")
 	}
 }
+
+func TestOutputFileCopiesTheRunAndItsExitCode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run.txt")
+	var out, errb bytes.Buffer
+	stdout, stderr, done, err := outputFile(path, &out, &errb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := run(context.Background(), []string{"import", "--bundle", "b", "--identity", "i"}, stdout, stderr)
+	done(code)
+	got, _ := os.ReadFile(path)
+	exit, _ := os.ReadFile(path + ".exit")
+	if code != exitRefused || !strings.Contains(string(got), "mapping file") || strings.TrimSpace(string(exit)) != "3" || !strings.Contains(errb.String(), "mapping file") {
+		t.Fatalf("code %d, file %q, exit %q", code, got, exit)
+	}
+}

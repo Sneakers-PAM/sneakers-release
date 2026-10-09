@@ -50,7 +50,9 @@ vault after an import.
 
 Environment: TARGET_IDENTITY_DSN, TARGET_VAULT_DSN, TARGET_WORKFLOW_DSN,
 TARGET_AUDIT_DSN, TARGET_KRATOS_ADMIN_URL, TARGET_VAULT_ADDR, TARGET_AUDIT_ADDR,
-TARGET_TOTP_ENC_KEY, and optionally MIGRATE_PRINCIPAL and WORKLOAD_TOKEN_FILE.`,
+TARGET_TOTP_ENC_KEY, and optionally MIGRATE_PRINCIPAL, WORKLOAD_TOKEN_FILE and
+MIGRATE_OWNER_PASSWORD_FILE (where --owner-email's password goes instead of
+the terminal; the file must not exist).`,
 		Args: cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
 			if o.bundle == "" || o.identity == "" {
@@ -102,6 +104,25 @@ TARGET_TOTP_ENC_KEY, and optionally MIGRATE_PRINCIPAL and WORKLOAD_TOKEN_FILE.`,
 			}
 			if ierr != nil {
 				return ierr
+			}
+			if out.OwnerPassword != "" && e.getenv("MIGRATE_OWNER_PASSWORD_FILE") != "" {
+				// A runner that shows it once itself (the appliance's Import page)
+				// takes it from this file; it never reaches the output.
+				path := e.getenv("MIGRATE_OWNER_PASSWORD_FILE")
+				f, err := createExclusive(path)
+				if err != nil {
+					return err
+				}
+				if _, err := f.WriteString(out.OwnerPassword + "\n"); err != nil {
+					_ = f.Close()
+					return err
+				}
+				if err := f.Close(); err != nil {
+					return err
+				}
+				pr := report.NewPrinter(cmd.ErrOrStderr())
+				pr.F("\nfirst sign-in for %s: the one-time password is in the owner password file\n", o.ownerEmail)
+				return pr.Err()
 			}
 			if out.OwnerPassword != "" {
 				// Shown once, on the terminal; never in the report or the log.

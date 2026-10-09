@@ -292,6 +292,8 @@ not a person's. The vault admits it to `SealForImport`, `RevealSecretField`, `Ge
 | `TARGET_TOTP_ENC_KEY` | import | the target identity's `TOTP_ENC_KEY` |
 | `MIGRATE_PRINCIPAL` | import | the actor on the migration's own audit entries (default `system:sneakers-migrate`) |
 | `WORKLOAD_TOKEN_FILE` | import, verify | the projected ServiceAccount token sent as the caller's workload identity |
+| `MIGRATE_OWNER_PASSWORD_FILE` | import | where `--owner-email`'s one-time password is written (0600, must not exist) instead of the terminal |
+| `MIGRATE_OUTPUT_FILE` | all | also copy everything the command prints into this file, and its exit code into the file plus `.exit` (the appliance's Import page reads both) |
 | `LOG_LEVEL`, `LOG_FORMAT` | all | logging (console format unless `LOG_FORMAT` says otherwise; `-v` is trace) |
 
 ### The migrate callers
