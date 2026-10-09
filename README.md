@@ -58,6 +58,8 @@ Secret with the database: without it no stored secret can be opened.
 - [docs/release-checks.md](docs/release-checks.md): the manual checks run on a release candidate
   before it's tagged.
 - [docs/migrate.md](docs/migrate.md): `sneakers-migrate`, the rehearsals and the cutover runbook.
+- [docs/release.md](docs/release.md): how a release is cut, and its GitHub `production`
+  environment.
 - [manifest/release.yaml](manifest/release.yaml): the pinned release.
 
 ## 🛠️ Develop
