@@ -31,6 +31,11 @@ organization secret.
         APP: staff
   ```
 
+  `spec.jobs` holds the images a product runs as one-off Jobs rather than as a chart's workload:
+  today `migrate`, the sneakers-migrate image the appliance's Import page runs. Its build block
+  points at this repository's `migrate/Dockerfile` at a commit of this repository's own `main`
+  (bump it when `migrate/` changes); it isn't in `test/kind/services.txt`.
+
   The appliance's release builds each image from that commit with the repository's own
   Dockerfile, pushes it to GHCR by digest, and writes the digest in place of
   `sha256:TBD-at-release` in the release.yaml it ships and countersigns. The digests stay

@@ -52,7 +52,7 @@ def kind_services():
 kind = kind_services()
 
 
-def check_build(name, svc):
+def check_build(name, svc, kind_test=True):
     """The build block the appliance release builds the image from."""
     b = svc.get("build")
     if not isinstance(b, dict):
@@ -72,6 +72,8 @@ def check_build(name, svc):
     if not isinstance(args, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in args.items()):
         errors.append(f"{name}: build.args is a map of strings")
         args = {}
+    if not kind_test:
+        return
     image = svc["image"].rsplit("/", 1)[-1]
     if image not in kind:
         errors.append(f"{name}: test/kind/services.txt doesn't build {image}")
@@ -88,6 +90,17 @@ for name, svc in spec["services"].items():
     if svc["digest"] != PLACEHOLDER and not DIGEST.match(svc["digest"]):
         errors.append(f"{name}: digest {svc['digest']!r} is neither a sha256 digest nor {PLACEHOLDER}")
     check_build(name, svc)
+
+# One-off Job images (sneakers-migrate): no chart pins them and the install
+# test doesn't build them, but each has a build block, a version that is
+# the release's, and a digest or the placeholder.
+for name, job in (spec.get("jobs") or {}).items():
+    check_build(f"jobs.{name}", job, kind_test=False)
+    expect(f"jobs.{name} version", job.get("version"), manifest["metadata"]["version"])
+    if job.get("digest") != PLACEHOLDER and not DIGEST.match(str(job.get("digest"))):
+        errors.append(f"jobs.{name}: digest {job.get('digest')!r} is neither a sha256 digest nor {PLACEHOLDER}")
+if "migrate" not in (spec.get("jobs") or {}):
+    errors.append("spec.jobs pins no migrate image (the appliance's Import page runs it)")
 
 for name, part in spec["thirdParty"].items():
     if not DIGEST.match(part["digest"]):

@@ -18,6 +18,9 @@ Two things to know before changing it:
   and its context (plus the target and build args). The appliance's release workflow builds the
   service images from it. `test/kind/services.txt` builds the same commits, and
   `scripts/check-manifest.py` fails when the two disagree, so bump both together.
+- `spec.jobs.migrate` pins the sneakers-migrate image the appliance's Import page runs, built from
+  this repository's `migrate/Dockerfile` at its `build.commit` (a commit of this repository's own
+  `main`); bump that commit when `migrate/` changes.
 - The service charts share their templates (`charts/sneakers-lib`) and one values schema
   (`charts/sneakers-lib/service.schema.json`). Edit the schema there and run
   `scripts/sync-schemas.sh`.
