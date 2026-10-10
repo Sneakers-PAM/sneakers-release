@@ -1,7 +1,9 @@
 # Manual checks for a release
 
 The install test covers what a machine can check: the charts install, upgrade and pass
-`helm test`, and the NetworkPolicies refuse the pods they should. The checks below need a person,
+`helm test`, the NetworkPolicies refuse the pods they should, and a cold start with PostgreSQL,
+Kratos and Hydra 60 s late reaches Ready without a single container restart
+(`test/kind/late-deps.sh`). The checks below need a person,
 a browser or a running connector. Run them on a test install of the release candidate before it's
 tagged, and record the result of each one in the release's tracking issue.
 

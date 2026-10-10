@@ -28,7 +28,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-identity
-        commit: 2db389cadbc7c1fe1a4263606f767fd4f3a01521
+        commit: 6bcc7192e42a093c23be7d423b34a0d51a4f4139
         dockerfile: Dockerfile
         context: .
     vault:
@@ -38,7 +38,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-vault
-        commit: 2644629a50c138764f89d897bcc4b2e6c78e2924
+        commit: 30ac7fd9296ec976eb493d2e4215374df5b2a05d
         dockerfile: Dockerfile
         context: .
         target: vault
@@ -49,7 +49,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-vault
-        commit: 2644629a50c138764f89d897bcc4b2e6c78e2924
+        commit: 30ac7fd9296ec976eb493d2e4215374df5b2a05d
         dockerfile: Dockerfile
         context: .
         target: workflow
@@ -60,7 +60,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-audit
-        commit: 1ecfc74f492fa9f02cc1865d3e17a1ce4060443b
+        commit: c20ebd270b341cdf78a2b05e1dd1767004354517
         dockerfile: Dockerfile
         context: .
     notify:
@@ -70,7 +70,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-notify
-        commit: 78096c74497678a94ff2be507ba92bb4f7610814
+        commit: 6eef73d3564773ecc2c50779e8dff7692ee73f10
         dockerfile: Dockerfile
         context: .
     connector:
@@ -80,7 +80,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-connector
-        commit: be456ff05e19b96c8b8978785c6fd7a437524bbb
+        commit: 9c27110acda9f3b778af5cf7dca2cf29228693b7
         dockerfile: Dockerfile
         context: .
     sshbroker:
@@ -90,7 +90,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-sshbroker
-        commit: 7a45ea63e1a9a8f1f7c709c8bf38e5647f551d80
+        commit: 3c1c08594c39d53c53be8b90762c53394b9c12a4
         dockerfile: Dockerfile
         context: .
     gateway:

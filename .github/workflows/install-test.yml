@@ -7,7 +7,8 @@ name: Install Test
 # install runs the chart defaults on amd64. install-arm64 runs the same test on
 # an arm64 runner with the small-box example values, building each image
 # natively for arm64; it isn't a required check. Both record the pods' peak
-# memory and fail over 4 GiB. Where no arm64 runner is available (a private
+# memory and fail over 4 GiB, then boot every workload again with PostgreSQL,
+# Kratos and Hydra 60 s late and fail on any container restart. Where no arm64 runner is available (a private
 # fork without one), set the repository variable ARM64_RUNNER to none and the
 # job is skipped with a notice.
 on:
@@ -59,6 +60,8 @@ jobs:
         env:
           MEMORY_BUDGET: "4096"
         run: test/kind/memory-peak.sh
+      - name: Cold start with PostgreSQL late, no restarts
+        run: test/kind/late-deps.sh
       - name: Diagnostics
         if: failure()
         run: |
@@ -102,6 +105,8 @@ jobs:
         env:
           MEMORY_BUDGET: "4096"
         run: test/kind/memory-peak.sh
+      - name: Cold start with PostgreSQL late, no restarts
+        run: test/kind/late-deps.sh
       - name: Diagnostics
         if: failure()
         run: |
