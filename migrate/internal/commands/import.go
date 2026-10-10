@@ -85,7 +85,7 @@ the terminal; the file must not exist).`,
 					return codes.Wrap(codes.TargetKey, err)
 				}
 			}
-			conns, err := dialTarget(cfg)
+			conns, err := dialTarget(ctxOf(cmd), cfg, l)
 			if err != nil {
 				return err
 			}

@@ -58,7 +58,7 @@ Environment: as for import.`,
 			if err != nil {
 				return err
 			}
-			conns, err := dialTarget(cfg)
+			conns, err := dialTarget(ctxOf(cmd), cfg, l)
 			if err != nil {
 				return err
 			}

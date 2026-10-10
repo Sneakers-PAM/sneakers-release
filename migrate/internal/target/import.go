@@ -21,6 +21,7 @@ import (
 	postgres "github.com/Bugs5382/go-postgres"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/bundle"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/codes"
+	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/connect"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/kratos"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/mapping"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/report"
@@ -121,7 +122,7 @@ func Import(ctx context.Context, cfg Config, b *bundle.Bundle, d Deps, lg log.Lo
 	}()
 	versions := map[schema.Service]int64{}
 	for _, s := range schema.Services {
-		db, err := postgres.New(ctx, cfg.DSN[s])
+		db, err := connect.Postgres(ctx, "the target "+string(s)+" database", cfg.DSN[s], lg)
 		if err != nil {
 			return nil, fmt.Errorf("connect to the target %s database: %w", s, err)
 		}

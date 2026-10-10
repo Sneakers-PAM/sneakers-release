@@ -26,6 +26,7 @@ import (
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/bundle"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/chain"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/codes"
+	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/connect"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/envelope"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/kratos"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/schema"
@@ -114,7 +115,7 @@ func (x *exporter) service(ctx context.Context, s schema.Service) error {
 	if dsn == "" {
 		return fmt.Errorf("no DSN for the %s database", s)
 	}
-	db, err := postgres.New(ctx, dsn)
+	db, err := connect.Postgres(ctx, "the source "+string(s)+" database", dsn, x.lg)
 	if err != nil {
 		return fmt.Errorf("connect to the %s database: %w", s, err)
 	}

@@ -296,6 +296,13 @@ not a person's. The vault admits it to `SealForImport`, `RevealSecretField`, `Ge
 | `MIGRATE_OUTPUT_FILE` | all | also copy everything the command prints into this file, and its exit code into the file plus `.exit` (the appliance's Import page reads both) |
 | `LOG_LEVEL`, `LOG_FORMAT` | all | logging (console format unless `LOG_FORMAT` says otherwise; `-v` is trace) |
 
+**First connections wait.** Each command's first connection to a service (every source or target
+database, the target vault and audit gRPC addresses, and the source or target Kratos admin API)
+keeps trying for up to 60 seconds, with a doubling backoff and jitter, before the command fails.
+Each step runs as a fresh pod, and on an appliance the pod network can refuse a new pod's
+connections for a few seconds before its network policy admits it. Every retry is logged at
+debug; a final failure names the service, its address and how long it waited.
+
 ### The migrate callers
 
 For the import and verify Jobs' lifetime, in a rehearsal and a cutover alike, the vault and audit must list `migrate` as a caller

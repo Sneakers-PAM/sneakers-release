@@ -13,6 +13,7 @@ import (
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/bundle"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/codes"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/config"
+	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/connect"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/kratos"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/mapping"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/rpc"
@@ -76,7 +77,18 @@ type targetConns struct {
 	Kratos       *kratos.Admin
 }
 
-func dialTarget(t config.Target) (*targetConns, error) {
+// dialTarget connects to the target vault, audit service and Kratos, each
+// first waiting until it's reachable (connect).
+func dialTarget(ctx context.Context, t config.Target, lg log.Logger) (*targetConns, error) {
+	if err := connect.TCP(ctx, "the target vault", t.VaultAddr, connect.Wait, lg); err != nil {
+		return nil, err
+	}
+	if err := connect.TCP(ctx, "the target audit service", t.AuditAddr, connect.Wait, lg); err != nil {
+		return nil, err
+	}
+	if err := connect.HTTP(ctx, "the target Kratos", t.KratosAdminURL, connect.Wait, lg); err != nil {
+		return nil, err
+	}
 	vc, err := rpc.Dial(t.VaultAddr, t.TokenFile)
 	if err != nil {
 		return nil, err
