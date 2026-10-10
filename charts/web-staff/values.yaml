@@ -51,6 +51,9 @@ probes:
   port: 3000
   path: /healthz
   startupFailureThreshold: 60
+  # Seconds each probe waits for an answer; the kubelet's 1 s default times out on a small box
+  # under boot load.
+  timeoutSeconds: 3
 
 # Non-secret settings, rendered into the ConfigMap. Values go through tpl.
 # An empty value is left out, so the service uses its own default.

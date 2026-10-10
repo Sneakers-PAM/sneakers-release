@@ -47,6 +47,12 @@ resources:
 # work_mem, maintenance_work_mem and max_connections.
 parameters: {}
 
+# Seconds each probe (pg_isready) waits for an answer. The kubelet's 1 s
+# default times out on a small box under boot or checkpoint load, and failed
+# liveness probes restart the database.
+probes:
+  timeoutSeconds: 5
+
 # The memory-backed /dev/shm, used for parallel query workers. It counts
 # against the pod's memory.
 shm:

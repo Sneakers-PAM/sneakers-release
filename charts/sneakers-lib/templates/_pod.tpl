@@ -54,7 +54,9 @@ follows the service's required dependencies, so traffic stops reaching a pod tha
 serve. A gRPC service answers liveness on health service "liveness" and readiness on the
 default service; an HTTP service on livenessPath and readinessPath. Startup uses the
 liveness check: the pod is up once the process answers, and readiness gates traffic.
-Unset, both follow `path` (or the default gRPC service), as before.
+Unset, both follow `path` (or the default gRPC service), as before. Every probe waits
+timeoutSeconds (default 3) for an answer: the kubelet's 1-second default is too tight for a
+small box under boot load. The startup window is 5 s x startupFailureThreshold.
 */ -}}
 {{- define "sneakers.probes" -}}
 {{- with .Values.probes }}
@@ -73,14 +75,17 @@ Unset, both follow `path` (or the default gRPC service), as before.
 startupProbe:
   {{- toYaml $live | nindent 2 }}
   periodSeconds: 5
+  timeoutSeconds: {{ .timeoutSeconds | default 3 }}
   failureThreshold: {{ .startupFailureThreshold }}
 livenessProbe:
   {{- toYaml $live | nindent 2 }}
   periodSeconds: 10
+  timeoutSeconds: {{ .timeoutSeconds | default 3 }}
   failureThreshold: 3
 readinessProbe:
   {{- toYaml $ready | nindent 2 }}
   periodSeconds: 5
+  timeoutSeconds: {{ .timeoutSeconds | default 3 }}
   failureThreshold: 3
 {{- end }}
 {{- end -}}
