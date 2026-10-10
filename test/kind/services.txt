@@ -11,6 +11,6 @@ sneakers-notify    Sneakers-PAM/sneakers-notify     6eef73d3564773ecc2c50779e8df
 sneakers-connector Sneakers-PAM/sneakers-connector  9c27110acda9f3b778af5cf7dca2cf29228693b7  -
 sneakers-sshbroker Sneakers-PAM/sneakers-sshbroker  3c1c08594c39d53c53be8b90762c53394b9c12a4  -
 sneakers-gateway   Sneakers-PAM/sneakers-gateway    4d3336476a1c6dab7761f12a359bd5529e33461a  -
-sneakers-mcp       Sneakers-PAM/sneakers-mcp        5180b663617535ef2f76ac74e6da4f6b0ffcf435  -
+sneakers-mcp       Sneakers-PAM/sneakers-mcp        ea2b2ae5c5645f2caca29ef3a6ad2870d631dbdd  -
 sneakers-web-staff Sneakers-PAM/sneakers-web        ed062500508a70fc671acffebd2253e1e466fdca  -  APP=staff
 sneakers-web-admin Sneakers-PAM/sneakers-web        ed062500508a70fc671acffebd2253e1e466fdca  -  APP=admin
