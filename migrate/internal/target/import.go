@@ -226,7 +226,7 @@ func Import(ctx context.Context, cfg Config, b *bundle.Bundle, d Deps, lg log.Lo
 			return nil, err
 		}
 		out.OwnerPassword, rep.OwnerPasswordSet = pw, true
-		lg.Info("owner password replaced for the rehearsal", log.F("owner", cfg.OwnerEmail))
+		lg.Info("the first admin's one-time password is set", log.F("owner", cfg.OwnerEmail), log.F("mode", mode))
 	}
 	rep.Notes = append(rep.Notes, "restart the vault deployment so it loads the imported state")
 	if len(rep.SSHTargetsToPin) > 0 {
