@@ -237,8 +237,11 @@ Any mismatch fails the run (exit code 4):
   (`--mapping`), or neither has one.
 - **Parity:** the import's parity table, again: the source, less what the mapping dropped, plus the
   folders it created, is what the target holds.
-- **Sign-in reset** (a sign-in reset bundle only): no TOTP seed or passkey is on the target, and at
-  most one identity (the first admin's, from `--owner-email`) has a password.
+- **Sign-in reset** (a sign-in reset bundle only): no TOTP seed or passkey came across, and at most
+  one identity (the first admin's, from `--owner-email`) has a password. A second factor made after
+  the import (its time is the import's audit summary) is a user enrolling, so it doesn't count: the
+  first admin may sign in and open or finish the second-factor page before Verify. The table counts
+  leave those rows out too.
 - **Personal tokens:** every active personal (MCP) token in the bundle still authenticates on the
   target, checked by id and never with the token: the same stored hash, not revoked or expired, and
   its user present, enabled and linked to a sign-in identity. A token of a disabled user is skipped.

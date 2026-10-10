@@ -830,3 +830,61 @@ func TestImportIntoTheNewestLayout(t *testing.T) {
 		t.Fatalf("re-import on the newest layout: %v", err)
 	}
 }
+
+// After a cutover import the first admin signs in and enrols a second factor,
+// sometimes before Verify runs. Opening the second-factor page stores a
+// pending TOTP seed; that, a confirmed one or a passkey made since the import
+// didn't come across, so Verify still passes. A factor older than the import
+// would have, and fails it.
+func TestVerifyAllowsSecondFactorsEnrolledAfterTheImport(t *testing.T) {
+	r := newRigWith(t, func(c *source.Config) { c.CurrentOnly, c.ResetSignIn = true, true })
+	cfg := r.cfg()
+	cfg.OwnerEmail = "owner@example.org"
+	if _, err := r.importIt(t, cfg); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	ctx := context.Background()
+	iq := r.db[schema.Identity].Querier()
+	var users []string
+	rows, err := iq.Query(ctx, "SELECT id FROM users ORDER BY id LIMIT 2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		users = append(users, id)
+	}
+	rows.Close()
+	if len(users) != 2 {
+		t.Fatalf("users = %v", users)
+	}
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := iq.Exec(ctx, sql, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	passes := func(when string) {
+		t.Helper()
+		rep := r.verifyReport(t)
+		if !rep.OK || !checkOK(t, rep, "sign-in reset") || !checkOK(t, rep, "counts") {
+			t.Fatalf("verify failed %s: %v", when, rep.Failures)
+		}
+	}
+
+	exec("INSERT INTO user_totp (user_id, encrypted_secret) VALUES ($1, 'pending')", users[0])
+	passes("with a pending TOTP enrolment made after the import")
+
+	exec("UPDATE user_totp SET confirmed_at = now() WHERE user_id = $1", users[0])
+	exec("INSERT INTO user_webauthn_credentials (credential_id, user_id, public_key) VALUES ('cred-after', $1, '\\x00')", users[0])
+	passes("with a TOTP seed and a passkey enrolled after the import")
+
+	exec("INSERT INTO user_totp (user_id, encrypted_secret, created_at, updated_at) VALUES ($1, 'carried', now() - interval '1 day', now() - interval '1 day')", users[1])
+	rep := r.verifyReport(t)
+	if rep.OK || checkOK(t, rep, "sign-in reset") {
+		t.Fatal("verify passed with a TOTP seed older than the import")
+	}
+}

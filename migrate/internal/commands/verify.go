@@ -31,7 +31,8 @@ to head (through the audit service and by its own walk), sample reveals of the
 designated test secrets' current values by keyed hash, every secret's older
 versions by number, timestamp and sealed fields (never revealed), that every
 target resolves to its connection and secrets, the parity table, that the
-import applied the same --mapping file, that a sign-in reset held, and that
+import applied the same --mapping file, that a sign-in reset held (a second
+factor enrolled after the import doesn't count), and that
 every active personal token still authenticates (by id). Any mismatch fails
 the run (exit code 4).
 
