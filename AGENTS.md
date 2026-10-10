@@ -42,7 +42,7 @@ Two things to know before changing it:
   chart)
 - `manifest/release.yaml` - the pinned release
 - `scripts/` - `install-tools.sh` (pinned, checksum-checked tools), `check-charts.sh`, the
-  manifest, defaults, edges, web and resources checks, `sync-schemas.sh`
+  manifest, defaults, probes, edges, web and resources checks, `sync-schemas.sh`
 - `test/ci/` - values for rendering in CI; `test/kind/` - the install test
 - `migrate/` - `sneakers-migrate` (Go, cobra): `cmd/sneakers-migrate`, `internal/` (one package per
   job: bundle, envelope, chain, kratos, source, mapping (with the mapping file, the review and the
@@ -59,7 +59,7 @@ Two things to know before changing it:
 
 - Tools: `scripts/install-tools.sh bin helm kubeconform` (add `kind kubectl` for the install test)
 - Chart checks: `PATH="$PWD/bin:$PATH" scripts/check-charts.sh` (lint, render, schema refusals,
-  kubeconform, production-safe defaults, service-to-service edges, manifest)
+  kubeconform, production-safe defaults, probe timings, service-to-service edges, manifest)
 - Install test: create a kind cluster, then `test/kind/build-images.sh` and `test/kind/run.sh`
   (`BASE_VALUES=charts/sneakers/examples/values-small-box.yaml` layers a sizing example under the
   test values, as the arm64 job does), then `test/kind/memory-peak.sh` for the pods' peak memory.

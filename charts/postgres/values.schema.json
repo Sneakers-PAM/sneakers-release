@@ -52,6 +52,13 @@
       "propertyNames": { "pattern": "^[a-z_][a-z0-9_.]*$" },
       "additionalProperties": { "type": ["string", "integer", "number", "boolean"] }
     },
+    "probes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 30 }
+      }
+    },
     "shm": {
       "type": "object",
       "additionalProperties": false,
