@@ -46,7 +46,8 @@ Two things to know before changing it:
 - `test/ci/` - values for rendering in CI; `test/kind/` - the install test
 - `migrate/` - `sneakers-migrate` (Go, cobra): `cmd/sneakers-migrate`, `internal/` (one package per
   job: bundle, envelope, chain, kratos, source, mapping (with the mapping file, the review and the
-  proposal-sheet converter), settings, target, verify, report, synth), `test/synth` (the synthetic
+  proposal-sheet converter), settings, target, verify, report, synth, wait (the init-container
+  dependency gate)), `test/synth` (the synthetic
   source, `--shape` for an inventory-shaped layout), `testdata/source-schema`, `deploy/` (the Job manifests, the rehearsal egress policy and the migrate callers values), `Dockerfile`
 - `gen/go/thirdparty/` - vault and audit client stubs from the protos pinned in `proto-refs.env`
   (`scripts/proto-generate.sh`); never import another service's Go module

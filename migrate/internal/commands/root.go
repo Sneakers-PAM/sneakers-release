@@ -42,6 +42,7 @@ func rootWith(e env) *cobra.Command {
   mapping  convert a proposal sheet into a mapping file, or check one
   import   load the bundle into a fresh target install
   verify   check the target against the bundle
+  wait     block until a DNS name and TCP targets answer (for an init container)
 
 Connection settings and keys come from the environment; see docs/migrate.md.`,
 		SilenceErrors: true,
@@ -63,6 +64,6 @@ Connection settings and keys come from the environment; see docs/migrate.md.`,
 		}
 		return log.NewLoggerWithOptions("sneakers-migrate", log.WithOutput(out), log.WithDefaultFormat(log.FormatConsole), log.WithDefaultLevel(level))
 	}
-	cmd.AddCommand(KeygenCmd(), ExportCmd(e, lg), ReviewCmd(), MappingCmd(), ImportCmd(e, lg), VerifyCmd(e, lg), VersionCmd())
+	cmd.AddCommand(KeygenCmd(), ExportCmd(e, lg), ReviewCmd(), MappingCmd(), ImportCmd(e, lg), VerifyCmd(e, lg), WaitCmd(lg), VersionCmd())
 	return cmd
 }
