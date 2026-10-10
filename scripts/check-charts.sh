@@ -215,6 +215,20 @@ assert not [d for d in on_docs if d["kind"] in ("Issuer", "ClusterIssuer")], "th
 print("ok: certManager.enabled renders one Certificate at the configured issuer, off renders none, and the chart never creates an Issuer")
 PY
 
+step "service-account tokens"
+python3 - "$out/sneakers.yaml" "$out/sneakers-small-box.yaml" <<'PY'
+import sys, yaml
+for path in sys.argv[1:]:
+    docs = [d for d in yaml.safe_load_all(open(path)) if d]
+    mounted = sorted(d["metadata"]["name"] for d in docs if d["kind"] == "Deployment" and d["spec"]["template"]["spec"].get("automountServiceAccountToken"))
+    # The gateway reads the API server's /version for the diagnostics; its
+    # service account has no role, and no other service mounts a token.
+    assert mounted == ["sneakers-gateway"], f"{path}: Deployments with a mounted token: {mounted}"
+    roles = [d["metadata"]["name"] for d in docs if d["kind"] in ("Role", "RoleBinding") and "gateway" in d["metadata"]["name"]]
+    assert not roles, f"{path}: the gateway's service account has a role: {roles}"
+print("ok: only the gateway mounts its service-account token, and it has no role")
+PY
+
 step "no cluster-scoped objects"
 cluster_scoped=(CustomResourceDefinition ClusterRole ClusterRoleBinding MutatingWebhookConfiguration ValidatingWebhookConfiguration IngressClass StorageClass PriorityClass)
 for f in "$out"/sneakers.yaml "$out"/sneakers-hydra.yaml "$out"/sneakers-small-box.yaml "$out"/sneakers-small-box-hydra.yaml "$out"/sneakers-large-box.yaml "$out"/sneakers-large-box-hydra.yaml; do
