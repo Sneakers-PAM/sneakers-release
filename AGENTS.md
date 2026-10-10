@@ -62,7 +62,8 @@ Two things to know before changing it:
   kubeconform, production-safe defaults, service-to-service edges, manifest)
 - Install test: create a kind cluster, then `test/kind/build-images.sh` and `test/kind/run.sh`
   (`BASE_VALUES=charts/sneakers/examples/values-small-box.yaml` layers a sizing example under the
-  test values, as the arm64 job does), then `test/kind/memory-peak.sh` for the pods' peak memory.
+  test values, as the arm64 job does), then `test/kind/memory-peak.sh` for the pods' peak memory, then `test/kind/late-deps.sh` (a cold
+  start with PostgreSQL, Kratos and Hydra 60 s late; fails on any container restart).
   `scripts/install-tools.sh` picks the amd64 or arm64 build of each tool
 - sneakers-migrate: `go test ./...` (set `MIGRATE_TEST_PG` to an admin Postgres DSN for the
   integration tests); the image is `docker build -f migrate/Dockerfile .`
