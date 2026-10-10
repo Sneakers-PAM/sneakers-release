@@ -100,7 +100,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-gateway
-        commit: 8c7fe7ac1760ba43483cc7d9c361aeac0fa49a69
+        commit: 4d3336476a1c6dab7761f12a359bd5529e33461a
         dockerfile: Dockerfile
         context: .
     mcp:
