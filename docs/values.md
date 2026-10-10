@@ -82,7 +82,7 @@ All nine service charts take the same values. Each one also works on its own, ou
 | `resources` | 50m and 64Mi requested, 1 CPU and 512Mi limit | Requests and limits; both are required. |
 | `podSecurityContext` | non-root (65532), `RuntimeDefault` seccomp | `runAsNonRoot` must stay true. |
 | `securityContext` | read-only root filesystem, no privilege escalation, all capabilities dropped | `readOnlyRootFilesystem` must stay true and `allowPrivilegeEscalation` false. |
-| `serviceAccount.*` | one per service, no token mounted | `create`, `name`, `automountToken`. |
+| `serviceAccount.*` | one per service, no token mounted (the gateway's is: its diagnostics read the API server's `/version`, and the account has no role) | `create`, `name`, `automountToken`. |
 | `projectedToken.*` | off | An extra kubelet-rotated ServiceAccount token: `audience`, `expirationSeconds`, `mountPath`, `path`, `clusterCA` (also mount the cluster CA), `envName` (a variable set to the token's path). It can't use the workload identity paths below. |
 | `workloadIdentity.caller` | on for every service that makes gRPC calls | Mount a token with audience `workloadIdentity.audience` at `/var/run/secrets/sneakers/token` and set `WORKLOAD_TOKEN_FILE` to it. The service sends it on every gRPC call. |
 | `workloadIdentity.callers` | the service's callers ([install.md](install.md#service-to-service-traffic)) | The services allowed to call this one's main port. The NetworkPolicy admits only their pods there. `migrate` is the `sneakers-migrate` Jobs, listed on the vault and audit only for a migration ([migrate.md](migrate.md)). |

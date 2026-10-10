@@ -144,7 +144,10 @@ securityContext:
 serviceAccount:
   create: true
   name: ""
-  automountToken: false
+  # The diagnostics read the Kubernetes version from the API server's
+  # /version with this token and the cluster CA. The account has no role, so
+  # the token reads only what any authenticated client may.
+  automountToken: true
 
 projectedToken:
   enabled: false
