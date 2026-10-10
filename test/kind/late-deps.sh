@@ -20,9 +20,12 @@ done
 echo "== stop PostgreSQL and ${ory[*]}"
 k scale statefulset/sneakers-postgres --replicas=0
 for d in "${ory[@]}"; do k scale "deployment/$d" --replicas=0; done
-k wait --for=delete pod -l app.kubernetes.io/component=postgres --timeout=120s || true
+# selector <kind/name>: the workload's own pod selector, so the Ory charts'
+# finished migration Job pods (same name label) aren't waited on.
+selector() { k get "$1" -o go-template='{{range $k, $v := .spec.selector.matchLabels}}{{$k}}={{$v}},{{end}}' | sed 's/,$//'; }
+k wait --for=delete pod -l "$(selector statefulset/sneakers-postgres)" --timeout=120s || true
 for d in "${ory[@]}"; do
-  k wait --for=delete pod -l "app.kubernetes.io/name=${d#sneakers-}" --timeout=120s || true
+  k wait --for=delete pod -l "$(selector "deployment/$d")" --timeout=120s || true
 done
 
 echo "== restart every other workload while they're down"
