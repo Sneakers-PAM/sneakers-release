@@ -28,7 +28,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-identity
-        commit: 8bd01bf333d1fd051009ad5567e82900b424091e
+        commit: 2db389cadbc7c1fe1a4263606f767fd4f3a01521
         dockerfile: Dockerfile
         context: .
     vault:
