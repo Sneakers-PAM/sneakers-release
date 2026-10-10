@@ -11,6 +11,7 @@ import (
 	log "github.com/Bugs5382/go-log"
 	postgres "github.com/Bugs5382/go-postgres"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/bundle"
+	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/connect"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/kratos"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/mapping"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/schema"
@@ -51,7 +52,7 @@ func Inventory(ctx context.Context, dsn map[schema.Service]string, kr Lister, lg
 	inv := &InventoryReport{At: time.Now().UTC().Format(time.RFC3339), Profile: schema.SourceProfile.Name, Tables: map[string]int{}, UsersByRole: map[string]int{}}
 	rows := map[string][]mapping.Row{}
 	for _, s := range schema.Services {
-		db, err := postgres.New(ctx, dsn[s])
+		db, err := connect.Postgres(ctx, "the source "+string(s)+" database", dsn[s], lg)
 		if err != nil {
 			return nil, fmt.Errorf("connect to the %s database: %w", s, err)
 		}

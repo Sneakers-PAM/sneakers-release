@@ -12,6 +12,7 @@ import (
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/bundle"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/codes"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/config"
+	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/connect"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/envelope"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/kratos"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/report"
@@ -94,6 +95,9 @@ source has them SOURCE_DEV_KEK_SEED and SOURCE_TOTP_ENC_KEY.`,
 				}
 			}
 			rcpt, _ := bundle.ParseRecipient(o.recipient)
+			if err := connect.HTTP(ctxOf(cmd), "the source Kratos", cfg.KratosAdminURL, connect.Wait, l); err != nil {
+				return err
+			}
 			b, err := source.Export(ctxOf(cmd), sc, kratos.New(cfg.KratosAdminURL), l)
 			if err != nil {
 				return err
@@ -146,6 +150,9 @@ func runInventory(cmd *cobra.Command, e env, l log.Logger, out string) error {
 	}
 	var kr source.Lister
 	if cfg.KratosAdminURL != "" {
+		if err := connect.HTTP(ctxOf(cmd), "the source Kratos", cfg.KratosAdminURL, connect.Wait, l); err != nil {
+			return err
+		}
 		kr = kratos.New(cfg.KratosAdminURL)
 	}
 	inv, err := source.Inventory(ctxOf(cmd), cfg.DSN, kr, l)
