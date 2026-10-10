@@ -87,10 +87,14 @@ func Run(ctx context.Context, cfg Config, b *bundle.Bundle, v VaultReader, a Cha
 	if err := mappingApplied(ctx, rep, b, cfg.Plan, dbs[schema.Audit].Querier()); err != nil {
 		return nil, err
 	}
-	if err := counts(ctx, rep, b, m, dbs, kr); err != nil {
+	at, err := importedAt(ctx, dbs[schema.Audit].Querier(), b.Manifest.BundleID)
+	if err != nil {
 		return nil, err
 	}
-	if err := signIn(ctx, rep, b, dbs[schema.Identity].Querier(), kr); err != nil {
+	if err := counts(ctx, rep, b, m, dbs, kr, at); err != nil {
+		return nil, err
+	}
+	if err := signIn(ctx, rep, b, dbs[schema.Identity].Querier(), kr, at); err != nil {
 		return nil, err
 	}
 	if err := tokens(ctx, rep, m, dbs[schema.Identity].Querier()); err != nil {
@@ -117,7 +121,29 @@ func count(ctx context.Context, q postgres.Querier, sql string, args ...any) (in
 	return n, err
 }
 
-func counts(ctx context.Context, rep *report.Verify, b *bundle.Bundle, m *mapping.Result, dbs map[schema.Service]*postgres.DB, kr KratosLister) error {
+// factorTables hold second factors a user enrols. One made after the import
+// didn't come across, so counts and the sign-in reset check leave it out.
+var factorTables = map[string]bool{"identity.user_totp": true, "identity.user_webauthn_credentials": true}
+
+// importedAt is when this bundle's latest import finished (its audit
+// summary), or nil if the target records none.
+func importedAt(ctx context.Context, aq postgres.Querier, bundleID string) (*time.Time, error) {
+	var occurred string
+	err := aq.QueryRow(ctx, "SELECT occurred_at FROM public.audit_records WHERE action = 'migration.import' AND attributes->>'bundle_id' = $1 ORDER BY seq DESC LIMIT 1", bundleID).Scan(&occurred)
+	if errors.Is(err, postgres.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read the import's audit summary: %w", err)
+	}
+	at, err := time.Parse(time.RFC3339Nano, occurred)
+	if err != nil {
+		return nil, fmt.Errorf("the import's audit summary: occurred_at %q: %w", occurred, err)
+	}
+	return &at, nil
+}
+
+func counts(ctx context.Context, rep *report.Verify, b *bundle.Bundle, m *mapping.Result, dbs map[schema.Service]*postgres.DB, kr KratosLister, at *time.Time) error {
 	want := m.Expected()
 	var bad []string
 	for _, t := range schema.Tables {
@@ -130,6 +156,10 @@ func counts(ctx context.Context, rep *report.Verify, b *bundle.Bundle, m *mappin
 		if t.Stream() == "audit.audit_records" {
 			sql += " WHERE seq <= $1"
 			args = append(args, int64(b.Manifest.AuditHead.Seq)) // #nosec G115 -- audit seq fits in bigint
+		}
+		if factorTables[t.Stream()] && at != nil {
+			sql += " WHERE created_at <= $1"
+			args = append(args, *at)
 		}
 		n, err := count(ctx, q, sql, args...)
 		if err != nil {
@@ -230,13 +260,18 @@ func mappingApplied(ctx context.Context, rep *report.Verify, b *bundle.Bundle, p
 }
 
 // signIn checks a sign-in reset held: no second factor and no password
-// came across, apart from the one first-admin password import may set.
-func signIn(ctx context.Context, rep *report.Verify, b *bundle.Bundle, iq postgres.Querier, kr KratosLister) error {
+// came across, apart from the one first-admin password import may set. A
+// second factor enrolled after the import (a pending TOTP seed from opening
+// the second-factor page included) is a user signing in, not a carried one.
+func signIn(ctx context.Context, rep *report.Verify, b *bundle.Bundle, iq postgres.Querier, kr KratosLister, at *time.Time) error {
 	if !b.Manifest.SignInReset {
 		return nil
 	}
-	var totp, passkeys int
-	if err := iq.QueryRow(ctx, "SELECT (SELECT count(*) FROM public.user_totp), (SELECT count(*) FROM public.user_webauthn_credentials)").Scan(&totp, &passkeys); err != nil {
+	var totp, passkeys, since int
+	if err := iq.QueryRow(ctx, `SELECT
+	  (SELECT count(*) FROM public.user_totp WHERE $1::timestamptz IS NULL OR created_at <= $1),
+	  (SELECT count(*) FROM public.user_webauthn_credentials WHERE $1::timestamptz IS NULL OR created_at <= $1),
+	  (SELECT count(*) FROM public.user_totp WHERE created_at > $1) + (SELECT count(*) FROM public.user_webauthn_credentials WHERE created_at > $1)`, at).Scan(&totp, &passkeys, &since); err != nil {
 		return fmt.Errorf("count second factors: %w", err)
 	}
 	ids, err := kr.List(ctx, true)
@@ -251,6 +286,9 @@ func signIn(ctx context.Context, rep *report.Verify, b *bundle.Bundle, iq postgr
 	}
 	ok := totp == 0 && passkeys == 0 && withPassword <= 1
 	detail := fmt.Sprintf("%d identities, %d with a password (at most the first admin's), no TOTP seed or passkey carried", len(ids), withPassword)
+	if since > 0 {
+		detail += fmt.Sprintf("; %d second factors enrolled since the import", since)
+	}
 	if !ok {
 		detail = fmt.Sprintf("%d TOTP seeds, %d passkeys and %d passwords on the target after a sign-in reset", totp, passkeys, withPassword)
 		rep.Failures = append(rep.Failures, "sign-in reset: "+detail)
