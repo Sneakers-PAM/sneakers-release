@@ -65,6 +65,12 @@ env:
   SMTP_HOST: ""
   SMTP_PORT: "587"
   SMTP_TLS: "true"
+  # none, starttls or tls (implicit TLS); set, it wins over SMTP_TLS.
+  SMTP_TLS_MODE: ""
+  # "true" skips the relay's certificate check.
+  SMTP_TLS_INSECURE: ""
+  # The relay's CA, PEM, trusted on top of the system roots.
+  SMTP_CA_PEM: ""
   SMTP_FROM: "no-reply@{{ .Values.global.host }}"
   SMTP_USER: ""
 requiredEnv: [DATABASE_DSN]

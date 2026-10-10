@@ -3,7 +3,7 @@
 # The refs are each service repository's merge commit on main: the same commits,
 # targets and build args as each service's build block in manifest/release.yaml
 # (scripts/check-manifest.py checks it), so the install test builds what ships.
-sneakers-identity  Sneakers-PAM/sneakers-identity   8bd01bf333d1fd051009ad5567e82900b424091e  -
+sneakers-identity  Sneakers-PAM/sneakers-identity   2db389cadbc7c1fe1a4263606f767fd4f3a01521  -
 sneakers-vault     Sneakers-PAM/sneakers-vault      2644629a50c138764f89d897bcc4b2e6c78e2924  vault
 sneakers-workflow  Sneakers-PAM/sneakers-vault      2644629a50c138764f89d897bcc4b2e6c78e2924  workflow
 sneakers-audit     Sneakers-PAM/sneakers-audit      1ecfc74f492fa9f02cc1865d3e17a1ce4060443b  -
