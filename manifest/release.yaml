@@ -120,7 +120,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-web
-        commit: 752b815f8f96b27c9eb651935d2a4b481a8c7a16
+        commit: 29b1af5a3b256e9fbea44629e2e3cbcc845437b7
         dockerfile: Dockerfile
         context: .
         args:
@@ -132,7 +132,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-web
-        commit: 752b815f8f96b27c9eb651935d2a4b481a8c7a16
+        commit: 29b1af5a3b256e9fbea44629e2e3cbcc845437b7
         dockerfile: Dockerfile
         context: .
         args:
