@@ -28,7 +28,7 @@ chart by `scripts/sync-schemas.sh`.
 | `<service>.*` | | That service chart's values (next section). The umbrella sets each database DSN and points each `secretEnv` at the bundled Secrets. |
 | `postgres.enabled` | `true` | The bundled PostgreSQL (`charts/postgres`). |
 | `valkey.enabled` | `true` | The bundled Valkey ([valkey-helm](https://github.com/valkey-io/valkey-helm)); its values pass through. |
-| `kratos.enabled` | `true` | The bundled Ory Kratos ([ory/k8s](https://github.com/ory/k8s)); its values pass through. |
+| `kratos.enabled` | `true` | The bundled Ory Kratos ([ory/k8s](https://github.com/ory/k8s)); its values pass through. Its startup probe asks `/admin/health/alive` (the process) with a 5-minute window instead of the chart's `/admin/health/ready` for 5 s, so a Kratos that starts before PostgreSQL waits rather than being restarted; Hydra's does the same with `/health/alive`. Valkey's probes wait 3 s, with a 5-minute startup window. `scripts/check-probes.py` checks all of these. |
 | `hydra.enabled` | `false` | The bundled Ory Hydra ([ory/k8s](https://github.com/ory/k8s)); its values pass through. `hydra.maester.enabled` stays `false`: it would add the `OAuth2Client` CRD, and this chart installs no CRD of its own ([install.md](install.md#the-public-edge)). |
 | `bundledNetworkPolicies.enabled` | `true` | NetworkPolicies for the bundled Kratos and Hydra, whose charts ship none. See [install.md](install.md#service-to-service-traffic). |
 | `bundledNetworkPolicies.kratosPublicFrom` | `[]` | More peers for Kratos's public port, besides the gateway. |
@@ -72,7 +72,7 @@ All nine service charts take the same values. Each one also works on its own, ou
 | `logLevel`, `logFormat` | (empty: the global values) | Per-service overrides. |
 | `service.port`, `service.portName` | the service's port, `grpc` or `http` | The main port. |
 | `service.extraPorts` | `[]` (`http` 9097 for sshbroker) | More ports, each `{name, port}`. |
-| `probes.*` | gRPC health, or HTTP `/livez` and `/readyz` | Startup, liveness and readiness probes: `type`, `port`, `startupFailureThreshold`. Liveness (and startup) checks the process only: gRPC health service `livenessService` (`liveness`), or HTTP `livenessPath`. Readiness follows the service's required dependencies: the default gRPC health service, or HTTP `readinessPath`. Unset, both use `path` or the default gRPC service. |
+| `probes.*` | gRPC health, or HTTP `/livez` and `/readyz` | Startup, liveness and readiness probes: `type`, `port`, `startupFailureThreshold` (60: a 5-minute startup window at one probe every 5 s), `timeoutSeconds` (3: how long each probe waits; the kubelet's 1 s default times out on a small box under boot load). Liveness (and startup) checks the process only: gRPC health service `livenessService` (`liveness`), or HTTP `livenessPath`. Readiness follows the service's required dependencies: the default gRPC health service, or HTTP `readinessPath`. Unset, both use `path` or the default gRPC service. |
 | `env` | per service | Non-secret settings, rendered into the ConfigMap. Values go through `tpl` (so `{{ .Values.global.host }}` works); an empty value is left out so the service uses its own default. The settings are in each service's `docs/configuration.md`. |
 | `requiredEnv` | `[DATABASE_DSN]` where there is a database | Keys of `env` that must not be empty. |
 | `secretEnv.<VAR>` | per service | A setting read from a Secret: `secretName`, `key` (default: the variable name), `required`. With `generate: true` and no `secretName` the chart creates the value once (`bytes` random bytes, base64) in `sneakers-<service>-generated`, kept on upgrade and uninstall. |
@@ -132,6 +132,7 @@ All nine service charts take the same values. Each one also works on its own, ou
 | `persistence.size`, `persistence.storageClass`, `persistence.accessModes` | `10Gi`, the default class, `ReadWriteOnce` | The data volume, kept when the release is deleted. |
 | `resources` | 100m and 256Mi requested, 2 CPUs and 1Gi limit | |
 | `parameters` | `{}` (the image's defaults) | Server settings, each passed as `-c <name>=<value>`: `shared_buffers`, `work_mem`, `maintenance_work_mem`, `max_connections` and any other. |
+| `probes.timeoutSeconds` | `5` | How long each `pg_isready` probe waits. A failed liveness probe restarts the database, so this stays above the kubelet's 1 s default. |
 | `shm.sizeLimit` | `256Mi` | The memory-backed `/dev/shm`, used by parallel query workers. It counts against the pod's memory. |
 | `networkPolicy.enabled` | `true` | Only this release's pods may connect. |
 

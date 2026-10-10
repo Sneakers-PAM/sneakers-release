@@ -303,6 +303,15 @@ kubeconform -strict -summary -kubernetes-version "${KUBE_VERSION}" "$out"/*.yaml
 step "production-safe defaults"
 python3 scripts/check-defaults.py <"$out/sneakers.yaml"
 
+step "probe timings"
+# Probes fit a small box under boot load and never kill a process that is
+# only waiting for a dependency (scripts/check-probes.py).
+for f in "$out"/sneakers.yaml "$out"/sneakers-hydra.yaml "$out"/sneakers-small-box.yaml "$out"/sneakers-small-box-hydra.yaml "$out"/sneakers-large-box-hydra.yaml; do
+  python3 scripts/check-probes.py <"$f"
+done
+helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set audit.probes.timeoutSeconds=1 >"$out/probes-tight.yaml"
+must_fail "a probe that waits 1 s" python3 scripts/check-probes.py <"$out/probes-tight.yaml"
+
 step "sizing: every figure is a value, and the example values' budgets"
 python3 scripts/check-resources.py templates
 # The small-box example (docs/values.md) must leave room for the operating

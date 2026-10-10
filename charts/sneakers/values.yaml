@@ -172,6 +172,15 @@ valkey:
       memory: 512Mi
   readinessProbe:
     enabled: true
+    timeoutSeconds: 3
+  # The chart's 1 s timeouts and 30 s startup window are too tight for a
+  # small box loading its dataset at boot.
+  startupProbe:
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 60
+  livenessProbe:
+    timeoutSeconds: 3
   # Only the services that use Valkey (REDIS_URL) may connect.
   networkPolicy:
     ingress:
@@ -219,6 +228,22 @@ kratos:
       limits:
         cpu: "1"
         memory: 512Mi
+    # The chart's startup probe asks /admin/health/ready, which needs the
+    # database, and gives up after about 5 s, so Kratos was restarted
+    # whenever PostgreSQL came up after it. Startup asks the process only
+    # (alive), with a 5-minute window; readiness still follows the database.
+    customStartupProbe:
+      httpGet:
+        path: /admin/health/alive
+        port: 4434
+        httpHeaders:
+          - name: Host
+            value: "127.0.0.1"
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 60
+    readinessProbe:
+      timeoutSeconds: 3
     automigration:
       extraEnv: []
   kratos:
@@ -337,6 +362,20 @@ hydra:
       limits:
         cpu: "1"
         memory: 512Mi
+    # As for Kratos: startup asks the process only (alive), with a 5-minute
+    # window, instead of /health/ready (which needs the database) for 5 s.
+    customStartupProbe:
+      httpGet:
+        path: /health/alive
+        port: 4445
+        httpHeaders:
+          - name: Host
+            value: "127.0.0.1"
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 60
+    readinessProbe:
+      timeoutSeconds: 3
   hydra:
     automigration:
       enabled: true
