@@ -8,7 +8,7 @@ secret's current value only, reset every sign-in (each user sets a new password 
 second factor again), and re-map folders, names and types from a mapping file the owner approves.
 [Moving onto the appliance](migrate-appliance.md) is the step-by-step guide for that.
 
-One binary, six commands:
+One binary, seven commands:
 
 | Command | Runs | Does |
 |---|---|---|
@@ -18,6 +18,7 @@ One binary, six commands:
 | `mapping` | anywhere with the import key | converts a proposal sheet into a mapping file, or checks one, against the bundle |
 | `import` | next to the new install | loads the bundle into a fresh, empty install, applying the mapping file |
 | `verify` | next to the new install | checks the install against the bundle |
+| `wait` | an init container | blocks until a DNS name and a list of TCP targets answer |
 
 The tool is in `migrate/` (Go, cobra) and is built as an image from `migrate/Dockerfile`:
 
@@ -251,6 +252,25 @@ acts as its own `system:migrate` actor, so the seals, reveals and lists are audi
 not a person's. The vault admits it to `SealForImport`, `RevealSecretField`, `GetSecret`,
 `ListTargets` and `ListConnections` only, and only with workload authentication on: with
 `WORKLOAD_AUTH=disabled` it refuses `SealForImport`.
+
+### Wait
+
+A dependency gate for an init container, not part of the migration flow itself:
+
+```bash
+sneakers-migrate wait --dns kubernetes.default.svc.cluster.local \
+  --tcp sneakers-vault.sneakers.svc:9091 --tcp sneakers-audit.sneakers.svc:9093 --every 2s
+```
+
+- Resolves `--dns` first, retrying every `--every` until it resolves, then dials each `--tcp`
+  target (`host:port`) in the order given, retrying each the same way until it connects.
+  `--tcp` repeats for more than one target.
+- Retries forever: there is no internal timeout, so the init container's own timeout is the only
+  time bound. Exits 0 once every target has answered.
+- A bad `host:port` value, a missing `--dns`, a missing `--tcp` or a non-positive `--every` is
+  caught before the first retry and exits with code 2.
+- Every retry is logged to stderr with the target, the outcome and how long the attempt took;
+  never a value.
 
 ## Guardrails
 
