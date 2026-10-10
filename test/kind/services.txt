@@ -10,7 +10,7 @@ sneakers-audit     Sneakers-PAM/sneakers-audit      1ecfc74f492fa9f02cc1865d3e17
 sneakers-notify    Sneakers-PAM/sneakers-notify     78096c74497678a94ff2be507ba92bb4f7610814  -
 sneakers-connector Sneakers-PAM/sneakers-connector  be456ff05e19b96c8b8978785c6fd7a437524bbb  -
 sneakers-sshbroker Sneakers-PAM/sneakers-sshbroker  7a45ea63e1a9a8f1f7c709c8bf38e5647f551d80  -
-sneakers-gateway   Sneakers-PAM/sneakers-gateway    f508fa0c2146a27fe25fbbc019a5397bd250586a  -
+sneakers-gateway   Sneakers-PAM/sneakers-gateway    8c7fe7ac1760ba43483cc7d9c361aeac0fa49a69  -
 sneakers-mcp       Sneakers-PAM/sneakers-mcp        5180b663617535ef2f76ac74e6da4f6b0ffcf435  -
-sneakers-web-staff Sneakers-PAM/sneakers-web        9c24045aaa1d4a1288176934d9ee9557aa250b32  -  APP=staff
-sneakers-web-admin Sneakers-PAM/sneakers-web        9c24045aaa1d4a1288176934d9ee9557aa250b32  -  APP=admin
+sneakers-web-staff Sneakers-PAM/sneakers-web        752b815f8f96b27c9eb651935d2a4b481a8c7a16  -  APP=staff
+sneakers-web-admin Sneakers-PAM/sneakers-web        752b815f8f96b27c9eb651935d2a4b481a8c7a16  -  APP=admin
