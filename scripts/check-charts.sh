@@ -312,6 +312,23 @@ done
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set audit.probes.timeoutSeconds=1 >"$out/probes-tight.yaml"
 must_fail "a probe that waits 1 s" python3 scripts/check-probes.py <"$out/probes-tight.yaml"
 
+step "PostgreSQL stops cleanly"
+# Every stop is a fast shutdown with its checkpoint written before the kubelet
+# would kill the server (scripts/check-shutdown.py).
+for f in "$out"/sneakers.yaml "$out"/sneakers-small-box.yaml "$out"/sneakers-large-box.yaml "$out"/postgres.yaml; do
+  python3 scripts/check-shutdown.py <"$f"
+done
+must_fail "a PostgreSQL grace period under 120 s" helm template ci charts/postgres -n sneakers --set auth.existingSecret=ci --set shutdown.terminationGracePeriodSeconds=60
+python3 - "$out/postgres.yaml" <<'PY2'
+import sys, yaml
+docs = [d for d in yaml.safe_load_all(open(sys.argv[1])) if d]
+sts = [d for d in docs if d["kind"] == "StatefulSet"][0]
+c = sts["spec"]["template"]["spec"]["containers"][0]
+c["lifecycle"]["preStop"]["exec"]["command"] = ["pg_ctl", "stop", "-D", "/var/lib/postgresql/data/pgdata", "-m", "smart", "-W"]
+yaml.safe_dump(sts, open(sys.argv[1] + ".smart", "w"))
+PY2
+must_fail "a smart shutdown" sh -c "python3 scripts/check-shutdown.py <'$out/postgres.yaml.smart'"
+
 step "sizing: every figure is a value, and the example values' budgets"
 python3 scripts/check-resources.py templates
 # The small-box example (docs/values.md) must leave room for the operating

@@ -133,6 +133,7 @@ All nine service charts take the same values. Each one also works on its own, ou
 | `resources` | 100m and 256Mi requested, 2 CPUs and 1Gi limit | |
 | `parameters` | `{}` (the image's defaults) | Server settings, each passed as `-c <name>=<value>`: `shared_buffers`, `work_mem`, `maintenance_work_mem`, `max_connections` and any other. |
 | `probes.timeoutSeconds` | `5` | How long each `pg_isready` probe waits. A failed liveness probe restarts the database, so this stays above the kubelet's 1 s default. |
+| `shutdown.terminationGracePeriodSeconds` | `120` (at least 120) | How long the kubelet waits for the server to exit on a stop before it kills it. Every stop first runs `pg_ctl stop -m fast` (a preStop hook): the sessions end and the server writes its shutdown checkpoint. A killed server has to recover at its next start. `scripts/check-shutdown.py` checks the hook and the grace period; `test/kind/clean-stop.sh` checks a scale to 0 and a pod delete each end in a clean start with every row kept. |
 | `shm.sizeLimit` | `256Mi` | The memory-backed `/dev/shm`, used by parallel query workers. It counts against the pod's memory. |
 | `networkPolicy.enabled` | `true` | Only this release's pods may connect. |
 

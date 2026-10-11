@@ -31,7 +31,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      terminationGracePeriodSeconds: 60
+      terminationGracePeriodSeconds: {{ .Values.shutdown.terminationGracePeriodSeconds }}
       containers:
         - name: postgres
           image: {{ include "postgres.image" . | quote }}
@@ -66,6 +66,16 @@ spec:
               value: {{ join " " .Values.databases | quote }}
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
+          # Every stop (a scale to 0, a delete, an update, a drain) is a fast
+          # shutdown whatever signal the runtime sends: the sessions end
+          # rather than being waited for, and the server writes its shutdown
+          # checkpoint. The hook only asks (-W): the server's exit ends the
+          # container, and with it any process waiting in it. The kubelet
+          # then waits for that exit, up to the grace period.
+          lifecycle:
+            preStop:
+              exec:
+                command: [pg_ctl, stop, -D, /var/lib/postgresql/data/pgdata, -m, fast, -W]
           startupProbe:
             exec:
               command: [pg_isready, -U, postgres, -h, 127.0.0.1]

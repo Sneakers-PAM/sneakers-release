@@ -59,11 +59,14 @@ Two things to know before changing it:
 
 - Tools: `scripts/install-tools.sh bin helm kubeconform` (add `kind kubectl` for the install test)
 - Chart checks: `PATH="$PWD/bin:$PATH" scripts/check-charts.sh` (lint, render, schema refusals,
-  kubeconform, production-safe defaults, probe timings, service-to-service edges, manifest)
+  kubeconform, production-safe defaults, probe timings, PostgreSQL's clean stop, service-to-service edges,
+  manifest)
 - Install test: create a kind cluster, then `test/kind/build-images.sh` and `test/kind/run.sh`
   (`BASE_VALUES=charts/sneakers/examples/values-small-box.yaml` layers a sizing example under the
   test values, as the arm64 job does), then `test/kind/memory-peak.sh` for the pods' peak memory, then `test/kind/late-deps.sh` (a cold
-  start with PostgreSQL, Kratos and Hydra 60 s late; fails on any container restart).
+  start with PostgreSQL, Kratos and Hydra 60 s late; fails on any container restart), then
+  `test/kind/clean-stop.sh` (rows written, a scale to 0 and a pod delete; each must end in a
+  clean PostgreSQL start, with no crash recovery, and every row kept).
   `scripts/install-tools.sh` picks the amd64 or arm64 build of each tool
 - sneakers-migrate: `go test ./...` (set `MIGRATE_TEST_PG` to an admin Postgres DSN for the
   integration tests); the image is `docker build -f migrate/Dockerfile .`
