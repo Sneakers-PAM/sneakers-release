@@ -59,6 +59,14 @@
         "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 30 }
       }
     },
+    "shutdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["terminationGracePeriodSeconds"],
+      "properties": {
+        "terminationGracePeriodSeconds": { "type": "integer", "minimum": 120, "maximum": 900 }
+      }
+    },
     "shm": {
       "type": "object",
       "additionalProperties": false,

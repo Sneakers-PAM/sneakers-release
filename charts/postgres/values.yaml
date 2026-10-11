@@ -53,6 +53,14 @@ parameters: {}
 probes:
   timeoutSeconds: 5
 
+# How the server stops. Every stop starts with `pg_ctl stop -m fast` (a preStop
+# hook): the sessions end and the server writes its shutdown checkpoint. The
+# kubelet waits up to terminationGracePeriodSeconds for it to exit before it
+# kills it, and a killed server has to recover at its next start, so this stays
+# well above the checkpoint's time on a slow disk (at least 120).
+shutdown:
+  terminationGracePeriodSeconds: 120
+
 # The memory-backed /dev/shm, used for parallel query workers. It counts
 # against the pod's memory.
 shm:
