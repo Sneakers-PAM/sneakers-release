@@ -18,7 +18,7 @@ One binary, seven commands:
 | `mapping` | anywhere with the import key | converts a proposal sheet into a mapping file, or checks one, against the bundle |
 | `import` | next to the new install | loads the bundle into a fresh, empty install, applying the mapping file |
 | `verify` | next to the new install | checks the install against the bundle |
-| `wait` | an init container | blocks until a DNS name and a list of TCP targets answer |
+| `wait` | an init container | blocks until a DNS name and any TCP targets answer |
 
 The tool is in `migrate/` (Go, cobra) and is built as an image from `migrate/Dockerfile`:
 
@@ -264,10 +264,11 @@ sneakers-migrate wait --dns kubernetes.default.svc.cluster.local \
 
 - Resolves `--dns` first, retrying every `--every` until it resolves, then dials each `--tcp`
   target (`host:port`) in the order given, retrying each the same way until it connects.
-  `--tcp` repeats for more than one target.
+  `--tcp` repeats for more than one target, and is optional: a workload with no Service to wait
+  for (the bundled PostgreSQL, Valkey) waits on `--dns` alone and exits once it resolves.
 - Retries forever: there is no internal timeout, so the init container's own timeout is the only
   time bound. Exits 0 once every target has answered.
-- A bad `host:port` value, a missing `--dns`, a missing `--tcp` or a non-positive `--every` is
+- A bad `host:port` value, a missing `--dns` or a non-positive `--every` is
   caught before the first retry and exits with code 2.
 - Every retry is logged to stderr with the target, the outcome and how long the attempt took;
   never a value.

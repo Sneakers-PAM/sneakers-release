@@ -42,7 +42,7 @@ func TestUsageErrors(t *testing.T) {
 		{"import", "--bundle", "b"},
 		{"keygen"},
 		{"wait"},
-		{"wait", "--dns", "kubernetes.default.svc.cluster.local"},
+		{"wait", "--tcp", "svc.example.org:9090"},
 		{"wait", "--dns", "kubernetes.default.svc.cluster.local", "--tcp", "not-a-host-port"},
 		{"wait", "--dns", "kubernetes.default.svc.cluster.local", "--tcp", "svc.example.org:9090", "--every", "0s"},
 	} {
@@ -129,6 +129,18 @@ func TestWaitExitsOKOnceEveryTargetAnswers(t *testing.T) {
 	code := run(ctx, []string{"wait", "--dns", "localhost", "--tcp", ln.Addr().String(), "--every", "10ms"}, &out, &errb)
 	if code != exitOK {
 		t.Fatalf("wait: exit %d (%s)", code, errb.String())
+	}
+}
+
+// A workload with no Service to wait for (the database, the cache) gets a
+// wait on the cluster's DNS alone: it exits 0 once the name resolves.
+func TestWaitWithDNSOnlyExitsOKOnceTheNameResolves(t *testing.T) {
+	var out, errb bytes.Buffer
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	code := run(ctx, []string{"wait", "--dns", "localhost", "--every", "10ms"}, &out, &errb)
+	if code != exitOK {
+		t.Fatalf("wait --dns only: exit %d (%s)", code, errb.String())
 	}
 }
 

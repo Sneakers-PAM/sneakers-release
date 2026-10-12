@@ -130,6 +130,21 @@ func TestRunRetriesDNSUntilItResolves(t *testing.T) {
 	}
 }
 
+// With no TCP target, Run retries the DNS name through its failures and
+// returns once it resolves.
+func TestRunWithDNSOnlyRetriesThenReturns(t *testing.T) {
+	r := &countingResolver{failUntil: 3}
+	cfg := Config{DNS: "kubernetes.default.svc.cluster.local", Every: 2 * time.Millisecond}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := Run(ctx, cfg, r, testLogger()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := r.callCount(); got != 4 {
+		t.Fatalf("resolver calls = %d, want 4 (3 failures then success)", got)
+	}
+}
+
 func TestRunRetriesTCPUntilItConnects(t *testing.T) {
 	// Reserve a free port, then close it so the first dials refuse, and
 	// reopen the same port a little later: like a service that isn't ready

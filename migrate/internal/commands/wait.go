@@ -17,25 +17,22 @@ type waitOptions struct {
 	every time.Duration
 }
 
-// WaitCmd blocks until a DNS name resolves and a list of TCP targets accept
-// a connection, so an init container can gate a step on its dependencies.
+// WaitCmd blocks until a DNS name resolves and any TCP targets accept a
+// connection, so an init container can gate a step on its dependencies.
 func WaitCmd(lg logFn) *cobra.Command {
 	o := &waitOptions{}
 	cmd := &cobra.Command{
 		Use:   "wait",
-		Short: "Block until a DNS name resolves and TCP targets accept a connection",
+		Short: "Block until a DNS name resolves and any TCP targets accept a connection",
 		Long: `wait resolves --dns first, retrying every --every until it resolves, then
 dials each --tcp target in the order given, retrying each the same way until
-it connects. It retries forever: the caller owns the time bound (an init
-container's own timeout), never this command. Exits 0 once every target has
-answered.`,
+it connects. --tcp is optional: with none, wait exits once the name resolves.
+It retries forever: the caller owns the time bound (an init container's own
+timeout), never this command. Exits 0 once every target has answered.`,
 		Args: cobra.NoArgs,
 		PreRunE: func(_ *cobra.Command, _ []string) error {
 			if o.dns == "" {
 				return usage("--dns is required")
-			}
-			if len(o.tcp) == 0 {
-				return usage("at least one --tcp is required")
 			}
 			for _, t := range o.tcp {
 				if _, _, err := net.SplitHostPort(t); err != nil {
