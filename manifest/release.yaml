@@ -90,7 +90,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-sshbroker
-        commit: 3c1c08594c39d53c53be8b90762c53394b9c12a4
+        commit: c99333564c4fcd33e118608b165f8f3a969a4aae
         dockerfile: Dockerfile
         context: .
     gateway:
@@ -100,7 +100,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-gateway
-        commit: 3715bf817fc8498d043b61d5ed85a3e42eb1fe31
+        commit: 963d40871d797aa393c971039665ec09b0df013f
         dockerfile: Dockerfile
         context: .
     mcp:
