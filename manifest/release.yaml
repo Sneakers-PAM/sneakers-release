@@ -80,7 +80,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-connector
-        commit: 9c27110acda9f3b778af5cf7dca2cf29228693b7
+        commit: 66d5d109e73f916846fabb75fe621f568cf39dc1
         dockerfile: Dockerfile
         context: .
     sshbroker:
