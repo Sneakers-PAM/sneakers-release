@@ -224,7 +224,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-release
-        commit: 240bd8fdf8c4eb41617763e27b108d165ba85590
+        commit: aa281c860b387aa09df7b4ff8052b83715e88fae
         dockerfile: migrate/Dockerfile
         context: .
   tools:
