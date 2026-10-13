@@ -35,7 +35,7 @@ jobs:
   rehearsal:
     name: 🔁 Migration rehearsal on kind
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 75
     env:
       KIND_CLUSTER: sneakers
@@ -45,7 +45,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         with:
           go-version-file: go.mod
       - name: Install tools
