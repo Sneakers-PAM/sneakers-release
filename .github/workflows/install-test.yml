@@ -36,7 +36,7 @@ jobs:
   install:
     name: 🚢 Install on kind
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       KIND_CLUSTER: sneakers
@@ -126,7 +126,7 @@ jobs:
     if: >-
       vars.ARM64_RUNNER == 'none'
       && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: No arm64 runner
