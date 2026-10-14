@@ -90,7 +90,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-sshbroker
-        commit: b2b2874315d28affe1b6163c8b26ea8586183385
+        commit: dfd60e0946cbe19ee2c5c198c8d6f2d95fee8f95
         dockerfile: Dockerfile
         context: .
     gateway:
@@ -100,7 +100,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-gateway
-        commit: 963d40871d797aa393c971039665ec09b0df013f
+        commit: 3371afc9fb6703bc5b790e87492558adb309410f
         dockerfile: Dockerfile
         context: .
     mcp:
@@ -120,7 +120,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-web
-        commit: b005d31408bb8672d3932a98844b71932ee308bf
+        commit: 63aa7e08f227ac34e17d9a42973044f64f1faef3
         dockerfile: Dockerfile
         context: .
         args:
@@ -132,7 +132,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-web
-        commit: b005d31408bb8672d3932a98844b71932ee308bf
+        commit: 63aa7e08f227ac34e17d9a42973044f64f1faef3
         dockerfile: Dockerfile
         context: .
         args:
