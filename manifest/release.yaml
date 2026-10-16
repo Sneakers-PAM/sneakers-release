@@ -38,7 +38,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-vault
-        commit: 921421ab89cb1a564b004463477fa540966d326b
+        commit: 94505f3f616e54c04cdcdf0f354289376eed77c5
         dockerfile: Dockerfile
         context: .
         target: vault
@@ -49,7 +49,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-vault
-        commit: 921421ab89cb1a564b004463477fa540966d326b
+        commit: 94505f3f616e54c04cdcdf0f354289376eed77c5
         dockerfile: Dockerfile
         context: .
         target: workflow
