@@ -204,7 +204,11 @@ its SHA-256 on the audit chain).
   approval requests. Dropping a connection's privileged secret is refused.
 - **Type changes** map each field to the new type's keys: `types` gives the mapping for a pair, and a
   field without one keeps its key. A non-empty field with no place in the new type is refused unless
-  it's in `drop_fields`. A rotation or heartbeat schedule the new type can't run is removed.
+  it's in `drop_fields`. The active value must also land with every field the new type marks
+  required non-empty (the same rule sneakers-vault enforces on create and update): a source row
+  that lacks one is refused by name at this check, before anything is written, rather than
+  arriving as a secret the vault accepts but the web then marks incomplete. A rotation or heartbeat
+  schedule the new type can't run is removed.
 - A folder that gains or loses secrets has its order renumbered, keeping the secrets' order. Two
   secrets with one name in one folder is a warning in the report, not an error.
 
