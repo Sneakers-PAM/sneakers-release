@@ -600,11 +600,36 @@ func typeFields(t map[string]any) map[string]bool {
 	return out
 }
 
+// requiredFields returns the keys of t's fields marked required, the same
+// catalogue flag the vault itself refuses an empty value for on create and
+// update (sneakers-vault#163). The mapping check applies it too, so a row
+// that would land with a required field empty is caught here, before
+// anything is written, rather than arriving as a secret the vault accepts
+// but the web then marks incomplete.
+func requiredFields(t map[string]any) map[string]bool {
+	out := map[string]bool{}
+	fs, _ := t["fields"].([]any)
+	for _, f := range fs {
+		if m, ok := f.(map[string]any); ok {
+			if req, _ := m["required"].(bool); req {
+				out[str(m, "key")] = true
+			}
+		}
+	}
+	return out
+}
+
 // retype moves every field of the secret's current value and versions into
 // the target type's keys, and refuses to lose a non-empty one the rule
-// doesn't let go.
+// doesn't let go. It also refuses, for the active record only, landing a
+// required field of the destination type empty (sneakers-vault#163): a
+// version row keeps whatever history it already had, but the active value
+// a retyped secret arrives with must satisfy the same required-field rule
+// the vault enforces on create and update, caught here rather than arriving
+// as a secret the web then has to mark incomplete.
 func (x *remapper) retype(id, dest string, rule TypeRule, what string) error {
 	keys := typeFields(x.types[dest])
+	required := requiredFields(x.types[dest])
 	dropOK := map[string]bool{}
 	for _, f := range rule.DropFields {
 		dropOK[f] = true
@@ -634,6 +659,18 @@ func (x *remapper) retype(id, dest string, rule TypeRule, what string) error {
 					return mappingErr("%s: secret %s: two fields land on %q in type %q", what, id, destKey, rule.To)
 				}
 				out[destKey] = v
+			}
+			if stream == "vault.secret_records" {
+				missing := make([]string, 0, len(required))
+				for key := range required {
+					if v, ok := out[key]; !ok || fmt.Sprint(v) == "" {
+						missing = append(missing, key)
+					}
+				}
+				if len(missing) > 0 {
+					sort.Strings(missing)
+					return mappingErr("%s: secret %s is missing required field(s) %s for type %q", what, id, strings.Join(missing, ", "), rule.To)
+				}
 			}
 			row["fields"] = out
 		}

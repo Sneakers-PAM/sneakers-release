@@ -238,3 +238,65 @@ func TestNoPlanCarriesEverything(t *testing.T) {
 		t.Fatalf("remap %v, %d secrets, %d folders", r.Remap, len(r.Rows["vault.secrets"]), len(r.Rows["vault.folders"]))
 	}
 }
+
+// A type change the mapping file requests must land with every required
+// field of the destination type non-empty, the same rule the vault itself
+// enforces on create and update (sneakers-vault#163) — caught here, before
+// anything is written, rather than arriving as a secret the vault accepts
+// but the web then marks incomplete.
+func requiredFieldFixture(t *testing.T, sourceFields string) *bundle.Bundle {
+	t.Helper()
+	b := bundle.New("test")
+	add(t, b, "vault.secret_types",
+		`{"id":"type-src","data":{"id":"type-src","name":"Source","fields":[{"key":"user"},{"key":"pass"}]}}`,
+		`{"id":"type-dst","data":{"id":"type-dst","name":"Dest","fields":[{"key":"username","required":true},{"key":"password","required":true},{"key":"note"}]}}`)
+	add(t, b, "vault.folders", `{"id":"f-1","data":{"id":"f-1","name":"Root"}}`)
+	add(t, b, "vault.secrets", `{"id":"s-1","data":{"id":"s-1","name":"svc","typeId":"type-src","folderId":"f-1","position":1}}`)
+	add(t, b, "vault.secret_records", `{"secret_id":"s-1","fields":`+sourceFields+`}`)
+	return b
+}
+
+func TestRetypeRefusesAMissingRequiredField(t *testing.T) {
+	body := `{
+	  "format": "sneakers-migrate-mapping", "version": 1, "unlisted": "keep",
+	  "types": [{"from": "Source", "to": "Dest", "fields": {"user": "username"}}],
+	  "secrets": [{"id": "s-1", "to": {"type": "Dest"}}]
+	}`
+	// "pass" is never sent, so the destination's required "password" has
+	// nowhere to come from.
+	_, err := Map(requiredFieldFixture(t, `{"user":"svc"}`), Context{Now: time.Now(), Actor: "system:sneakers-migrate", Plan: plan(t, body)})
+	if !errors.Is(err, ErrMapping) || !strings.Contains(err.Error(), "password") || !strings.Contains(err.Error(), "Dest") {
+		t.Fatalf("err = %v, want a mapping error naming the missing required field and the type", err)
+	}
+}
+
+func TestRetypeAcceptsEveryRequiredFieldMapped(t *testing.T) {
+	body := `{
+	  "format": "sneakers-migrate-mapping", "version": 1, "unlisted": "keep",
+	  "types": [{"from": "Source", "to": "Dest", "fields": {"user": "username", "pass": "password"}}],
+	  "secrets": [{"id": "s-1", "to": {"type": "Dest"}}]
+	}`
+	r, err := Map(requiredFieldFixture(t, `{"user":"svc","pass":"pw-one-aaaa"}`),
+		Context{Now: time.Now(), Actor: "system:sneakers-migrate", Plan: plan(t, body)})
+	if err != nil {
+		t.Fatalf("Map: %v", err)
+	}
+	f := rowByID(r.Rows["vault.secret_records"], "secret_id", "s-1")["fields"].(map[string]any)
+	if f["username"] != "svc" || f["password"] != "pw-one-aaaa" || len(f) != 2 {
+		t.Fatalf("fields = %v, want username and password carried over", f)
+	}
+}
+
+// An already-empty required field (e.g. "note" is optional and left out)
+// must not be refused -- only a field the type actually marks required.
+func TestRetypeAcceptsAnEmptyOptionalField(t *testing.T) {
+	body := `{
+	  "format": "sneakers-migrate-mapping", "version": 1, "unlisted": "keep",
+	  "types": [{"from": "Source", "to": "Dest", "fields": {"user": "username", "pass": "password"}}],
+	  "secrets": [{"id": "s-1", "to": {"type": "Dest"}}]
+	}`
+	if _, err := Map(requiredFieldFixture(t, `{"user":"svc","pass":"pw-one-aaaa","note":""}`),
+		Context{Now: time.Now(), Actor: "system:sneakers-migrate", Plan: plan(t, body)}); err != nil {
+		t.Fatalf("Map: %v", err)
+	}
+}
