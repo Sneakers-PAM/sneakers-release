@@ -69,10 +69,13 @@ const TargetVersion int64 = 1
 // TargetVersions are the target migration versions this tool writes, per
 // service: the baseline and the migrations after it whose new columns it
 // fills (identity 2: a personal token's client kind; vault 2: a break-glass
-// event's session; vault 3: a secret's place in its folder).
+// event's session; vault 3: a secret's place in its folder; vault 4: the
+// heartbeat rollup table, target-only; vault 5: a version's type-change note,
+// NULL for every carried version; vault 6: a secret's list of attached
+// targets).
 var TargetVersions = map[Service][]int64{
 	Identity: {1, 2},
-	Vault:    {1, 2, 3},
+	Vault:    {1, 2, 3, 4, 5, 6},
 	Workflow: {1},
 	Audit:    {1},
 }
@@ -143,6 +146,7 @@ var Tables = []Table{
 var TargetOnly = []Table{
 	{Service: Vault, Name: "target_ssh_host_keys", Key: []string{"target_id", "ordinal"}},
 	{Service: Vault, Name: "break_glass_sessions", Key: []string{"id"}},
+	{Service: Vault, Name: "heartbeat_audit_summary", Key: []string{"secret_id"}},
 }
 
 // Of returns a service's tables in insert order.

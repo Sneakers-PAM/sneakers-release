@@ -272,10 +272,27 @@ func fillNewColumns(s schema.Service, version int64, m *mapping.Result) {
 				t["client_kind"] = "mcp"
 			}
 		}
-	case s == schema.Vault && version >= 2:
-		for _, e := range m.Rows["vault.break_glass_events"] {
-			if _, ok := e["session_id"]; !ok {
-				e["session_id"] = ""
+	case s == schema.Vault:
+		if version >= 2 {
+			for _, e := range m.Rows["vault.break_glass_events"] {
+				if _, ok := e["session_id"]; !ok {
+					e["session_id"] = ""
+				}
+			}
+		}
+		if version >= 6 {
+			// The vault's own 0006 backfill: a secret's one target becomes
+			// its one-item list of attached targets.
+			for _, row := range m.Rows["vault.secrets"] {
+				d, ok := row["data"].(map[string]any)
+				if !ok {
+					continue
+				}
+				id, _ := d["targetId"].(string)
+				if _, listed := d["targetIds"]; id == "" || listed {
+					continue
+				}
+				d["targetIds"] = []any{id}
 			}
 		}
 	}
