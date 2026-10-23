@@ -23,3 +23,12 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
 {{- printf "%s:%s" .Values.image.repository .Values.image.tag -}}
 {{- end -}}
 {{- end -}}
+
+{{- /* nodeSelector plus kubernetes.io/arch from global.arch; its own kubernetes.io/arch wins. */ -}}
+{{- define "postgres.nodeSelector" -}}
+{{- $sel := deepCopy (.Values.nodeSelector | default dict) }}
+{{- with (.Values.global).arch }}
+{{- $_ := set $sel "kubernetes.io/arch" (get $sel "kubernetes.io/arch" | default .) }}
+{{- end }}
+{{- toYaml $sel }}
+{{- end -}}

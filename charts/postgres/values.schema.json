@@ -6,7 +6,10 @@
   "required": ["image", "auth", "databases", "persistence", "resources"],
   "properties": {
     "enabled": { "type": "boolean" },
-    "global": { "type": "object" },
+    "global": {
+      "type": "object",
+      "properties": { "arch": { "enum": ["", "amd64", "arm64"] } }
+    },
     "fullnameOverride": { "type": "string" },
     "image": {
       "type": "object",

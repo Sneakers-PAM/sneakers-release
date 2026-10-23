@@ -16,6 +16,10 @@ metadata:
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
   restartPolicy: Never
+  {{- with .Values.global.arch }}
+  nodeSelector:
+    kubernetes.io/arch: {{ . }}
+  {{- end }}
   automountServiceAccountToken: false
   securityContext:
     runAsNonRoot: true

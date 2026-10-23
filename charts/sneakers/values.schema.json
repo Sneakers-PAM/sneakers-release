@@ -31,7 +31,9 @@
           "properties": { "enabled": { "type": "boolean" } }
         },
         "mfaMaxAge": { "type": "string", "pattern": "^0$|^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$" },
-        "workloadIdentityIssuer": { "type": "string", "pattern": "^(https://.+)?$" }
+        "workloadIdentityIssuer": { "type": "string", "pattern": "^(https://.+)?$" },
+        "imageTag": { "type": "string", "pattern": "^([A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?$" },
+        "arch": { "enum": ["", "amd64", "arm64"] }
       }
     },
     "bundledSecrets": {

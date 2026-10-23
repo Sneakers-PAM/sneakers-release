@@ -25,9 +25,13 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | 
 {{- .Values.serviceAccount.name | default (include "sneakers.fullname" .) -}}
 {{- end -}}
 
-{{/* repository[:tag][@digest]; the tag defaults to the chart's appVersion. */}}
+{{/*
+repository[:tag][@digest]. The tag is the service's image.tag, else
+global.imageTag (one tag for every service, such as an rc's 0.1.0-rc.3),
+else the chart's appVersion.
+*/}}
 {{- define "sneakers.image" -}}
-{{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
+{{- $tag := .Values.image.tag | default ((.Values.global).imageTag) | default .Chart.AppVersion -}}
 {{- if .Values.image.digest -}}
 {{- printf "%s@%s" .Values.image.repository .Values.image.digest -}}
 {{- else -}}

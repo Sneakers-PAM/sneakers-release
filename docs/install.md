@@ -67,6 +67,52 @@ install you can let the chart generate one instead
 Install one release per namespace: the services find each other by fixed names
 (`sneakers-vault`, `sneakers-gateway` and so on).
 
+### Image tags
+
+Every Sneakers image is tagged with the version of the appliance release that published it. The
+charts default to their appVersion, which is that tag for a final release (`0.1.0`). A release
+candidate's images carry the rc tag (`0.1.0-rc.3`) while the charts keep their appVersion, so when
+you install from an rc tag, set the tag once for every service:
+
+```bash
+helm install sneakers charts/sneakers -n sneakers ... --set global.imageTag=0.1.0-rc.3
+```
+
+A service's own `image.tag` or `image.digest` still wins over `global.imageTag`.
+
+### CPU architecture
+
+Every image the charts install is built for both `linux/amd64` and `linux/arm64`, so an install
+works on either without any setting, and on a cluster with both kinds of node the pods land on
+whichever has room. `global.arch` only controls where the pods run: set it to `amd64` or `arm64`
+to keep every pod on nodes of that architecture (a `kubernetes.io/arch` nodeSelector). Leave it
+empty for any node.
+
+The Valkey, Kratos and Hydra charts don't read global values, so each one you run needs the same
+setting in its own nodeSelector. The chart refuses to render until they match, and the error names
+the key to set. On a Raspberry Pi (or any arm64 node):
+
+```yaml
+global:
+  arch: arm64
+valkey:
+  nodeSelector:
+    kubernetes.io/arch: arm64
+kratos:
+  deployment:
+    nodeSelector:
+      kubernetes.io/arch: arm64
+# Only with hydra.enabled: true.
+hydra:
+  deployment:
+    nodeSelector:
+      kubernetes.io/arch: arm64
+```
+
+A service's own `nodeSelector` with a `kubernetes.io/arch` key wins over `global.arch`, so one
+service can run elsewhere on a mixed cluster. The third-party charts' own `helm test` pods have no
+placement values and can run on any node; their images are multi-arch too.
+
 ### First start
 
 On the first start the services can restart once or twice while PostgreSQL initialises; each one
