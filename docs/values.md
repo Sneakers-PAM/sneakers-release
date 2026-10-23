@@ -25,6 +25,7 @@ chart by `scripts/sync-schemas.sh`.
 | `global.sso.enabled` | `false` | `SSO_ENABLED` for both web apps: shows the single sign-on button. Turn it on with the gateway's SSO settings. |
 | `global.workloadIdentityIssuer` | empty | The cluster's service account token issuer for every service (`WORKLOAD_OIDC_ISSUER`), winning over each service's `workloadIdentity.issuer` when set. Empty keeps each chart's, `https://kubernetes.default.svc.cluster.local`. k0s and the appliance: `https://kubernetes.default.svc` ([install.md](install.md)). https only. |
 | `global.imageTag` | empty | The tag of every Sneakers service image, such as an rc's `0.1.0-rc.3` ([install.md](install.md#image-tags)). A service's own `image.tag` or `image.digest` wins. Empty keeps each chart's appVersion. |
+| `global.arch` | empty | The CPU architecture every pod runs on: `amd64` or `arm64` ([install.md](install.md#cpu-architecture)). Adds a `kubernetes.io/arch` nodeSelector to every Sneakers service, PostgreSQL and the smoke test; a service's own `nodeSelector` key wins. The images are multi-arch, so this only picks the nodes. With it set, the chart refuses to render until each enabled Valkey, Kratos and Hydra carries the same `kubernetes.io/arch` in its own nodeSelector (`valkey.nodeSelector`, `kratos.deployment.nodeSelector`, `hydra.deployment.nodeSelector`, plus `job`, `statefulSet` and `cronjob` ones those charts render). Empty: any node. The values schema refuses any other value. |
 | `global.mfaMaxAge` | `30m` | `MFA_MAX_AGE` on the vault, the workflow and the gateway: the one MFA step-up window. A Go duration, 0 to 4h; the values schema refuses anything else. |
 | `<service>.*` | | That service chart's values (next section). The umbrella sets each database DSN and points each `secretEnv` at the bundled Secrets. |
 | `postgres.enabled` | `true` | The bundled PostgreSQL (`charts/postgres`). |
@@ -102,7 +103,7 @@ All nine service charts take the same values. Each one also works on its own, ou
 | `certManager.enabled` | `false` | `true` makes the chart create one `Certificate` for `ingress.host`, at `certManager.issuerRef`, writing `ingress.tlsSecretName`. Needs `ingress.enabled` and `ingress.tlsSecretName`. The chart never creates an Issuer, a ClusterIssuer or any cert-manager CRD or webhook. |
 | `certManager.issuerRef.kind`, `.name`, `.group` | `ClusterIssuer`, `""`, `cert-manager.io` | The existing Issuer or ClusterIssuer to use. `.name` is required when `certManager.enabled` is true. |
 | `migrations.job.*` | off | A pre-upgrade Job running the image with `args`. Off until the services have a migrate-only command; they migrate at start today. |
-| `podLabels`, `podAnnotations`, `priorityClassName`, `terminationGracePeriodSeconds`, `nodeSelector`, `tolerations`, `affinity` | | Pod placement and metadata. |
+| `podLabels`, `podAnnotations`, `priorityClassName`, `terminationGracePeriodSeconds`, `nodeSelector`, `tolerations`, `affinity` | | Pod placement and metadata. `global.arch` adds `kubernetes.io/arch` to `nodeSelector` unless it already has that key. |
 | `topologySpreadConstraints` | spread over nodes, best effort | Values go through `tpl`. |
 
 ### Per-service settings the umbrella and the defaults set
@@ -137,6 +138,7 @@ All nine service charts take the same values. Each one also works on its own, ou
 | `shutdown.terminationGracePeriodSeconds` | `120` (at least 120) | How long the kubelet waits for the server to exit on a stop before it kills it. Every stop first runs `pg_ctl stop -m fast` (a preStop hook): the sessions end and the server writes its shutdown checkpoint. A killed server has to recover at its next start. `scripts/check-shutdown.py` checks the hook and the grace period; `test/kind/clean-stop.sh` checks a scale to 0 and a pod delete each end in a clean start with every row kept. |
 | `shm.sizeLimit` | `256Mi` | The memory-backed `/dev/shm`, used by parallel query workers. It counts against the pod's memory. |
 | `networkPolicy.enabled` | `true` | Only this release's pods may connect. |
+| `nodeSelector`, `tolerations`, `affinity` | | Pod placement. `global.arch` adds `kubernetes.io/arch` to `nodeSelector` unless it already has that key. |
 
 ## Sizing examples
 

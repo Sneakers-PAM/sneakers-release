@@ -163,7 +163,7 @@ spec:
         {{- include "sneakers.volumeMounts" . | nindent 8 }}
   volumes:
     {{- include "sneakers.volumes" . | nindent 4 }}
-  {{- with .Values.nodeSelector }}
+  {{- with include "sneakers.nodeSelector" . | fromYaml }}
   nodeSelector:
     {{- toYaml . | nindent 4 }}
   {{- end }}
@@ -179,4 +179,17 @@ spec:
   topologySpreadConstraints:
     {{- tpl (toYaml .) $ | nindent 4 }}
   {{- end }}
+{{- end -}}
+
+{{- /*
+The pod's nodeSelector: the service's own, plus kubernetes.io/arch from
+global.arch. The images are multi-arch, so the arch only picks the nodes; a
+service's own kubernetes.io/arch wins.
+*/ -}}
+{{- define "sneakers.nodeSelector" -}}
+{{- $sel := deepCopy (.Values.nodeSelector | default dict) }}
+{{- with (.Values.global).arch }}
+{{- $_ := set $sel "kubernetes.io/arch" (get $sel "kubernetes.io/arch" | default .) }}
+{{- end }}
+{{- toYaml $sel }}
 {{- end -}}

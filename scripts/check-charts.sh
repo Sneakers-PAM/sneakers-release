@@ -233,6 +233,75 @@ print(f"ok: global.imageTag sets all {len(global_)} Sneakers images, a service's
 PY
 must_fail "a global.imageTag that isn't an image tag" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.imageTag=0.1.0:latest
 
+step "global.arch"
+# hydra on: every workload the umbrella can render. The third-party charts
+# don't read global values, so their own nodeSelector keys carry the arch.
+arch_args=(-f test/ci/values.yaml --set hydra.enabled=true)
+arch_bundled=(--set-string 'valkey.nodeSelector.kubernetes\.io/arch=arm64'
+  --set-string 'kratos.deployment.nodeSelector.kubernetes\.io/arch=arm64'
+  --set-string 'hydra.deployment.nodeSelector.kubernetes\.io/arch=arm64')
+helm template ci charts/sneakers -n sneakers "${arch_args[@]}" >"$out/arch-default.yaml"
+helm template ci charts/sneakers -n sneakers "${arch_args[@]}" --set global.arch=arm64 "${arch_bundled[@]}" \
+  --set-string 'vault.nodeSelector.disk=ssd' >"$out/arch-arm64.yaml"
+helm template ci charts/postgres -n sneakers --set auth.existingSecret=ci --set global.arch=amd64 >"$out/arch-postgres.yaml"
+helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml --set global.arch=amd64 >"$out/arch-gateway.yaml"
+python3 - "$out/arch-default.yaml" "$out/arch-arm64.yaml" "$out/arch-postgres.yaml" "$out/arch-gateway.yaml" <<'PY'
+import sys, yaml
+
+# The third-party charts' own helm test pods have no scheduling values.
+UNSET = {"sneakers-hydra-test-connection", "sneakers-kratos-test-connection", "sneakers-valkey-test-auth-existing"}
+
+def selectors(path):
+    out = {}
+    for d in yaml.safe_load_all(open(path)):
+        if not d or d["kind"] not in ("Deployment", "StatefulSet", "Job", "CronJob", "Pod"):
+            continue
+        spec = d["spec"]
+        if d["kind"] == "CronJob":
+            spec = spec["jobTemplate"]["spec"]
+        if d["kind"] != "Pod":
+            spec = spec["template"]["spec"]
+        out[f'{d["kind"]}/{d["metadata"]["name"]}'] = spec.get("nodeSelector") or {}
+    return out
+
+default, arm, pg, gw = (selectors(p) for p in sys.argv[1:])
+assert len(default) >= 15, f"too few workloads rendered: {sorted(default)}"
+pinned = {k: v for k, v in default.items() if "kubernetes.io/arch" in v}
+assert not pinned, f"the default install pins an arch: {pinned}"
+assert set(arm) == set(default), f"global.arch changed which workloads render: {set(arm) ^ set(default)}"
+for k, v in arm.items():
+    if k.split("/", 1)[1] in UNSET:
+        continue
+    assert v.get("kubernetes.io/arch") == "arm64", f"global.arch didn't reach {k}: {v}"
+assert arm["Deployment/sneakers-vault"] == {"disk": "ssd", "kubernetes.io/arch": "arm64"}, f"a service's own nodeSelector isn't kept: {arm['Deployment/sneakers-vault']}"
+for name, chart in (("postgres", pg), ("gateway", gw)):
+    assert chart and all(v.get("kubernetes.io/arch") == "amd64" for v in chart.values()), f"global.arch on the {name} chart alone: {chart}"
+print(f"ok: global.arch pins all {len(arm) - len(UNSET)} workloads, keeps a service's own nodeSelector, works on a chart alone, and the default pins none")
+PY
+helm template ci charts/sneakers -n sneakers "${arch_args[@]}" --set global.arch=arm64 "${arch_bundled[@]}" \
+  --set-string 'connector.nodeSelector.kubernetes\.io/arch=amd64' >"$out/arch-override.yaml"
+python3 - "$out/arch-override.yaml" <<'PY'
+import sys, yaml
+for d in yaml.safe_load_all(open(sys.argv[1])):
+    if d and d["kind"] == "Deployment" and d["metadata"]["name"] == "sneakers-connector":
+        sel = d["spec"]["template"]["spec"]["nodeSelector"]
+        assert sel == {"kubernetes.io/arch": "amd64"}, f"a service's own arch didn't win over global.arch: {sel}"
+        print("ok: a service's own kubernetes.io/arch wins over global.arch")
+        break
+else:
+    raise SystemExit("no connector Deployment")
+PY
+must_fail "an unknown global.arch" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.arch=s390x
+must_fail "an unknown global.arch on a chart alone" helm template ci charts/postgres -n sneakers --set auth.existingSecret=ci --set global.arch=x86_64
+must_fail "global.arch without the Valkey arch" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.arch=arm64 \
+  --set-string 'kratos.deployment.nodeSelector.kubernetes\.io/arch=arm64'
+must_fail "global.arch without the Kratos arch" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.arch=arm64 \
+  --set-string 'valkey.nodeSelector.kubernetes\.io/arch=arm64'
+must_fail "global.arch with a different Kratos arch" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.arch=arm64 \
+  --set-string 'valkey.nodeSelector.kubernetes\.io/arch=arm64' --set-string 'kratos.deployment.nodeSelector.kubernetes\.io/arch=amd64'
+must_fail "global.arch without the Hydra arch" helm template ci charts/sneakers -n sneakers "${arch_args[@]}" --set global.arch=arm64 \
+  --set-string 'valkey.nodeSelector.kubernetes\.io/arch=arm64' --set-string 'kratos.deployment.nodeSelector.kubernetes\.io/arch=arm64'
+
 step "cert-manager"
 # Rendered into its own subdirectory, out of kubeconform's "$out"/*.yaml glob:
 # kubeconform has no schema for the cert-manager.io CRD kinds (the same reason

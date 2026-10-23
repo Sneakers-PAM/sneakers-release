@@ -123,7 +123,7 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: {{ .Values.shm.sizeLimit }}
-      {{- with .Values.nodeSelector }}
+      {{- with include "postgres.nodeSelector" . | fromYaml }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}

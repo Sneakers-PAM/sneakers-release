@@ -34,6 +34,14 @@ global:
   # wins). Empty: each chart's appVersion, the tag a final release publishes.
   # Installing from a release candidate, set the rc's tag, such as 0.1.0-rc.3.
   imageTag: ""
+  # The CPU architecture every pod runs on: "" (any node), amd64 or arm64.
+  # The images are multi-arch, so this only picks the nodes, through a
+  # kubernetes.io/arch nodeSelector (a service's own nodeSelector key wins).
+  # Valkey, Kratos and Hydra don't read global values: when it's set, also
+  # set valkey.nodeSelector and kratos.deployment.nodeSelector (and
+  # hydra.deployment.nodeSelector with Hydra on) to the same kubernetes.io/arch,
+  # or the chart refuses to render. docs/install.md has the block to copy.
+  arch: ""
 
 # Rehearsal mode, for a migration rehearsal (docs/migrate.md). Every pod in
 # the namespace may reach only the other pods and the cluster DNS, and the chart
