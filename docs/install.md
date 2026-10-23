@@ -67,6 +67,19 @@ install you can let the chart generate one instead
 Install one release per namespace: the services find each other by fixed names
 (`sneakers-vault`, `sneakers-gateway` and so on).
 
+### Image tags
+
+Every Sneakers image is tagged with the version of the appliance release that published it. The
+charts default to their appVersion, which is that tag for a final release (`0.1.0`). A release
+candidate's images carry the rc tag (`0.1.0-rc.3`) while the charts keep their appVersion, so when
+you install from an rc tag, set the tag once for every service:
+
+```bash
+helm install sneakers charts/sneakers -n sneakers ... --set global.imageTag=0.1.0-rc.3
+```
+
+A service's own `image.tag` or `image.digest` still wins over `global.imageTag`.
+
 ### First start
 
 On the first start the services can restart once or twice while PostgreSQL initialises; each one

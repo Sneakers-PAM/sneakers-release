@@ -16,7 +16,8 @@ global:
 
 image:
   repository: ghcr.io/sneakers-pam/sneakers-workflow
-  # Empty: the chart's appVersion. A digest, when set, wins over the tag.
+  # Empty: global.imageTag, else the chart's appVersion. A digest, when set,
+  # wins over the tag.
   tag: ""
   digest: ""
   pullPolicy: IfNotPresent

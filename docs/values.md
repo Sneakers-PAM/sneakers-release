@@ -24,6 +24,7 @@ chart by `scripts/sync-schemas.sh`.
 | `web-staff.env.MCP_URL` | `https://{{ .Values.global.host }}/mcp` | The MCP server's public address, shown on the staff app's Agents page. Set it to `""` with `mcp.enabled: false`, so the page shows it as not configured. |
 | `global.sso.enabled` | `false` | `SSO_ENABLED` for both web apps: shows the single sign-on button. Turn it on with the gateway's SSO settings. |
 | `global.workloadIdentityIssuer` | empty | The cluster's service account token issuer for every service (`WORKLOAD_OIDC_ISSUER`), winning over each service's `workloadIdentity.issuer` when set. Empty keeps each chart's, `https://kubernetes.default.svc.cluster.local`. k0s and the appliance: `https://kubernetes.default.svc` ([install.md](install.md)). https only. |
+| `global.imageTag` | empty | The tag of every Sneakers service image, such as an rc's `0.1.0-rc.3` ([install.md](install.md#image-tags)). A service's own `image.tag` or `image.digest` wins. Empty keeps each chart's appVersion. |
 | `global.mfaMaxAge` | `30m` | `MFA_MAX_AGE` on the vault, the workflow and the gateway: the one MFA step-up window. A Go duration, 0 to 4h; the values schema refuses anything else. |
 | `<service>.*` | | That service chart's values (next section). The umbrella sets each database DSN and points each `secretEnv` at the bundled Secrets. |
 | `postgres.enabled` | `true` | The bundled PostgreSQL (`charts/postgres`). |
@@ -59,7 +60,7 @@ All nine service charts take the same values. Each one also works on its own, ou
 | Value | Default | Meaning |
 |---|---|---|
 | `image.repository` | `ghcr.io/sneakers-pam/sneakers-<service>` | The image. |
-| `image.tag` | (the chart's appVersion) | The tag. |
+| `image.tag` | (`global.imageTag`, else the chart's appVersion) | The tag. |
 | `image.digest` | (empty) | `sha256:...`. When set it wins over the tag. |
 | `image.pullPolicy` | `IfNotPresent` | |
 | `imagePullSecrets` | `[]` | |

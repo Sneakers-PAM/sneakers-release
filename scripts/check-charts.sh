@@ -192,6 +192,47 @@ print(f"ok: global.workloadIdentityIssuer sets WORKLOAD_OIDC_ISSUER on all {len(
 PY
 must_fail "a workloadIdentityIssuer that isn't https" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.workloadIdentityIssuer=http://kubernetes.default.svc
 
+step "global.imageTag"
+# hydra on: every Sneakers image the chart can render, the Jobs included.
+tag_args=(-f test/ci/values.yaml --set hydra.enabled=true)
+helm template ci charts/sneakers -n sneakers "${tag_args[@]}" >"$out/tags-default.yaml"
+helm template ci charts/sneakers -n sneakers "${tag_args[@]}" --set global.imageTag=0.1.0-rc.3 >"$out/tags-global.yaml"
+helm template ci charts/sneakers -n sneakers "${tag_args[@]}" --set global.imageTag=0.1.0-rc.3 \
+  --set vault.image.tag=pinned --set "audit.image.digest=sha256:$(printf 'a%.0s' {1..64})" >"$out/tags-override.yaml"
+python3 - "$(awk '/^appVersion:/ { gsub(/"/, "", $2); print $2 }' charts/sneakers/Chart.yaml)" \
+  "$out/tags-default.yaml" "$out/tags-global.yaml" "$out/tags-override.yaml" <<'PY'
+import sys, yaml
+
+def images(path):
+    out = {}
+    for d in yaml.safe_load_all(open(path)):
+        if not d or d["kind"] not in ("Deployment", "StatefulSet", "Job", "Pod"):
+            continue
+        spec = d["spec"]["template"]["spec"] if d["kind"] != "Pod" else d["spec"]
+        for c in spec.get("initContainers", []) + spec.get("containers", []):
+            if c["image"].startswith("ghcr.io/sneakers-pam/sneakers-"):
+                out[f'{d["kind"]}/{d["metadata"]["name"]}/{c["name"]}'] = c["image"]
+    return out
+
+app = sys.argv[1]
+default, global_, override = (images(p) for p in sys.argv[2:])
+assert len(default) >= 11, f"too few Sneakers images rendered: {default}"
+bad = {k: v for k, v in default.items() if not v.endswith(f":{app}")}
+assert not bad, f"the default tag isn't the appVersion {app}: {bad}"
+assert set(global_) == set(default), f"global.imageTag changed which containers render: {set(global_) ^ set(default)}"
+bad = {k: v for k, v in global_.items() if not v.endswith(":0.1.0-rc.3")}
+assert not bad, f"global.imageTag didn't reach every Sneakers image: {bad}"
+for k, v in override.items():
+    if "/sneakers-vault/" in k:
+        assert v.endswith("/sneakers-vault:pinned"), f"vault.image.tag didn't win over global.imageTag: {k} {v}"
+    elif "/sneakers-audit/" in k:
+        assert v.endswith("/sneakers-audit@sha256:" + "a" * 64), f"audit.image.digest didn't win over global.imageTag: {k} {v}"
+    else:
+        assert v.endswith(":0.1.0-rc.3"), f"{k}: {v}"
+print(f"ok: global.imageTag sets all {len(global_)} Sneakers images, a service's own tag or digest wins, and the default is the appVersion {app}")
+PY
+must_fail "a global.imageTag that isn't an image tag" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.imageTag=0.1.0:latest
+
 step "cert-manager"
 # Rendered into its own subdirectory, out of kubeconform's "$out"/*.yaml glob:
 # kubeconform has no schema for the cert-manager.io CRD kinds (the same reason

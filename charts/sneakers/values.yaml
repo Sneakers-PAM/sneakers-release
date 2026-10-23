@@ -30,6 +30,10 @@ global:
   # k0s (and the appliance) is https://kubernetes.default.svc. Read yours with
   # `kubectl get --raw /.well-known/openid-configuration`.
   workloadIdentityIssuer: ""
+  # The tag of every Sneakers service image (each service's image.tag still
+  # wins). Empty: each chart's appVersion, the tag a final release publishes.
+  # Installing from a release candidate, set the rc's tag, such as 0.1.0-rc.3.
+  imageTag: ""
 
 # Rehearsal mode, for a migration rehearsal (docs/migrate.md). Every pod in
 # the namespace may reach only the other pods and the cluster DNS, and the chart
