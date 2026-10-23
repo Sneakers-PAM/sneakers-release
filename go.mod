@@ -1,6 +1,6 @@
 module github.com/Sneakers-PAM/sneakers-release
 
-go 1.26.9
+go 1.26.10
 
 require (
 	filippo.io/age v1.3.2

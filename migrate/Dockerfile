@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # The sneakers-migrate image. Build from the repository root:
 #   docker build -f migrate/Dockerfile -t sneakers-migrate .
-ARG GO_VERSION=1.26.9
+ARG GO_VERSION=1.26.10
 FROM golang:${GO_VERSION} AS build
 WORKDIR /src
 COPY go.mod go.sum ./
