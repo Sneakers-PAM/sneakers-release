@@ -797,8 +797,10 @@ func TestSanitisedBundleImportsInRehearsalOnly(t *testing.T) {
 }
 
 // The services' migrations after their baselines: personal tokens gain a
-// client kind, break-glass events a session, and secrets a place in their
-// folder. Import fills each for rows that predate it.
+// client kind, break-glass events a session, secrets a place in their folder
+// and a list of attached targets, versions a type-change note, and the vault
+// a pending heartbeat rollup table. Import fills each for rows that predate
+// it.
 func TestImportIntoTheNewestLayout(t *testing.T) {
 	r := newRigOn(t, func(c *source.Config) { c.CurrentOnly, c.ResetSignIn = true, true }, testenv.NewLatestTarget)
 	if _, err := r.importIt(t, r.cfg()); err != nil {
@@ -821,13 +823,37 @@ func TestImportIntoTheNewestLayout(t *testing.T) {
 	if unplaced != 0 || dense != 0 {
 		t.Fatalf("%d active secrets without a place, %d folders not numbered 1..n", unplaced, dense)
 	}
+	var attached, unlisted, listedWithout, noted int
+	if err := r.db[schema.Vault].Querier().QueryRow(ctx, `SELECT
+	  (SELECT count(*) FROM secrets WHERE coalesce(data->>'targetId', '') <> ''),
+	  (SELECT count(*) FROM secrets WHERE coalesce(data->>'targetId', '') <> '' AND data->'targetIds' IS DISTINCT FROM jsonb_build_array(data->>'targetId')),
+	  (SELECT count(*) FROM secrets WHERE coalesce(data->>'targetId', '') = '' AND data ? 'targetIds'),
+	  (SELECT count(*) FROM secret_versions WHERE change_note IS NOT NULL)`).Scan(&attached, &unlisted, &listedWithout, &noted); err != nil {
+		t.Fatal(err)
+	}
+	if attached == 0 || unlisted != 0 || listedWithout != 0 {
+		t.Fatalf("target lists: %d secrets with a target, %d without it as their one-item list, %d with a list but no target", attached, unlisted, listedWithout)
+	}
+	if noted != 0 {
+		t.Fatalf("%d imported versions carry a type-change note", noted)
+	}
 	if !r.verifyIt(t) {
 		t.Fatal("verify failed on the newest layout")
+	}
+	if _, err := r.db[schema.Vault].Querier().Exec(ctx, "INSERT INTO heartbeat_audit_summary (secret_id, day, started_at, last_at, checks, result) VALUES ('sec-x', current_date, now(), now(), 3, 'ok')"); err != nil {
+		t.Fatal(err)
 	}
 	owner := r.cfg()
 	owner.Wipe = true
 	if _, err := r.importIt(t, owner); err != nil {
 		t.Fatalf("re-import on the newest layout: %v", err)
+	}
+	var pending int
+	if err := r.db[schema.Vault].Querier().QueryRow(ctx, "SELECT count(*) FROM heartbeat_audit_summary").Scan(&pending); err != nil {
+		t.Fatal(err)
+	}
+	if pending != 0 {
+		t.Fatalf("a rehearsal wipe left %d pending heartbeat rollups", pending)
 	}
 }
 
