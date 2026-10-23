@@ -28,7 +28,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-identity
-        commit: 6bcc7192e42a093c23be7d423b34a0d51a4f4139
+        commit: b82cc2cdeffcbdb53c5074b049049cc30be36b9c
         dockerfile: Dockerfile
         context: .
     vault:
@@ -38,7 +38,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-vault
-        commit: 0045ef1877c7bba82122c417f307df37c268206a
+        commit: 66a1ae4c4d471fb478f197a2d5f9498619063ac1
         dockerfile: Dockerfile
         context: .
         target: vault
@@ -49,7 +49,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-vault
-        commit: 0045ef1877c7bba82122c417f307df37c268206a
+        commit: 66a1ae4c4d471fb478f197a2d5f9498619063ac1
         dockerfile: Dockerfile
         context: .
         target: workflow
@@ -60,7 +60,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-audit
-        commit: f1d56e8b1d0efcf53cb4a3ea6f7a8ab7e98eda62
+        commit: ddeeff2774ba6a7ad3ca9db93d6fbd4e8a0a86af
         dockerfile: Dockerfile
         context: .
     notify:
@@ -70,7 +70,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-notify
-        commit: 6eef73d3564773ecc2c50779e8dff7692ee73f10
+        commit: 83034cb44cc4bde651ce15b2831267c59f2cbc72
         dockerfile: Dockerfile
         context: .
     connector:
@@ -80,7 +80,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-connector
-        commit: 66d5d109e73f916846fabb75fe621f568cf39dc1
+        commit: 140642bcc7bf545d70cb159d51fc34c9a0b38598
         dockerfile: Dockerfile
         context: .
     sshbroker:
@@ -90,7 +90,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-sshbroker
-        commit: 3132efb6114e21f53b1c75a55709bf5e9b3dca4e
+        commit: 10f5456a57d72f5bdb4a31eb83cf00f57a409f69
         dockerfile: Dockerfile
         context: .
     gateway:
@@ -100,7 +100,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-gateway
-        commit: 9caeb4ca79acc2aeeade01ee9aaa5354adec7963
+        commit: decb857ca1e2bfdfee09d120d8f678e0dabc5b76
         dockerfile: Dockerfile
         context: .
     mcp:
@@ -110,7 +110,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-mcp
-        commit: d119f114274398d5429f3100ea47327e0d39ed3b
+        commit: 4544b1e06500c29eb6e6a9e63d0cbba974f1ca9a
         dockerfile: Dockerfile
         context: .
     web-staff:
@@ -224,7 +224,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-release
-        commit: aa281c860b387aa09df7b4ff8052b83715e88fae
+        commit: 3b1fd2cbbccac6c06895c27aebc7a1c3a15d54b4
         dockerfile: migrate/Dockerfile
         context: .
   tools:
