@@ -89,11 +89,12 @@ A service's own `image.tag` or `image.digest` still wins over `global.imageTag`.
 
 ### CPU architecture
 
-Every image the charts install is built for both `linux/amd64` and `linux/arm64`, so an install
-works on either without any setting, and on a cluster with both kinds of node the pods land on
+From v0.1.0-rc.3 on, every image the charts install is built for both `linux/amd64` and
+`linux/arm64`, so an install works on either without any setting, and on a cluster with both kinds of node the pods land on
 whichever has room. `global.arch` only controls where the pods run: set it to `amd64` or `arm64`
 to keep every pod on nodes of that architecture (a `kubernetes.io/arch` nodeSelector). Leave it
-empty for any node.
+empty for any node. v0.1.0-rc.1 and rc.2 published `linux/amd64` images only and won't be
+rebuilt, so install rc.3 or later on arm64.
 
 The Valkey, Kratos and Hydra charts don't read global values, so each one you run needs the same
 setting in its own nodeSelector. The chart refuses to render until they match, and the error names
