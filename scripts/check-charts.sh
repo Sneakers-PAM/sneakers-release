@@ -167,6 +167,30 @@ for name in ("sneakers-vault", "sneakers-workflow", "sneakers-gateway"):
 print("ok: global.mfaMaxAge sets MFA_MAX_AGE on the vault, the workflow and the gateway")
 PY
 
+step "identity TOTP_ENC_KEY"
+helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml >"$out/sneakers-totp-default.yaml"
+helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set identity.secretEnv.TOTP_ENC_KEY.secretName=my-totp >"$out/sneakers-totp-named.yaml"
+python3 - "$out/sneakers-totp-default.yaml" "$out/sneakers-totp-named.yaml" <<'PY'
+import sys, yaml
+def load(f):
+    return [d for d in yaml.safe_load_all(open(f)) if d]
+def totp_ref(docs):
+    dep = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "sneakers-identity")
+    env = {e["name"]: e for c in dep["spec"]["template"]["spec"]["containers"] for e in c.get("env", [])}
+    assert "TOTP_ENC_KEY" in env, "identity: no TOTP_ENC_KEY, so authenticator-app MFA is unavailable"
+    return env["TOTP_ENC_KEY"]["valueFrom"]["secretKeyRef"]
+default = load(sys.argv[1])
+ref = totp_ref(default)
+assert ref == {"name": "sneakers-identity-generated", "key": "TOTP_ENC_KEY"}, ref
+gen = next(d for d in default if d["kind"] == "Secret" and d["metadata"]["name"] == "sneakers-identity-generated")
+assert gen["metadata"]["annotations"].get("helm.sh/resource-policy") == "keep", "the generated TOTP key must survive uninstall"
+assert "TOTP_ENC_KEY" in gen["data"], gen["data"].keys()
+named = load(sys.argv[2])
+assert totp_ref(named)["name"] == "my-totp", totp_ref(named)
+assert not any(d["kind"] == "Secret" and d["metadata"]["name"] == "sneakers-identity-generated" for d in named), "a named TOTP Secret still generated one"
+print("ok: identity gets a generated TOTP_ENC_KEY by default, or the named Secret's")
+PY
+
 step "global.workloadIdentityIssuer"
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml >"$out/sneakers-issuer-default.yaml"
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.workloadIdentityIssuer=https://kubernetes.default.svc >"$out/sneakers-issuer-k0s.yaml"

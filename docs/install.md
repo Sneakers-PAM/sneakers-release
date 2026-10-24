@@ -64,6 +64,13 @@ install you can let the chart generate one instead
 (`--set vault.secretEnv.VAULT_ROOT_KEK.generate=true`); it is written to the
 `sneakers-vault-generated` Secret and kept on uninstall.
 
+The identity service's `TOTP_ENC_KEY`, which encrypts the authenticator-app (TOTP) secrets, is
+generated the same way by default, into `sneakers-identity-generated`. To use your own, name its
+Secret with `--set identity.secretEnv.TOTP_ENC_KEY.secretName=<secret>`. Back it up with the
+database: a different key can't read the stored TOTP secrets, and everyone would have to set up
+their authenticator app again. Upgrading an install that had no key creates one; no one could
+enrol an authenticator app without it, so nothing stored is lost.
+
 Install one release per namespace: the services find each other by fixed names
 (`sneakers-vault`, `sneakers-gateway` and so on).
 
