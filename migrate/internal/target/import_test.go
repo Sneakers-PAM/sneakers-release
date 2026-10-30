@@ -331,7 +331,7 @@ func TestImportThenVerify(t *testing.T) {
 	if rep.KratosCreated != r.src.Summary.Kratos || len(rep.UsersWithoutSignIn) != 1 {
 		t.Fatalf("kratos created %d (want %d), unlinked %v", rep.KratosCreated, r.src.Summary.Kratos, rep.UsersWithoutSignIn)
 	}
-	if len(rep.SSHTargetsToPin) != 10 || rep.AuditEntries == 0 || out.OwnerPassword != "" {
+	if len(rep.SSHTargetsToPin) != 10 || rep.AuditEntries != 1 || out.OwnerPassword != "" {
 		t.Fatalf("pins %d, audit entries %d, owner password set %v", len(rep.SSHTargetsToPin), rep.AuditEntries, out.OwnerPassword != "")
 	}
 	if !r.verifyIt(t) {
@@ -374,11 +374,102 @@ func TestImportThenVerify(t *testing.T) {
 	}
 
 	// A tampered audit record fails verify.
-	if _, err := r.db[schema.Audit].Querier().Exec(ctx, "UPDATE audit_records SET actor_user_id = 'usr-9999' WHERE seq = 42"); err != nil {
+	if _, err := r.db[schema.Audit].Querier().Exec(ctx, "UPDATE audit_records SET actor_user_id = 'usr-9999' WHERE seq = 1"); err != nil {
 		t.Fatal(err)
 	}
 	if r.verifyIt(t) {
 		t.Fatal("verify passed with a tampered audit record")
+	}
+}
+
+// The audit trail stays on the source: the target's chain starts with one
+// "imported from" record of this import, then the target's own events (the
+// vault's re-seal entries here), and no source record comes across.
+func TestTheTargetChainStartsWithTheImportedFromRecord(t *testing.T) {
+	r := newRig(t)
+	cfg := r.cfg()
+	cfg.Actor = "usr-admin-1"
+	out, err := r.importIt(t, cfg)
+	if err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if out.Report.AuditEntries != 1 {
+		t.Fatalf("the import appended %d audit records, want 1", out.Report.AuditEntries)
+	}
+	ctx := context.Background()
+	rows, err := r.db[schema.Audit].Querier().Query(ctx, "SELECT seq, action, actor_user_id, subject, attributes::text FROM audit_records ORDER BY seq")
+	if err != nil {
+		t.Fatal(err)
+	}
+	type rec struct {
+		seq                    int64
+		action, actor, subject string
+		attrs                  map[string]string
+	}
+	var recs []rec
+	for rows.Next() {
+		var x rec
+		var raw string
+		if err := rows.Scan(&x.seq, &x.action, &x.actor, &x.subject, &raw); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal([]byte(raw), &x.attrs); err != nil {
+			t.Fatal(err)
+		}
+		recs = append(recs, x)
+	}
+	rows.Close()
+	if len(recs) < 2 {
+		t.Fatalf("chain = %+v, want the import record then the vault's own entries", recs)
+	}
+	first := recs[0]
+	m := r.bundle.Manifest
+	if first.seq != 1 || first.action != target.ImportAction || first.actor != "usr-admin-1" || first.subject != "bundle:"+m.BundleID {
+		t.Fatalf("first record = %+v", first)
+	}
+	want := map[string]string{
+		"bundle_id": m.BundleID, "imported_from": m.Source.Name, "source_version": m.Source.Version,
+		"imported_by":                      "usr-admin-1",
+		"folders":                          fmt.Sprint(r.src.Summary.Rows["vault.folders"]),
+		"secrets":                          fmt.Sprint(r.src.Summary.Rows["vault.secrets"]),
+		"users":                            fmt.Sprint(r.src.Summary.Rows["identity.users"]),
+		"source_audit_records_left_behind": "120",
+	}
+	for k, v := range want {
+		if first.attrs[k] != v {
+			t.Fatalf("imported-from record %s = %q, want %q (attributes %v)", k, first.attrs[k], v, first.attrs)
+		}
+	}
+	if first.attrs["imported_at"] == "" || m.Source.Name == "" {
+		t.Fatalf("imported-from record lacks when or where: %v", first.attrs)
+	}
+	for _, x := range recs[1:] {
+		if x.action != "vault.import.seal" {
+			t.Fatalf("record %d is %s: only the target's own events follow the import record", x.seq, x.action)
+		}
+	}
+	if !r.verifyIt(t) {
+		t.Fatal("verify failed")
+	}
+}
+
+// A bundle that carries an audit trail is refused before anything is
+// written: the trail belongs to the install that recorded it.
+func TestImportRefusesABundleCarryingAnAuditTrail(t *testing.T) {
+	r := newRig(t)
+	if err := r.bundle.Stream("audit.audit_records").Add(map[string]any{"seq": 1, "action": "secret.reveal"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.bundle.Seal(); err != nil {
+		t.Fatal(err)
+	}
+	_, err := r.importIt(t, r.cfg())
+	if code(err) != codes.BundleVersion || !strings.Contains(err.Error(), "audit trail") {
+		t.Fatalf("err = %v, want BundleVersion naming the audit trail", err)
+	}
+	var n int
+	if err := r.db[schema.Audit].Querier().QueryRow(context.Background(), "SELECT count(*) FROM audit_records").Scan(&n); err != nil || n != 0 {
+		t.Fatalf("audit records after a refused import = %d (%v), want 0", n, err)
 	}
 }
 

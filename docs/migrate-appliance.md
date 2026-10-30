@@ -16,7 +16,12 @@ What comes across, and what doesn't:
   factor travels. Each user sets a new password with "Forgot password" on the sign-in page and
   enrols a second factor at first sign-in. One account, the first admin, gets a one-time password
   from the import (`--owner-email`), so someone can get in before the product's email is set up.
-- **The audit chain** comes across record for record and still verifies.
+- **The audit trail stays on the source.** An audit trail belongs to the install that recorded it,
+  so the export never carries it and the import never takes one. The box's chain starts with one
+  record of the import, "imported from" the source: its box or host name (`export --source-name`)
+  and version, the bundle id, who ran the import and when, and the folders, secrets and users
+  carried. Then come the box's own events. Keep the original system's audit history with the
+  original system, or offline, if you need it after the source is retired.
 
 There is **no rollback**. If something is wrong after an import, fix the cause and import again
 with `--wipe-target`; on the appliance, the Import page's **Re-import** does that.
@@ -69,12 +74,14 @@ bundle and the lab import key out of use.
 On the target appliance's Import page, make its import key, then export a real bundle to it:
 
 ```bash
-sneakers-migrate export --current-only --reset-sign-in --recipient age1... --out real.age
+sneakers-migrate export --current-only --reset-sign-in --source-name old-box.example.org \
+  --recipient age1... --out real.age
 ```
 
 Upload `real.age` and run **Review**: it lists every secret by folder, name and type (personal
 folders with their owner) and offers a mapping template, one entry per secret. Neither carries a
-value. Decide the new structure from it, then write the mapping file:
+value, and it says the audit trail isn't moved: it stays on the source. Decide the new structure
+from it, then write the mapping file:
 
 - by editing the template, or
 - from a proposal sheet (one row per secret: current and new folder, name and type, and `carry` or
@@ -98,13 +105,16 @@ counted in the source, less what the mapping dropped, against what the box holds
 1. **Freeze** the original system: read-only for everyone, open check-outs forced back, rotation
    and heartbeats stopped.
 2. **Final export** from the frozen system, to the target's import key:
-   `export --current-only --reset-sign-in`. Compare its parity report with the inventory.
+   `export --current-only --reset-sign-in --source-name <the original box>`. Compare its parity
+   report with the inventory. Its "not carried" list names the audit trail, which stays on the
+   source.
 3. Upload it, run **Review** again: only items that changed since the mapping was approved need a
    new decision. Convert the approved sheet against this bundle and **Check mapping**.
 4. **Import** (no rehearsal) with the mapping file and the first admin's email. The import prints the
    first admin's one-time password once; it is never stored. A parity mismatch fails the import:
    fix the cause and re-import.
-5. **Verify** must pass. The page restarts the vault after the import.
+5. **Verify** must pass. The page restarts the vault after the import. The box's audit chain
+   starts with the "imported from" record; no record of the source's chain is on it.
 6. **Switch**: point the product's name at the box. Personal tokens keep working (verify checked
    each by id). Turn on the MCP and the SSH broker once the SSH host keys the report lists are
    pinned; leave rotation off until the owner signs off.

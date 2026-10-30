@@ -61,6 +61,7 @@ type Import struct {
 	UsersWithoutSignIn []string            `json:"users_without_sign_in_identity"`
 	NotCarried         []bundle.NotCarried `json:"not_carried"`
 	AuditEntries       int                 `json:"migration_audit_entries"`
+	ImportedFrom       string              `json:"imported_from"`
 	OwnerPasswordSet   bool                `json:"owner_password_set"`
 	Wiped              bool                `json:"target_wiped"`
 	Notes              []string            `json:"notes,omitempty"`
@@ -231,7 +232,7 @@ func (r *Import) Text(w io.Writer) error {
 		}
 	}
 	ParityText(pr, r.Parity)
-	pr.f("migration audit entries appended: %d\n", r.AuditEntries)
+	pr.f("audit trail: not moved, it stays on the source; import record appended (imported from %s): %d\n", r.ImportedFrom, r.AuditEntries)
 	for _, n := range r.Notes {
 		pr.ln("note:", n)
 	}

@@ -35,6 +35,9 @@ const (
 	Transient
 	// Replaced rows are the source's key material; the target keeps its own.
 	Replaced
+	// Stays rows belong to the install that recorded them and never travel:
+	// the audit trail. The target's chain starts with the import's own record.
+	Stays
 )
 
 // Table is one table of one service.
@@ -138,7 +141,7 @@ var Tables = []Table{
 	{Service: Workflow, Name: "approval_comments", Key: []string{"id"}},
 	{Service: Workflow, Name: "leases", Key: []string{"id"}, UserData: true},
 
-	{Service: Audit, Name: "audit_records", Key: []string{"seq"}, UserData: true},
+	{Service: Audit, Name: "audit_records", Key: []string{"seq"}, Kind: Stays, UserData: true},
 }
 
 // TargetOnly are tables the target has and the source doesn't. They stay
@@ -161,7 +164,14 @@ func Of(s Service) []Table {
 }
 
 // Carried reports whether a table's rows travel in the bundle.
-func (t Table) Carried() bool { return t.Kind != Transient && t.Kind != Replaced }
+func (t Table) Carried() bool { return t.Kind != Transient && t.Kind != Replaced && t.Kind != Stays }
+
+// ImportAction is the action of the import's one audit record, the first of
+// the target's chain: imported from the source install.
+const ImportAction = "migration.import"
+
+// AuditTrailReason is why the audit trail is not carried.
+const AuditTrailReason = "the audit trail belongs to the install that recorded it: it stays on the source, and the target's chain starts with one record of this import"
 
 // Lookup returns a table by stream name.
 func Lookup(stream string) (Table, bool) {

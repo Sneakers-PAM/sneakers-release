@@ -11,7 +11,6 @@ import apperr "github.com/Bugs5382/go-apperr"
 // verify found a mismatch; 4xxx: the bundle is unreadable or damaged.
 const (
 	SourceVersion  = 1001
-	SourceChain    = 1002
 	SourceValue    = 1003
 	TargetVersion  = 2001
 	TargetNotEmpty = 2002
@@ -28,7 +27,6 @@ const (
 // Entries describes every code, for the docs and the registry.
 var Entries = []apperr.Entry{
 	{Code: SourceVersion, Title: "source", Cause: "the source database is at a version this tool does not read, or a migration is dirty"},
-	{Code: SourceChain, Title: "source", Cause: "the source audit chain does not verify"},
 	{Code: SourceValue, Title: "source", Cause: "a source value does not open with the given keys"},
 	{Code: TargetVersion, Title: "target", Cause: "the target database is not at the baseline this tool writes"},
 	{Code: TargetNotEmpty, Title: "target", Cause: "the target already holds data that is not this bundle's"},

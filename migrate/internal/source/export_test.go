@@ -23,6 +23,7 @@ import (
 func TestExportSyntheticSource(t *testing.T) {
 	src := testenv.NewSource(t, synth.Options{Users: 8, Secrets: 30, AuditRecords: 50})
 	cfg, kf, sum := src.Config, src.Kratos, src.Summary
+	cfg.SourceName = "old-box.example.org"
 	b, err := source.Export(context.Background(), cfg, kratos.New(kf.URL), log.Nop())
 	if err != nil {
 		t.Fatalf("Export: %v", err)
@@ -42,8 +43,22 @@ func TestExportSyntheticSource(t *testing.T) {
 	if k, _ := b.Manifest.Table(schema.KratosStream); k.Rows != sum.Kratos {
 		t.Fatalf("kratos identities = %d, want %d", k.Rows, sum.Kratos)
 	}
-	if b.Manifest.AuditHead.Seq != 50 || b.Manifest.AuditHead.Hash == "" {
-		t.Fatalf("audit head = %+v", b.Manifest.AuditHead)
+	for _, n := range b.Names() {
+		if strings.HasPrefix(n, "audit.") {
+			t.Fatalf("the bundle carries %s; the audit trail stays on the source", n)
+		}
+	}
+	var trail *bundle.NotCarried
+	for i, n := range b.Manifest.NotCarried {
+		if n.Name == "audit.audit_records" {
+			trail = &b.Manifest.NotCarried[i]
+		}
+	}
+	if trail == nil || trail.Rows != 50 || !strings.Contains(trail.Reason, "belongs to the install that recorded it") {
+		t.Fatalf("not carried audit trail = %+v, want 50 rows and the reason", trail)
+	}
+	if b.Manifest.Source.Name != "old-box.example.org" || b.Manifest.Source.Version == "" {
+		t.Fatalf("source install = %+v", b.Manifest.Source)
 	}
 	if len(b.Manifest.Samples) == 0 || len(b.Manifest.SampleKey) != 32 {
 		t.Fatalf("samples = %d, key %d bytes", len(b.Manifest.Samples), len(b.Manifest.SampleKey))
@@ -99,8 +114,10 @@ func TestExportRefusals(t *testing.T) {
 	if _, err := dbs[schema.Audit].Querier().Exec(ctx, "UPDATE audit_records SET subject = 'edited' WHERE seq = 3"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := source.Export(ctx, cfg, kc, log.Nop()); !hasCode(err, codes.SourceChain) {
-		t.Fatalf("tampered chain: err = %v, want SourceChain", err)
+	// The source chain isn't read: it stays on the source, so an edited
+	// record there is the source's business and doesn't stop the export.
+	if _, err := source.Export(ctx, cfg, kc, log.Nop()); err != nil {
+		t.Fatalf("export with an edited source audit record: %v", err)
 	}
 
 	if _, err := dbs[schema.Workflow].Querier().Exec(ctx, "UPDATE "+schema.VersionTable(schema.Workflow)+" SET version = 2"); err != nil {

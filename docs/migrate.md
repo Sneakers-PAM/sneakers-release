@@ -2,8 +2,9 @@
 
 `sneakers-migrate` moves an install of the original Sneakers system to Sneakers-PAM: secrets,
 folders and access rules, users and groups, targets, connections and schedules, personal and API
-tokens, and the audit chain, which still verifies. By default it carries everything, every secret
-version and every sign-in included. For a move onto the appliance it can instead carry each
+tokens. It never moves the audit trail: an audit trail belongs to the install that recorded it, so
+it stays on the source, and the target's chain starts with one "imported from" record of the
+import. By default it carries everything else, every secret version and every sign-in included. For a move onto the appliance it can instead carry each
 secret's current value only, reset every sign-in (each user sets a new password and enrols a
 second factor again), and re-map folders, names and types from a mapping file the owner approves.
 [Moving onto the appliance](migrate-appliance.md) is the step-by-step guide for that.
@@ -42,7 +43,12 @@ docker build -f migrate/Dockerfile -t sneakers-migrate .
   under the source identity's `TOTP_ENC_KEY`.
 - Reads every Kratos identity through the admin API with its password hash
   (`include_credential=password`).
-- Checks the audit chain from genesis to head and stops if it doesn't verify.
+- Leaves the audit trail on the source: it counts `audit.audit_records` (inside the same snapshot,
+  never reading the records into the bundle) and lists it under "not carried", with the reason.
+  The source's chain isn't checked, since it doesn't travel.
+- Names the source install in the manifest: `--source-name` (default: the host name the export runs
+  on; in a pod that's the pod name, so the export Job passes the box's name) and the source
+  version (the profile and each database's and Kratos's version).
 - Picks the sample secrets (`--sample-secret`, or `--samples` picked evenly among active shared
   secrets) and records a keyed hash (HMAC-SHA256, under a random per-bundle key) of each sensitive
   value, current and every version. Verify reveals the current values; import checks the older
@@ -64,7 +70,7 @@ Options that change what travels:
 - `--sanitise`: a lab dry-run bundle. It keeps every id, name, folder, rule, type, target, user and
   schedule, replaces every secret value, token hash and target address with a generated fake of the
   same length, and implies `--reset-sign-in`. The sample hashes are taken over the fakes, so verify
-  still works. The audit chain travels as it is (ids, actions and client addresses, never values).
+  still works. Like every bundle, it carries no audit trail.
   The manifest says `sanitised`, and import takes a sanitised bundle in rehearsal mode only.
 - `--inventory`: counts and names only, with no key and no bundle: rows per table, secrets per
   folder and per type, unused types, users per role, personal tokens by id (active or not), the
@@ -77,21 +83,25 @@ Options that change what travels:
 A gzipped tar, encrypted with age to the import recipient. Holding it without the target's import
 identity reveals nothing.
 
-- `manifest.json`: the format version, the bundle id, the source profile and versions (Kratos
-  included), per-table row counts and SHA-256 checksums, the audit chain head, the sample hashes and
-  their key, the list of what isn't carried and why, the parity counts, and whether the bundle is
-  current-only, sign-in reset or sanitised.
+- `manifest.json`: the format version, the bundle id, the source install (its name and version),
+  the source profile and versions (Kratos included), per-table row counts and SHA-256 checksums,
+  the sample hashes and their key, the list of what isn't carried and why (the audit trail
+  included, with its record count), the parity counts, and whether the bundle is current-only,
+  sign-in reset or sanitised.
 - `streams/<service>.<table>.ndjson`: one stream per table, newline-delimited JSON, ids kept. Sealed
   values travel opened (inside the encryption), so the target can re-seal them.
 
 Import refuses a bundle of another major format version, and any stream that doesn't match its
-checksum or count.
+checksum or count. The format is at 2.0: a 1.x bundle carries the source's audit trail and is
+refused (exit code 5, error 4003) with a message to export again with this version. A bundle that
+carries any `audit.*` stream is refused the same way, before anything is written.
 
 ### Import
 
 - Refuses a target that already holds data that isn't this bundle's. "Empty" means no users,
   groups, service accounts, secrets, secret versions, folders, targets, approval requests, leases
-  or audit records, and no Kratos identities. A production install is empty until its first-run
+  or audit records (other than this bundle's own "imported from" record, on a resumed import), and
+  no Kratos identities. A production install is empty until its first-run
   setup, so import before setup: the bundle brings the root user, the built-in types and settings.
 - Checks every target database is at a migration version it writes: the baselines (version 1) and
   the service migrations after them (identity 2, vault 2 to 6). Rows that predate a migration get
@@ -112,17 +122,23 @@ checksum or count.
   version through its `SealForImport` RPC, so the target root key never leaves the vault. TOTP
   secrets are re-encrypted under the target identity's `TOTP_ENC_KEY`. WebAuthn credentials are
   public keys and carry over as they are.
-- Writes each service database in one transaction, in dependency order, through the baseline
-  layout. The vault transaction holds the vault's write lock. Seed rows the vault may hold (types,
-  catalogue, policies, settings, connections) are replaced by the source's.
-- Inserts the audit chain first, record for record with its stored hashes, never recomputed, so
-  every entry the import causes lands after the source head: the vault's `vault.import.seal`
-  entries for each re-seal call, then the migration's own entries appended through the audit
-  service, which hashes them onto the chain: one per item closed by the migration and one
-  `migration.import` summary.
+- Writes the identity, vault and workflow databases, each in one transaction, in dependency order,
+  through the baseline layout. The vault transaction holds the vault's write lock. Seed rows the
+  vault may hold (types, catalogue, policies, settings, connections) are replaced by the source's.
+  The audit database isn't written: no source record comes across.
+- Appends one audit record through the audit service once every check has passed and before any
+  service database is written or any value re-sealed, so it is the first record of the target's
+  chain: `migration.import`, imported from the source. Its attributes
+  carry the source install (`imported_from`, `source_version`, `source_profile`, `exported_at`),
+  the bundle id, who ran the import (`imported_by`, also the record's actor: `MIGRATE_PRINCIPAL`)
+  and when (`imported_at`), the counts carried (`folders`, `secrets`, `users`), the source's audit
+  records left behind (`source_audit_records_left_behind`), what the migration closed (`closed_*`
+  and `items_closed_by_migration`), the mapping (below) and the matched samples. The target's own
+  events follow it, starting with the vault's `vault.import.seal` entry for each re-seal call.
+  There are no per-item migration entries: the one record counts them.
 - Checks every older-version sample against the opened value it is about to seal, before anything
   is written, and stops if one doesn't match (exit code 5: the bundle doesn't match its manifest).
-  The count of matched samples goes into the report and the `migration.import` summary
+  The count of matched samples goes into the report and the `migration.import` record
   (`version_samples_matched`), so it is on the audit chain. Values are never printed.
 - Reviews the security settings: the report lists each imported setting next to the target's
   default (API access to super-sensitive fields, MFA for sensitive check-out, step-up before a
@@ -137,11 +153,12 @@ checksum or count.
   cause and re-import with `--wipe-target`.
 - Is resumable: a service whose tables already hold exactly the bundle's rows is skipped, Kratos
   identities that already exist are reused (found by email, so identities without credentials are
-  found too), and migration audit entries are never appended twice. A failed service transaction
-  leaves that service empty, so a re-run picks it up.
-- Records on the audit chain, in its `migration.import` summary, the mapping file's SHA-256 and
-  what it changed, and whether the bundle was current-only or a sign-in reset. Each secret the
-  mapping drops gets a `secret.dropped_by_migration` entry.
+  found too), and the `migration.import` record isn't appended twice: a target whose chain already
+  starts with this bundle's record keeps it. A failed service transaction leaves that service
+  empty, so a re-run picks it up.
+- Records on the audit chain, in its `migration.import` record, the mapping file's SHA-256 and
+  what it changed (folders and secrets moved, renamed, retyped, created and dropped), and whether
+  the bundle was current-only or a sign-in reset.
 - Restart the vault afterwards (`kubectl rollout restart deployment/sneakers-vault`): it holds its
   state in memory and loads the imported rows on start.
 
@@ -155,7 +172,8 @@ checksum or count.
 | Vault | Security settings import as stored, but the target enforces them: API access to super-sensitive fields, MFA for sensitive check-out and step-up before a reveal. The report warns on each one that now restricts something. |
 | Vault | `target_ssh_host_keys` is new and stays empty: brokered SSH to those targets is refused until an admin pins the keys. The report lists every SSH target that needs pins. |
 | Vault | Pending or approved uses without reveal end as expired; in-flight rotation and heartbeat claims are cleared, and a rotation that was running is marked failed ("interrupted by migration"). |
-| Workflow | Open approval requests close as denied by the migration, with a comment "Expired by migration."; open check-outs are returned. Each gets an audit entry, so force check-outs back before a cutover. |
+| Workflow | Open approval requests close as denied by the migration, with a comment "Expired by migration."; open check-outs are returned. The import's audit record counts them, so force check-outs back before a cutover. |
+| Audit | The audit trail isn't moved: it belongs to the install that recorded it and stays on the source. The target's chain starts with the import's one `migration.import` record ("imported from" the source). |
 | Kratos | Only password hashes import. Any other Kratos credential type is counted in the report; second factors live in the identity service. |
 
 ### The mapping file
@@ -228,25 +246,25 @@ has no field mappings, so give them with `--types` (a JSON list of type rules). 
 
 Any mismatch fails the run (exit code 4):
 
-- **Counts:** every table holds the manifest's rows (plus the comments import adds), the audit
-  table holds the source records up to the source head, and Kratos holds every identity.
-- **Audit chain:** the audit service's `VerifyChain` and an independent walk both verify from
-  genesis to head, and the record at the source head seq still has the source head hash.
+- **Counts:** every table holds the manifest's rows (plus the comments import adds), and Kratos holds
+  every identity. The audit trail isn't counted or compared with the source: it stayed there.
+- **Audit chain:** the target's chain: the audit service's `VerifyChain` and an independent walk both
+  verify from genesis to head, and the first record is this bundle's `migration.import` record.
 - **Sample reveals:** every sample's current value, revealed through the vault, matches its keyed
   hash. Values are never printed or stored. These prove the re-seal opens.
 - **Versions:** older versions are never revealed, so verify doesn't need the vault's recovery-gated
   `RevealSecretVersionField`. Instead every secret's versions in the target match the bundle by
   version number and timestamp, each is sealed with the bundle's field names, and the import's
-  `migration.import` audit summary records that every older-version sample matched before sealing.
+  `migration.import` audit record says every older-version sample matched before sealing.
 - **Targets (dry run):** every target resolves to its connection, and every connection's
   privileged secret resolves. Nothing is contacted: a rehearsal denies egress.
-- **Mapping:** the import's audit summary records the same mapping file verify is given
+- **Mapping:** the import's audit record names the same mapping file verify is given
   (`--mapping`), or neither has one.
 - **Parity:** the import's parity table, again: the source, less what the mapping dropped, plus the
   folders it created, is what the target holds.
 - **Sign-in reset** (a sign-in reset bundle only): no TOTP seed or passkey came across, and at most
   one identity (the first admin's, from `--owner-email`) has a password. A second factor made after
-  the import (its time is the import's audit summary) is a user enrolling, so it doesn't count: the
+  the import (its time is the import's audit record) is a user enrolling, so it doesn't count: the
   first admin may sign in and open or finish the second-factor page before Verify. The table counts
   leave those rows out too.
 - **Personal tokens:** every active personal (MCP) token in the bundle still authenticates on the
@@ -295,7 +313,7 @@ sneakers-migrate wait --dns kubernetes.default.svc.cluster.local \
 - **Re-import, never a rollback:** there is no rollback path. If something is wrong after an import,
   fix it and import again with `--wipe-target`, which empties the target (every table this tool
   writes, and Kratos) first. In rehearsal mode it empties any target; outside it, only one an
-  earlier import filled (the audit chain holds a `migration.import` summary). A target holding data
+  earlier import filled (the audit chain holds a `migration.import` record). A target holding data
   that didn't come from an import is refused, with a message: factory-reset it instead. Without
   `--wipe-target` a target holding other data is always refused.
 - **One account changed:** `--owner-email` gives that account a new random password, shown once on
@@ -320,7 +338,7 @@ sneakers-migrate wait --dns kubernetes.default.svc.cluster.local \
 | `TARGET_KRATOS_ADMIN_URL` | import, verify | the target Kratos admin API |
 | `TARGET_VAULT_ADDR`, `TARGET_AUDIT_ADDR` | import, verify | the target vault and audit gRPC addresses |
 | `TARGET_TOTP_ENC_KEY` | import | the target identity's `TOTP_ENC_KEY` |
-| `MIGRATE_PRINCIPAL` | import | the actor on the migration's own audit entries (default `system:sneakers-migrate`) |
+| `MIGRATE_PRINCIPAL` | import | who ran the import: the actor and `imported_by` on its audit record (default `system:sneakers-migrate`) |
 | `WORKLOAD_TOKEN_FILE` | import, verify | the projected ServiceAccount token sent as the caller's workload identity |
 | `MIGRATE_OWNER_PASSWORD_FILE` | import | where `--owner-email`'s one-time password is written (0600, must not exist) instead of the terminal |
 | `MIGRATE_OUTPUT_FILE` | all | also copy everything the command prints into this file, and its exit code into the file plus `.exit` (the appliance's Import page reads both) |
@@ -380,14 +398,16 @@ test/migrate/rehearsal.sh
    `migrate/test/synth`: 30 users with passwords and TOTP, groups, folders and rules, 200 secrets
    with several versions sealed under an invented key ring (older generations and the legacy key
    included), SSH and AD targets, schedules, open approvals, check-outs and uses, and 1,000 chained
-   audit records;
+   audit records, which stay behind;
 2. installs the umbrella chart in rehearsal mode;
-3. runs `keygen`, `export`, the import Job (`--rehearsal --owner-email`), a vault restart and the
-   verify Job;
-4. runs the negative tests: a rehearsal pod can't reach the cluster API while a pod in another
+3. runs `keygen`, `export` (`--source-name`), the import Job (`--rehearsal --owner-email`), a vault
+   restart and the verify Job;
+4. checks the audit trail stayed on the source: the export lists it as not carried, and the
+   target's chain starts with the `migration.import` record naming the source, with no older record;
+5. runs the negative tests: a rehearsal pod can't reach the cluster API while a pod in another
    namespace can, the connector, SSH broker and MCP server aren't deployed and no rotation or
    heartbeat work is claimed, an import into a target holding another user is refused (exit 3), and
-   a tampered audit record fails verify (exit 4).
+   a tampered import record fails verify (exit 4).
 
 `APPLIANCE=1 MAPPING_SHEET=<proposal sheet>` runs the appliance move instead: the export is
 current-only with a sign-in reset, the sheet is converted into a mapping file for the bundle (with
@@ -412,7 +432,7 @@ no rollback). For a Helm install of the umbrella chart the steps are the same, w
 
 - `export-job.yaml` runs the export next to the original system, from a Secret
   `sneakers-migrate-source` holding the `SOURCE_*` settings (read-only DSNs, the Kratos admin URL,
-  and the key ring material). Copy the bundle out of its holder container, then delete the Job.
+  and the key ring material), with `SOURCE_NAME` as its `--source-name`. Copy the bundle out of its holder container, then delete the Job.
 - `import-job.yaml` runs `import` (with `COMMAND_ARGS`, the mapping file mounted beside the bundle)
   and then `verify` in the new install, from the Secrets `sneakers-migrate-key` (`import.key`) and
   `sneakers-migrate-bundle` (`bundle.age`). It assumes the umbrella chart's names for a release
@@ -426,7 +446,6 @@ no rollback). For a Helm install of the umbrella chart the steps are the same, w
 | Code | Area | Cause |
 | --- | --- | --- |
 | 1001 | source | the source database is at a version this tool does not read, or a migration is dirty |
-| 1002 | source | the source audit chain does not verify |
 | 1003 | source | a source value does not open with the given keys |
 | 2001 | target | the target database is not at the baseline this tool writes |
 | 2002 | target | the target already holds data that is not this bundle's |

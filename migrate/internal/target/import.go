@@ -3,9 +3,10 @@
 
 // Package target imports a bundle into a fresh Sneakers-PAM install: Kratos
 // identities through the admin API, every service database through its own
-// baseline layout in one transaction per service, secret values re-sealed by
-// the target vault, the audit chain inserted raw, then the migration's own
-// audit entries appended through the audit service.
+// baseline layout in one transaction per service, and secret values re-sealed
+// by the target vault. No audit trail comes across: before any service
+// database is written, the import appends one "imported from" record through
+// the audit service, the first record of the target's chain.
 package target
 
 import (
@@ -38,6 +39,10 @@ import (
 const vaultWriteLock int64 = 0x7661756c74
 
 const insertChunk = 500
+
+// ImportAction is the action of the import's one audit record, the first of
+// the target's chain: imported from the source install.
+const ImportAction = schema.ImportAction
 
 // Sealer re-seals field sets under the target vault's key.
 type Sealer interface {
@@ -98,13 +103,17 @@ func Import(ctx context.Context, cfg Config, b *bundle.Bundle, d Deps, lg log.Lo
 	if err := checkMode(cfg, b); err != nil {
 		return nil, err
 	}
+	if err := refuseAuditTrail(b); err != nil {
+		return nil, err
+	}
 	mode := "cutover"
 	if cfg.Rehearsal {
 		mode = "rehearsal"
 	}
 	rep := &report.Import{BundleID: b.Manifest.BundleID, Mode: mode, StartedAt: cfg.Now().UTC().Format(time.RFC3339), Services: map[string]string{}, NotCarried: b.Manifest.NotCarried,
-		CurrentOnly: b.Manifest.CurrentOnly, SignInReset: b.Manifest.SignInReset}
-	lg.Info("import started", log.F("bundle_id", b.Manifest.BundleID), log.F("mode", mode), log.F("mapping", cfg.Plan != nil))
+		CurrentOnly: b.Manifest.CurrentOnly, SignInReset: b.Manifest.SignInReset, ImportedFrom: b.Manifest.Source.Name}
+	lg.Info("import started", log.F("bundle_id", b.Manifest.BundleID), log.F("mode", mode), log.F("mapping", cfg.Plan != nil),
+		log.F("source", b.Manifest.Source.Name), log.F("source_version", b.Manifest.Source.Version))
 
 	pre, err := mapRows(b, mapping.Context{Now: cfg.Now(), Actor: cfg.Actor, Rehearsal: cfg.Rehearsal, Plan: cfg.Plan})
 	if err != nil {
@@ -177,6 +186,12 @@ func Import(ctx context.Context, cfg Config, b *bundle.Bundle, d Deps, lg log.Lo
 		lg.Warn("security setting now restricts", log.F("warning", w))
 	}
 
+	// The import record goes first, before the vault's re-seal calls audit
+	// themselves, so the target's chain starts with it.
+	if rep.AuditEntries, err = recordImport(ctx, dbs[schema.Audit].Querier(), d.Recorder, b, m, cfg, mode, rep.VersionSamples, lg); err != nil {
+		return nil, err
+	}
+
 	for _, s := range writeOrder {
 		if st.done[s] {
 			rep.Services[string(s)] = "already imported (left as is)"
@@ -210,9 +225,6 @@ func Import(ctx context.Context, cfg Config, b *bundle.Bundle, d Deps, lg log.Lo
 	}
 	rep.Parity = CheckParity(b.Manifest, want, got, m.Remap)
 
-	if rep.AuditEntries, err = appendAudit(ctx, dbs[schema.Audit].Querier(), d.Recorder, b, m, cfg, mode, rep.VersionSamples); err != nil {
-		return nil, err
-	}
 	if err := ParityError(rep.Parity); err != nil {
 		lg.Error(err, "import parity failed")
 		rep.FinishedAt = cfg.Now().UTC().Format(time.RFC3339)
@@ -237,10 +249,22 @@ func Import(ctx context.Context, cfg Config, b *bundle.Bundle, d Deps, lg log.Lo
 	return out, nil
 }
 
-// writeOrder puts the audit chain first: the target vault audits every
-// SealForImport call through the audit service, and those entries must append
-// after the source chain, not take its first sequence numbers.
-var writeOrder = []schema.Service{schema.Audit, schema.Identity, schema.Vault, schema.Workflow}
+// writeOrder is the services the import writes. The audit database is not
+// among them: the trail stays on the source, and the import's one record goes
+// through the audit service.
+var writeOrder = []schema.Service{schema.Identity, schema.Vault, schema.Workflow}
+
+// refuseAuditTrail refuses a bundle that carries an audit stream: an audit
+// trail belongs to the install that recorded it, and this import never takes
+// one.
+func refuseAuditTrail(b *bundle.Bundle) error {
+	for _, n := range b.Names() {
+		if strings.HasPrefix(n, string(schema.Audit)+".") {
+			return codes.Wrap(codes.BundleVersion, fmt.Errorf("the bundle carries an audit trail (%s); an audit trail stays with the install that recorded it, so this import takes none: export again with this version of sneakers-migrate", n))
+		}
+	}
+	return nil
+}
 
 func checkTargetVersion(ctx context.Context, q postgres.Querier, s schema.Service) (int64, error) {
 	var version int64
@@ -320,11 +344,30 @@ func (s state) refuseForeign() error {
 }
 
 // inspect classifies each service as empty, already imported (every table
-// holds exactly the expected rows and the audit head matches), or foreign.
+// holds exactly the expected rows; for the audit service, its chain starts
+// with this bundle's import record), or foreign.
 func inspect(ctx context.Context, dbs map[schema.Service]*postgres.DB, kr Kratos, b *bundle.Bundle, expected map[string]int) (state, error) {
 	st := state{done: map[schema.Service]bool{}}
 	for _, s := range schema.Services {
 		q := dbs[s].Querier()
+		if s == schema.Audit {
+			n, err := count(ctx, q, "audit_records")
+			if err != nil {
+				return st, err
+			}
+			ours, err := startsWithImport(ctx, q, b.Manifest.BundleID)
+			if err != nil {
+				return st, err
+			}
+			switch {
+			case n == 0:
+			case ours:
+				st.done[s] = true
+			default:
+				st.foreign = append(st.foreign, fmt.Sprintf("audit (audit_records=%d)", n))
+			}
+			continue
+		}
 		empty, exact := true, true
 		var held []string
 		for _, t := range schema.Of(s) {
@@ -339,20 +382,9 @@ func inspect(ctx context.Context, dbs map[schema.Service]*postgres.DB, kr Kratos
 				empty = false
 				held = append(held, fmt.Sprintf("%s=%d", t.Name, n))
 			}
-			want := expected[t.Stream()]
-			if s == schema.Audit {
-				continue
-			}
-			if n != want {
+			if n != expected[t.Stream()] {
 				exact = false
 			}
-		}
-		if s == schema.Audit {
-			ok, err := auditHeadMatches(ctx, q, b.Manifest.AuditHead)
-			if err != nil {
-				return st, err
-			}
-			exact = ok && b.Manifest.AuditHead.Seq > 0
 		}
 		switch {
 		case empty:
@@ -385,16 +417,18 @@ func inspect(ctx context.Context, dbs map[schema.Service]*postgres.DB, kr Kratos
 	return st, nil
 }
 
-func auditHeadMatches(ctx context.Context, q postgres.Querier, head bundle.Head) (bool, error) {
-	var hash string
-	err := q.QueryRow(ctx, "SELECT hash FROM public.audit_records WHERE seq = $1", int64(head.Seq)).Scan(&hash) // #nosec G115 -- audit seq fits in bigint
+// startsWithImport reports whether the target's chain starts with this
+// bundle's import record (a resumed import).
+func startsWithImport(ctx context.Context, q postgres.Querier, bundleID string) (bool, error) {
+	var action, id string
+	err := q.QueryRow(ctx, "SELECT action, coalesce(attributes->>'bundle_id', '') FROM public.audit_records ORDER BY seq LIMIT 1").Scan(&action, &id)
 	if errors.Is(err, postgres.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("read the target audit chain: %w", err)
 	}
-	return hash == head.Hash, nil
+	return action == ImportAction && id == bundleID, nil
 }
 
 func traitEmail(id kratos.Identity) string {
@@ -611,67 +645,53 @@ func write(ctx context.Context, db *postgres.DB, s schema.Service, m *mapping.Re
 	})
 }
 
-// appendAudit appends the migration's own entries: one per item closed by
-// migration, then the import summary. Entries already present for this
-// bundle (a resumed import) are not appended twice.
-func appendAudit(ctx context.Context, q postgres.Querier, rec Recorder, b *bundle.Bundle, m *mapping.Result, cfg Config, mode string, versionSamples int) (int, error) {
-	have := map[string]bool{}
-	rows, err := q.Query(ctx, "SELECT action, subject FROM public.audit_records WHERE attributes->>'bundle_id' = $1", b.Manifest.BundleID)
+// recordImport appends the import's one audit record, "imported from" the
+// source: the source install, the bundle, who ran the import and when, the
+// counts carried, and what the migration closed or the mapping changed. No
+// record of the source's chain comes across. A resumed import whose chain
+// already starts with it appends nothing.
+func recordImport(ctx context.Context, q postgres.Querier, rec Recorder, b *bundle.Bundle, m *mapping.Result, cfg Config, mode string, versionSamples int, lg log.Logger) (int, error) {
+	done, err := startsWithImport(ctx, q, b.Manifest.BundleID)
 	if err != nil {
 		return 0, err
 	}
-	for rows.Next() {
-		var a, s string
-		if err := rows.Scan(&a, &s); err != nil {
-			rows.Close()
-			return 0, err
-		}
-		have[a+"\x00"+s] = true
+	if done {
+		lg.Info("the import record is already the first of the target chain", log.F("bundle_id", b.Manifest.BundleID))
+		return 0, nil
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return 0, err
+	want := m.Expected()
+	src := b.Manifest.Source
+	attrs := map[string]string{
+		"bundle_id": b.Manifest.BundleID, "mode": mode,
+		"imported_from": src.Name, "source_version": src.Version, "source_profile": b.Manifest.Profile,
+		"exported_at": b.Manifest.CreatedAt, "imported_by": cfg.Actor, "imported_at": cfg.Now().UTC().Format(time.RFC3339),
+		"folders": fmt.Sprint(want["vault.folders"]), "secrets": fmt.Sprint(want["vault.secrets"]), "users": fmt.Sprint(want["identity.users"]),
+		"tables": fmt.Sprint(len(b.Manifest.Tables)), "version_samples_matched": fmt.Sprint(versionSamples),
+		"items_closed_by_migration": fmt.Sprint(len(m.Events)),
 	}
-	n := 0
-	emit := func(action, subject string, attrs map[string]string) error {
-		if have[action+"\x00"+subject] {
-			return nil
+	for _, n := range b.Manifest.NotCarried {
+		if n.Name == "audit.audit_records" {
+			attrs["source_audit_records_left_behind"] = fmt.Sprint(n.Rows)
 		}
-		a := map[string]string{"bundle_id": b.Manifest.BundleID, "mode": mode}
-		for k, v := range attrs {
-			a[k] = v
-		}
-		if err := rec.Record(ctx, rpc.Event{Actor: cfg.Actor, Action: action, Subject: subject, Attributes: a}); err != nil {
-			return fmt.Errorf("append audit entry %s: %w", action, err)
-		}
-		n++
-		return nil
-	}
-	for _, e := range m.Events {
-		if err := emit(e.Action, e.Subject, e.Attrs); err != nil {
-			return n, err
-		}
-	}
-	sum := map[string]string{
-		"source_profile": b.Manifest.Profile, "source_head_seq": fmt.Sprint(b.Manifest.AuditHead.Seq),
-		"source_head_hash": b.Manifest.AuditHead.Hash, "tables": fmt.Sprint(len(b.Manifest.Tables)),
-		"version_samples_matched": fmt.Sprint(versionSamples),
 	}
 	for k, v := range m.Closed {
-		sum["closed_"+strings.ReplaceAll(k, " ", "_")] = fmt.Sprint(v)
+		attrs["closed_"+strings.ReplaceAll(k, " ", "_")] = fmt.Sprint(v)
 	}
-	sum["current_only"], sum["sign_in_reset"] = fmt.Sprint(b.Manifest.CurrentOnly), fmt.Sprint(b.Manifest.SignInReset)
+	attrs["current_only"], attrs["sign_in_reset"] = fmt.Sprint(b.Manifest.CurrentOnly), fmt.Sprint(b.Manifest.SignInReset)
 	if r := m.Remap; r != nil {
-		sum["mapping_sha256"] = r.MappingSHA256
-		sum["mapping_secrets_dropped"], sum["mapping_secrets_moved"] = fmt.Sprint(r.SecretsDropped), fmt.Sprint(r.SecretsMoved)
-		sum["mapping_secrets_renamed"], sum["mapping_secrets_retyped"] = fmt.Sprint(r.SecretsRenamed), fmt.Sprint(r.SecretsRetyped)
-		sum["mapping_folders_created"], sum["mapping_folders_moved"] = fmt.Sprint(r.FoldersCreated), fmt.Sprint(r.FoldersMoved)
-		sum["mapping_folders_dropped"] = fmt.Sprint(r.FoldersDropped)
+		attrs["mapping_sha256"] = r.MappingSHA256
+		attrs["mapping_secrets_dropped"], attrs["mapping_secrets_moved"] = fmt.Sprint(r.SecretsDropped), fmt.Sprint(r.SecretsMoved)
+		attrs["mapping_secrets_renamed"], attrs["mapping_secrets_retyped"] = fmt.Sprint(r.SecretsRenamed), fmt.Sprint(r.SecretsRetyped)
+		attrs["mapping_folders_created"], attrs["mapping_folders_moved"] = fmt.Sprint(r.FoldersCreated), fmt.Sprint(r.FoldersMoved)
+		attrs["mapping_folders_dropped"] = fmt.Sprint(r.FoldersDropped)
 	}
-	if err := emit("migration.import", "bundle:"+b.Manifest.BundleID, sum); err != nil {
-		return n, err
+	start := time.Now()
+	if err := rec.Record(ctx, rpc.Event{Actor: cfg.Actor, Action: ImportAction, Subject: "bundle:" + b.Manifest.BundleID, Attributes: attrs}); err != nil {
+		return 0, fmt.Errorf("append the import's audit record: %w", err)
 	}
-	return n, nil
+	lg.Info("import recorded as the first record of the target chain", log.F("bundle_id", b.Manifest.BundleID),
+		log.F("imported_from", src.Name), log.F("actor", cfg.Actor), log.F("elapsed_ms", time.Since(start).Milliseconds()))
+	return 1, nil
 }
 
 func ownerPassword(ctx context.Context, kr Kratos, email string) (string, error) {
@@ -728,7 +748,7 @@ func mapRows(b *bundle.Bundle, c mapping.Context) (*mapping.Result, error) {
 // importedBefore reports whether the target's audit chain records an import.
 func importedBefore(ctx context.Context, q postgres.Querier) (bool, error) {
 	var n int
-	if err := q.QueryRow(ctx, "SELECT count(*) FROM public.audit_records WHERE action = 'migration.import'").Scan(&n); err != nil {
+	if err := q.QueryRow(ctx, "SELECT count(*) FROM public.audit_records WHERE action = $1", ImportAction).Scan(&n); err != nil {
 		return false, fmt.Errorf("read the target audit chain: %w", err)
 	}
 	return n > 0, nil

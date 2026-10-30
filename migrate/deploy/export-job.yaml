@@ -5,6 +5,8 @@
 #   MIGRATE_IMAGE     the sneakers-migrate image, by digest
 #   HOLDER_IMAGE      a small image with tar and sleep (e.g. busybox, by digest)
 #   RECIPIENT         the target's import recipient (age1..., from keygen)
+#   SOURCE_NAME       the original system's box or host name, which the target's
+#                     "imported from" audit record names
 # It needs a Secret sneakers-migrate-source in that namespace with the keys
 # SOURCE_IDENTITY_DSN, SOURCE_VAULT_DSN, SOURCE_WORKFLOW_DSN, SOURCE_AUDIT_DSN,
 # SOURCE_KRATOS_ADMIN_URL, SOURCE_VAULT_ROOT_KEK and, when the source has them,
@@ -39,7 +41,7 @@ spec:
         - name: export
           image: ${MIGRATE_IMAGE}
           imagePullPolicy: IfNotPresent
-          args: ["export", "--recipient", "${RECIPIENT}", "--out", "/bundle/bundle.age"]
+          args: ["export", "--recipient", "${RECIPIENT}", "--out", "/bundle/bundle.age", "--source-name", "${SOURCE_NAME}"]
           envFrom:
             - secretRef:
                 name: sneakers-migrate-source
