@@ -110,7 +110,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-mcp
-        commit: 9bb32470c0906c7e750045613c217f9c3b3324f2
+        commit: 10e0379f2065a5a07a31456a61d334bcc47a8000
         dockerfile: Dockerfile
         context: .
     web-staff:
