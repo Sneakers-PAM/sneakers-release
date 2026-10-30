@@ -30,6 +30,7 @@ type exportOptions struct {
 	resetSignIn bool
 	inventory   bool
 	sanitise    bool
+	sourceName  string
 }
 
 // ExportCmd reads the source and writes the encrypted bundle.
@@ -39,9 +40,11 @@ func ExportCmd(e env, lg logFn) *cobra.Command {
 		Use:   "export",
 		Short: "Read the source system and write one encrypted bundle",
 		Long: `export reads the four source databases in read-only snapshots and the source
-Kratos, opens every sealed value with the source key ring in memory, checks the
-audit chain, and writes one bundle encrypted to --recipient. Nothing is written
-to the source and no plaintext is written to disk. It counts folders, secrets,
+Kratos, opens every sealed value with the source key ring in memory, and
+writes one bundle encrypted to --recipient. Nothing is written to the source
+and no plaintext is written to disk. The audit trail is not carried: it stays
+on the source, and the target's chain starts with one "imported from" record
+naming --source-name. It counts folders, secrets,
 types, users, targets and connections in the source and prints them next to
 the bundle's (the parity report); a difference stops it.
 
@@ -88,7 +91,7 @@ source has them SOURCE_DEV_KEK_SEED and SOURCE_TOTP_ENC_KEY.`,
 			if err != nil {
 				return codes.Wrap(codes.SourceValue, err)
 			}
-			sc := source.Config{DSN: cfg.DSN, RootKey: root, DevSeed: cfg.DevSeed, Samples: o.samples, SampleMax: o.sampleMax, CurrentOnly: o.currentOnly, ResetSignIn: o.resetSignIn, Sanitise: o.sanitise}
+			sc := source.Config{DSN: cfg.DSN, RootKey: root, DevSeed: cfg.DevSeed, Samples: o.samples, SampleMax: o.sampleMax, CurrentOnly: o.currentOnly, ResetSignIn: o.resetSignIn, Sanitise: o.sanitise, SourceName: o.sourceName}
 			if cfg.TOTPKey != "" && !o.resetSignIn && !o.sanitise {
 				if sc.TOTP, err = totpcipher.Parse(cfg.TOTPKey); err != nil {
 					return codes.Wrap(codes.SourceValue, err)
@@ -120,7 +123,7 @@ source has them SOURCE_DEV_KEK_SEED and SOURCE_TOTP_ENC_KEY.`,
 			for _, t := range b.Manifest.Tables {
 				pr.F("  %-36s %8d\n", t.Name, t.Rows)
 			}
-			pr.F("audit chain head: seq %d\nsample values: %d\n", b.Manifest.AuditHead.Seq, len(b.Manifest.Samples))
+			pr.F("source: %s, %s\nsample values: %d\n", b.Manifest.Source.Name, b.Manifest.Source.Version, len(b.Manifest.Samples))
 			for _, n := range b.Manifest.NotCarried {
 				pr.F("not carried: %s (%d rows): %s\n", n.Name, n.Rows, n.Reason)
 			}
@@ -140,6 +143,8 @@ source has them SOURCE_DEV_KEK_SEED and SOURCE_TOTP_ENC_KEY.`,
 	f.BoolVarP(&o.resetSignIn, "reset-sign-in", "x", false, "carry no password hash, TOTP seed or passkey; every user signs up again")
 	f.BoolVarP(&o.inventory, "inventory", "I", false, "counts and names only: no key, no bundle")
 	f.BoolVarP(&o.sanitise, "sanitise", "S", false, "a lab dry-run bundle: the real shape, every value a fake (implies --reset-sign-in)")
+	host, _ := os.Hostname()
+	f.StringVarP(&o.sourceName, "source-name", "N", host, "the source install's box or host name, as the target's \"imported from\" audit record names it")
 	return cmd
 }
 

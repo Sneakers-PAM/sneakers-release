@@ -4,8 +4,8 @@
 // Package chain recomputes and checks the audit service's hash chain. Each
 // record's hash is the hex sha256 of its canonical form, which covers the
 // previous record's hash, so an edit, a deletion or a reorder breaks every
-// later hash. Imported records keep their stored hashes; this package only
-// checks them.
+// later hash. Verify walks the target's chain with it, and the synthetic
+// source builds one.
 package chain
 
 import (

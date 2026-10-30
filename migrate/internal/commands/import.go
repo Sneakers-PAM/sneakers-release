@@ -32,9 +32,10 @@ func ImportCmd(e env, lg logFn) *cobra.Command {
 		Short: "Load a bundle into a fresh Sneakers-PAM install",
 		Long: `import decrypts the bundle in memory, maps the source layout to the Sneakers-PAM
 baselines, imports the Kratos identities with their password hashes, has the
-target vault re-seal every secret version, writes each service database in one
-transaction, inserts the audit chain as it is and appends the migration's own
-audit entries. It refuses a target that holds other data.
+target vault re-seal every secret version, and writes each service database in
+one transaction. No audit trail comes across: before writing, it appends one
+"imported from" record, the first of the target's chain. It refuses a target
+that holds other data, and a bundle that carries an audit trail.
 
 --mapping applies the owner's approved mapping file (folders, names and types
 re-mapped, retired items dropped); outside rehearsal mode it is required.

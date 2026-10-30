@@ -88,6 +88,7 @@ prints what would change; an error names the rule that doesn't fit.`,
 			for _, w := range st.Warnings {
 				pr.F("warning: %s\n", w)
 			}
+			pr.F("audit trail: %s\n", mapping.AuditTrailNote)
 			return pr.Err()
 		},
 	}

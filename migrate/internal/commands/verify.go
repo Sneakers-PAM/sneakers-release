@@ -26,8 +26,10 @@ func VerifyCmd(e env, lg logFn) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "verify",
 		Short: "Check the target against the bundle it was imported from",
-		Long: `verify checks per-table counts against the manifest, the audit chain from genesis
-to head (through the audit service and by its own walk), sample reveals of the
+		Long: `verify checks per-table counts against the manifest, the target's audit chain
+from genesis to head (through the audit service and by its own walk) and that it
+starts with the import's "imported from" record (the source's trail stays on
+the source and isn't compared), sample reveals of the
 designated test secrets' current values by keyed hash, every secret's older
 versions by number, timestamp and sealed fields (never revealed), that every
 target resolves to its connection and secrets, the parity table, that the

@@ -3,8 +3,9 @@
 
 // Package source exports the original system: it reads each service database
 // in one read-only snapshot, opens sealed values with the original key ring
-// in memory, reads the Kratos identities with their password hashes, checks
-// the audit chain, and builds the bundle. It never writes to the source.
+// in memory, reads the Kratos identities with their password hashes, and
+// builds the bundle. The audit trail stays on the source: it is counted, never
+// read into the bundle. It never writes to the source.
 package source
 
 import (
@@ -16,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,7 +26,6 @@ import (
 	log "github.com/Bugs5382/go-log"
 	postgres "github.com/Bugs5382/go-postgres"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/bundle"
-	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/chain"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/codes"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/connect"
 	"github.com/Sneakers-PAM/sneakers-release/migrate/internal/envelope"
@@ -57,6 +58,9 @@ type Config struct {
 	// and target address with a generated fake, for a lab dry run. It
 	// implies ResetSignIn.
 	Sanitise bool
+	// SourceName is the source install's box or host name, which the
+	// target's "imported from" audit record names.
+	SourceName string
 }
 
 // Export reads the source and returns the bundle.
@@ -67,8 +71,12 @@ func Export(ctx context.Context, cfg Config, kr Kratos, lg log.Logger) (*bundle.
 		cfg.ResetSignIn = true
 	}
 	b.Manifest.CurrentOnly, b.Manifest.SignInReset, b.Manifest.Sanitised = cfg.CurrentOnly, cfg.ResetSignIn, cfg.Sanitise
+	if cfg.SourceName == "" {
+		cfg.SourceName, _ = os.Hostname()
+	}
+	b.Manifest.Source.Name = cfg.SourceName
 	lg.Info("export started", log.F("bundle_id", b.Manifest.BundleID), log.F("profile", schema.SourceProfile.Name),
-		log.F("current_only", cfg.CurrentOnly), log.F("reset_sign_in", cfg.ResetSignIn))
+		log.F("source", cfg.SourceName), log.F("current_only", cfg.CurrentOnly), log.F("reset_sign_in", cfg.ResetSignIn))
 	x := &exporter{cfg: cfg, b: b, lg: lg, raw: map[string][][]byte{}, counted: map[string]int{}}
 	for _, s := range schema.Services {
 		if err := x.service(ctx, s); err != nil {
@@ -78,9 +86,8 @@ func Export(ctx context.Context, cfg Config, kr Kratos, lg log.Logger) (*bundle.
 	if err := x.kratos(ctx, kr); err != nil {
 		return nil, err
 	}
-	if err := x.auditHead(); err != nil {
-		return nil, err
-	}
+	b.Manifest.Source.Version = SourceVersion(b.Manifest)
+	lg.Info("source values opened", log.F("by_key_ref", fmt.Sprint(x.refs)))
 	if err := x.samples(); err != nil {
 		return nil, err
 	}
@@ -143,6 +150,17 @@ func (x *exporter) service(ctx context.Context, s schema.Service) error {
 			}
 		}
 		for _, t := range schema.Of(s) {
+			if t.Kind == schema.Stays {
+				// Counted, never read: a large chain must not cost the
+				// export memory, and it doesn't travel.
+				var n int
+				if err := tx.QueryRow(ctx, "SELECT count(*) FROM public."+t.Name).Scan(&n); err != nil { // #nosec G202 -- names come from the fixed table list
+					return fmt.Errorf("count %s: %w", t.Stream(), err)
+				}
+				x.b.Manifest.NotCarried = append(x.b.Manifest.NotCarried, bundle.NotCarried{Name: t.Stream(), Rows: n, Reason: schema.AuditTrailReason})
+				x.lg.Info("audit trail left on the source", log.F("table", t.Stream()), log.F("rows", n))
+				continue
+			}
 			rows, err := readTable(ctx, tx, t)
 			if err != nil {
 				return err
@@ -423,27 +441,20 @@ func (x *exporter) kratos(ctx context.Context, kr Kratos) error {
 	return nil
 }
 
-// auditHead checks the source chain from genesis and records its head. A
-// chain that doesn't verify here can't verify on the target, so export stops.
-func (x *exporter) auditHead() error {
-	rows := x.raw["audit.audit_records"]
-	recs := make([]chain.Record, 0, len(rows))
-	for _, raw := range rows {
-		var r chain.Record
-		if err := json.Unmarshal(raw, &r); err != nil {
-			return fmt.Errorf("audit record: %w", err)
-		}
-		recs = append(recs, r)
+// SourceVersion is the source install's version as the "imported from"
+// record names it: the profile, then each database's migration version and
+// Kratos's.
+func SourceVersion(m bundle.Manifest) string {
+	keys := make([]string, 0, len(m.SourceVersion))
+	for k := range m.SourceVersion {
+		keys = append(keys, k)
 	}
-	if ok, at := chain.Verify(recs); !ok {
-		return codes.Wrap(codes.SourceChain, fmt.Errorf("the source audit chain breaks at seq %d", at))
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+" "+m.SourceVersion[k])
 	}
-	if n := len(recs); n > 0 {
-		x.b.Manifest.AuditHead = bundle.Head{Seq: recs[n-1].Seq, Hash: recs[n-1].Hash}
-	}
-	x.lg.Info("source audit chain verified", log.F("records", len(recs)), log.F("head_seq", x.b.Manifest.AuditHead.Seq))
-	x.lg.Info("source values opened", log.F("by_key_ref", fmt.Sprint(x.refs)))
-	return nil
+	return m.Profile + " (" + strings.Join(parts, ", ") + ")"
 }
 
 // samples records an HMAC of each sensitive value of the designated secrets,

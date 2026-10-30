@@ -29,7 +29,7 @@ func TestEveryTableHasAKeyAndAUniqueStream(t *testing.T) {
 func TestCarriedAndLookup(t *testing.T) {
 	for stream, want := range map[string]bool{
 		"vault.kek_keyring": false, "identity.user_email_otp": false, "identity.webauthn_sessions": false,
-		"vault.secret_versions": true, "identity.users": true, "audit.audit_records": true,
+		"vault.secret_versions": true, "identity.users": true, "audit.audit_records": false,
 	} {
 		tb, ok := Lookup(stream)
 		if !ok {
@@ -41,5 +41,14 @@ func TestCarriedAndLookup(t *testing.T) {
 	}
 	if _, ok := Lookup("vault.nope"); ok {
 		t.Fatal("unknown stream found")
+	}
+}
+
+// The audit trail belongs to the install that recorded it: it stays on the
+// source, and the target's chain starts with the import's own record.
+func TestTheAuditTrailStays(t *testing.T) {
+	tb, ok := Lookup("audit.audit_records")
+	if !ok || tb.Kind != Stays || tb.Carried() {
+		t.Fatalf("audit.audit_records = %+v (found %v), want kind Stays, not carried", tb, ok)
 	}
 }

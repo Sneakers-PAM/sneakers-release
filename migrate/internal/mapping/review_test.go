@@ -68,3 +68,26 @@ func TestReviewListsNamesOnlyAndMakesATemplate(t *testing.T) {
 		t.Fatalf("the unedited template changed something: %+v", st)
 	}
 }
+
+// The review says the audit trail isn't moved: it stays on the source, and
+// the target's chain starts with one record of the import.
+func TestReviewSaysTheAuditTrailStays(t *testing.T) {
+	r, err := Map(remapFixture(t), Context{Now: time.Now(), Actor: "system:sneakers-migrate"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rv, err := Review(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rv.AuditTrail != AuditTrailNote {
+		t.Fatalf("review audit_trail = %q, want the note", rv.AuditTrail)
+	}
+	var text strings.Builder
+	if err := rv.Text(&text); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text.String(), "audit trail: "+AuditTrailNote) {
+		t.Fatalf("review text does not say the audit trail stays:\n%s", text.String())
+	}
+}

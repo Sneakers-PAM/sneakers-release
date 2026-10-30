@@ -18,7 +18,7 @@ import (
 // Getenv reads one variable.
 type Getenv func(string) string
 
-// DefaultPrincipal is the actor the migration's own audit entries carry. The
+// DefaultPrincipal is the actor on the import's one audit record. The
 // vault takes no actor from the tool; it acts as its own system:migrate.
 const DefaultPrincipal = "system:sneakers-migrate"
 

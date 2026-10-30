@@ -418,7 +418,7 @@ NAMESPACE=sneakers JOB_NAME=sneakers-migrate-import MIGRATE_IMAGE=ci.example.org
   COMMAND_ARGS='["import", "--bundle", "/bundle/bundle.age", "--identity", "/key/import.key"]' \
   envsubst <migrate/deploy/import-job.yaml >"$out/migrate-import.yaml"
 SOURCE_NAMESPACE=sneakers-old MIGRATE_IMAGE=ci.example.org/sneakers-migrate:ci HOLDER_IMAGE=ci.example.org/holder:ci \
-  RECIPIENT=age1example envsubst <migrate/deploy/export-job.yaml >"$out/migrate-export.yaml"
+  RECIPIENT=age1example SOURCE_NAME=old-box.example.org envsubst <migrate/deploy/export-job.yaml >"$out/migrate-export.yaml"
 NAMESPACE=sneakers API_SERVER_CIDR=192.0.2.10/32 API_SERVER_PORT=6443 envsubst <migrate/deploy/rehearsal-egress.yaml >"$out/migrate-egress.yaml"
 if grep -h -v '^[[:space:]]*#' "$out"/migrate-*.yaml | grep -q '\${'; then fail "a Job manifest placeholder was not filled"; fi
 python3 - "$out/migrate-import.yaml" <<'PY'

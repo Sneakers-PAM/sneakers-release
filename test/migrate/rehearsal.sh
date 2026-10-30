@@ -9,7 +9,9 @@
 #      automation);
 #   3. keygen on the target side, export on the source side, the import Job,
 #      a vault restart, the verify Job;
-#   4. the negative tests: egress is blocked, automation is off, an import into
+#   4. the audit trail stayed on the source: the target's chain starts with the
+#      import's one "imported from" record and holds no source record;
+#   5. the negative tests: egress is blocked, automation is off, an import into
 #      a target holding other data is refused, a tampered audit record fails
 #      verify.
 #
@@ -33,6 +35,7 @@ image="${MIGRATE_IMAGE:-ci.example.org/sneakers-migrate:ci}"
 schema_dir="${SOURCE_SCHEMA_DIR:-migrate/testdata/source-schema}"
 timeout="${HELM_TIMEOUT:-15m}"
 owner="owner@example.org"
+source_name="rehearsal-source.example.org"
 pg_image="docker.io/library/postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722"
 kratos_image="oryd/kratos:v1.3.1@sha256:fe2428f103a6240c064b6ea77d3088610865c55fcebccb30355857eccdc25b4b"
 work="${WORK_DIR:-$(mktemp -d)}"
@@ -142,7 +145,8 @@ docker run --rm --network "$prefix-net" --user "$(id -u):$(id -g)" -v "$work:/wo
   -e SOURCE_KRATOS_ADMIN_URL="http://${prefix}-kratos:4434" \
   -e SOURCE_VAULT_ROOT_KEK="$(keys SOURCE_VAULT_ROOT_KEK)" -e SOURCE_DEV_KEK_SEED="$(keys SOURCE_DEV_KEK_SEED)" \
   -e SOURCE_TOTP_ENC_KEY="$(keys SOURCE_TOTP_ENC_KEY)" \
-  "$image" export --recipient "$recipient" --out /work/bundle.age ${export_flags} | tee "$work/export.txt"
+  "$image" export --recipient "$recipient" --out /work/bundle.age --source-name "$source_name" ${export_flags} | tee "$work/export.txt"
+grep -q "^not carried: audit.audit_records " "$work/export.txt" || fail "the export did not list the audit trail as not carried"
 note "bundle: $(stat -c %s "$work/bundle.age") bytes, encrypted"
 sed -n '/^parity/,$p' "$work/export.txt" >>"$results"
 bundle_files=(--from-file=bundle.age="$work/bundle.age")
@@ -203,6 +207,13 @@ kubectl -n "$ns" rollout status deployment/sneakers-vault --timeout 5m
 step "verify (Job)"
 run_job sneakers-migrate-verify 0 "$verify_args"
 sed -n '/^verify /,$p' "$work/sneakers-migrate-verify.log" >>"$results"
+
+step "the audit trail stayed on the source"
+first="$(psql_target sneakers_audit "SELECT action || ' ' || coalesce(attributes->>'imported_from', '') FROM audit_records ORDER BY seq LIMIT 1")"
+[ "$first" = "migration.import $source_name" ] || fail "the target chain starts with '${first}', not the import record"
+older="$(psql_target sneakers_audit "SELECT count(*) FROM audit_records WHERE occurred_at < (SELECT occurred_at FROM audit_records WHERE seq = 1)")"
+[ "$older" = 0 ] || fail "the target chain holds ${older} records older than the import"
+note "target chain: starts with the import record (imported from ${source_name}); no source record came across"
 
 if [ "$appliance" = 1 ]; then
   step "re-import over the earlier import (no rollback: fix and re-import)"
@@ -267,7 +278,7 @@ grep -q "already holds data that is not this bundle" "$work/sneakers-migrate-imp
 psql_target sneakers_identity "DELETE FROM users WHERE id = 'usr-foreign'" >/dev/null
 
 step "negative: a tampered audit record fails verify"
-psql_target sneakers_audit "UPDATE audit_records SET subject = 'tampered' WHERE seq = 500" >/dev/null
+psql_target sneakers_audit "UPDATE audit_records SET subject = 'tampered' WHERE seq = 1" >/dev/null
 run_job sneakers-migrate-verify-tampered 4 "$verify_args"
 grep -q "audit chain" "$work/sneakers-migrate-verify-tampered.log" || fail "verify did not name the audit chain"
 note "tampered record: $(grep -m1 'FAIL\] audit chain' "$work/sneakers-migrate-verify-tampered.log" | sed 's/^ *//')"

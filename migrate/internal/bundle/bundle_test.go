@@ -21,8 +21,7 @@ func sample(t *testing.T) *Bundle {
 			t.Fatal(err)
 		}
 	}
-	b.Stream("audit.audit_records")
-	b.Manifest.AuditHead = Head{Seq: 0}
+	b.Stream("workflow.leases")
 	if err := b.Seal(); err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +76,7 @@ func TestRoundTrip(t *testing.T) {
 	if len(rows) != 2 || rows[0]["id"] != "sec-1" {
 		t.Fatalf("rows = %v", rows)
 	}
-	if _, ok := out.Manifest.Table("audit.audit_records"); !ok {
+	if _, ok := out.Manifest.Table("workflow.leases"); !ok {
 		t.Fatal("an empty table still gets a manifest entry")
 	}
 }
@@ -112,7 +111,7 @@ func TestStreamMissingFromManifestIsRefused(t *testing.T) {
 func TestOtherMajorVersionIsRefused(t *testing.T) {
 	id, _ := keys(t)
 	b := sample(t)
-	b.Manifest.FormatVersion = "2.0"
+	b.Manifest.FormatVersion = "3.0"
 	var buf bytes.Buffer
 	if err := Write(&buf, b, id.Recipient()); err != nil {
 		t.Fatal(err)
@@ -120,13 +119,29 @@ func TestOtherMajorVersionIsRefused(t *testing.T) {
 	if _, err := Read(&buf, id); !errors.Is(err, ErrVersion) {
 		t.Fatalf("err = %v, want ErrVersion", err)
 	}
-	b.Manifest.FormatVersion = "1.7"
+	b.Manifest.FormatVersion = "2.7"
 	buf.Reset()
 	if err := Write(&buf, b, id.Recipient()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Read(&buf, id); err != nil {
 		t.Fatalf("a newer minor of the same major reads: %v", err)
+	}
+}
+
+// A 1.x bundle carries the source's audit trail, which this format no longer
+// moves: it is refused, and the message says why and what to do.
+func TestAOneXBundleIsRefusedForItsAuditTrail(t *testing.T) {
+	id, _ := keys(t)
+	b := sample(t)
+	b.Manifest.FormatVersion = "1.1"
+	var buf bytes.Buffer
+	if err := Write(&buf, b, id.Recipient()); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Read(&buf, id)
+	if !errors.Is(err, ErrVersion) || !strings.Contains(err.Error(), "audit trail") || !strings.Contains(err.Error(), "export again") {
+		t.Fatalf("err = %v, want ErrVersion naming the audit trail and asking for a new export", err)
 	}
 }
 

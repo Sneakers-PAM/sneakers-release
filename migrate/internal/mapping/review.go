@@ -29,7 +29,13 @@ type ReviewReport struct {
 	ByFolder map[string]int `json:"by_folder"`
 	// UnusedTypes are types no secret uses.
 	UnusedTypes []string `json:"unused_types"`
+	// AuditTrail says the audit trail isn't moved.
+	AuditTrail string `json:"audit_trail"`
 }
+
+// AuditTrailNote is what the review and the mapping check say about the
+// audit trail.
+const AuditTrailNote = "not moved; it stays on the source install, and the target's chain starts with one \"imported from\" record of this import"
 
 // Review lists the mapped rows' secrets.
 func Review(r *Result) (*ReviewReport, error) {
@@ -37,7 +43,7 @@ func Review(r *Result) (*ReviewReport, error) {
 	if err := x.load(); err != nil {
 		return nil, err
 	}
-	rv := &ReviewReport{ByType: map[string]int{}, ByFolder: map[string]int{}}
+	rv := &ReviewReport{ByType: map[string]int{}, ByFolder: map[string]int{}, AuditTrail: AuditTrailNote}
 	used := map[string]bool{}
 	for _, id := range x.sOrder {
 		d := x.secrets[id].data
@@ -108,6 +114,7 @@ func (rv *ReviewReport) Text(w io.Writer) error {
 	for _, t := range rv.UnusedTypes {
 		f("unused type: %s\n", t)
 	}
+	f("audit trail: %s\n", rv.AuditTrail)
 	return err
 }
 

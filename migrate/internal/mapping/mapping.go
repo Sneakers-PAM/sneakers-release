@@ -32,7 +32,8 @@ type Context struct {
 	Plan *Plan
 }
 
-// Event is one migration audit entry to append after the import.
+// Event is one item the migration closed or dropped. The import doesn't
+// append them one by one: its one audit record counts them.
 type Event struct {
 	Action  string
 	Subject string
@@ -42,7 +43,7 @@ type Event struct {
 // Result is the mapped rows plus what the report lists.
 type Result struct {
 	Rows map[string][]Row
-	// Events are the per-item migration audit entries.
+	// Events are the items the migration closed or dropped.
 	Events []Event
 	// SSHTargets need host-key pins before brokered SSH works again.
 	SSHTargets []string

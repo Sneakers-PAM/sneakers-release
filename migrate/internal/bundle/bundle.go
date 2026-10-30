@@ -28,11 +28,12 @@ import (
 )
 
 // Format names the bundle format; FormatVersion is its version. Readers accept
-// any minor version of their own major.
+// any minor version of their own major. Major 2 carries no audit trail; a 1.x
+// bundle carries the source's chain and is refused.
 const (
 	Format        = "sneakers-migrate-bundle"
-	FormatVersion = "1.1"
-	formatMajor   = "1"
+	FormatVersion = "2.0"
+	formatMajor   = "2"
 	manifestName  = "manifest.json"
 	streamPrefix  = "streams/"
 	streamSuffix  = ".ndjson"
@@ -60,11 +61,12 @@ type Manifest struct {
 	CreatedAt     string            `json:"created_at"`
 	Profile       string            `json:"source_profile"`
 	SourceVersion map[string]string `json:"source_versions"`
-	Tables        []Table           `json:"tables"`
-	AuditHead     Head              `json:"audit_head"`
-	SampleKey     []byte            `json:"sample_key,omitempty"`
-	Samples       []Sample          `json:"samples,omitempty"`
-	NotCarried    []NotCarried      `json:"not_carried,omitempty"`
+	// Source names the install the bundle was exported from.
+	Source     Source       `json:"source"`
+	Tables     []Table      `json:"tables"`
+	SampleKey  []byte       `json:"sample_key,omitempty"`
+	Samples    []Sample     `json:"samples,omitempty"`
+	NotCarried []NotCarried `json:"not_carried,omitempty"`
 	// CurrentOnly: each secret carries its current value only, no history.
 	CurrentOnly bool `json:"current_only,omitempty"`
 	// SignInReset: no password hash, TOTP seed or passkey travels; every
@@ -92,10 +94,11 @@ type Table struct {
 	SHA256 string `json:"sha256"`
 }
 
-// Head is the last audit record of the source chain.
-type Head struct {
-	Seq  uint64 `json:"seq"`
-	Hash string `json:"hash"`
+// Source is the install a bundle comes from, as the target's "imported from"
+// audit record names it: its box or host name and its version.
+type Source struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
 }
 
 // Sample is one designated test value: verify reveals it from the target and
@@ -341,6 +344,9 @@ func Read(r io.Reader, identities ...age.Identity) (*Bundle, error) {
 		return nil, fmt.Errorf("%w: no manifest", ErrIntegrity)
 	}
 	major, _, _ := strings.Cut(b.Manifest.FormatVersion, ".")
+	if b.Manifest.Format == Format && major == "1" {
+		return nil, fmt.Errorf("%w: %s %s carries the source's audit trail, which this tool no longer moves (an audit trail stays with the install that recorded it); export again with this version of sneakers-migrate", ErrVersion, b.Manifest.Format, b.Manifest.FormatVersion)
+	}
 	if b.Manifest.Format != Format || major != formatMajor {
 		return nil, fmt.Errorf("%w: %s %s (this tool reads %s %s.x)", ErrVersion, b.Manifest.Format, b.Manifest.FormatVersion, Format, formatMajor)
 	}

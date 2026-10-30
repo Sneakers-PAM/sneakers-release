@@ -29,7 +29,7 @@ func TestHelpAndVersion(t *testing.T) {
 		t.Fatalf("help: %d %q", code, out)
 	}
 	code, out, _ := runArgs(t, "version")
-	if code != exitOK || !strings.Contains(out, "bundle format sneakers-migrate-bundle 1.1") || !strings.Contains(out, "source profile original-v1") {
+	if code != exitOK || !strings.Contains(out, "bundle format sneakers-migrate-bundle 2.0") || !strings.Contains(out, "source profile original-v1") {
 		t.Fatalf("version: %d %q", code, out)
 	}
 }

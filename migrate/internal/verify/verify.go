@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package verify checks a target against the bundle it was imported from:
-// per-table counts, the audit chain from genesis to head, sample reveals of
+// per-table counts, the target's audit chain from genesis to head (it starts
+// with the import's own record; the source's trail stays on the source),
+// sample reveals of
 // current values matched by keyed hash (never printed), every secret's older
 // versions by number, timestamp and sealed fields (never revealed), and that
 // every target resolves to a connection and its secrets, the dry run of a
@@ -129,7 +131,7 @@ var factorTables = map[string]bool{"identity.user_totp": true, "identity.user_we
 // summary), or nil if the target records none.
 func importedAt(ctx context.Context, aq postgres.Querier, bundleID string) (*time.Time, error) {
 	var occurred string
-	err := aq.QueryRow(ctx, "SELECT occurred_at FROM public.audit_records WHERE action = 'migration.import' AND attributes->>'bundle_id' = $1 ORDER BY seq DESC LIMIT 1", bundleID).Scan(&occurred)
+	err := aq.QueryRow(ctx, "SELECT occurred_at FROM public.audit_records WHERE action = $1 AND attributes->>'bundle_id' = $2 ORDER BY seq DESC LIMIT 1", schema.ImportAction, bundleID).Scan(&occurred)
 	if errors.Is(err, postgres.ErrNoRows) {
 		return nil, nil
 	}
@@ -153,10 +155,6 @@ func counts(ctx context.Context, rep *report.Verify, b *bundle.Bundle, m *mappin
 		q := dbs[t.Service].Querier()
 		sql := "SELECT count(*) FROM public." + t.Name // #nosec G202 -- names come from the fixed table list
 		var args []any
-		if t.Stream() == "audit.audit_records" {
-			sql += " WHERE seq <= $1"
-			args = append(args, int64(b.Manifest.AuditHead.Seq)) // #nosec G115 -- audit seq fits in bigint
-		}
 		if factorTables[t.Stream()] && at != nil {
 			sql += " WHERE created_at <= $1"
 			args = append(args, *at)
@@ -238,7 +236,7 @@ func parity(m bundle.Manifest, expected, target map[string]int, remap *mapping.R
 // in the import's audit summary (or neither has one).
 func mappingApplied(ctx context.Context, rep *report.Verify, b *bundle.Bundle, p *mapping.Plan, aq postgres.Querier) error {
 	var recorded string
-	err := aq.QueryRow(ctx, "SELECT coalesce(attributes->>'mapping_sha256', '') FROM public.audit_records WHERE action = 'migration.import' AND attributes->>'bundle_id' = $1 ORDER BY seq LIMIT 1", b.Manifest.BundleID).Scan(&recorded)
+	err := aq.QueryRow(ctx, "SELECT coalesce(attributes->>'mapping_sha256', '') FROM public.audit_records WHERE action = $1 AND attributes->>'bundle_id' = $2 ORDER BY seq LIMIT 1", schema.ImportAction, b.Manifest.BundleID).Scan(&recorded)
 	if err != nil && !errors.Is(err, postgres.ErrNoRows) {
 		return fmt.Errorf("read the import's audit summary: %w", err)
 	}
@@ -389,9 +387,10 @@ func tokens(ctx context.Context, rep *report.Verify, m *mapping.Result, iq postg
 	return nil
 }
 
-// auditChain checks the chain twice: the audit service's own VerifyChain,
-// and an independent walk of every stored record, plus that the imported
-// head is the source's head.
+// auditChain checks the target's chain twice: the audit service's own
+// VerifyChain, and an independent walk of every stored record. The source's
+// trail stays on the source, so nothing is compared with it; instead the
+// chain must start with this bundle's import record.
 func auditChain(ctx context.Context, rep *report.Verify, b *bundle.Bundle, q postgres.Querier, a ChainVerifier) error {
 	valid, broken, length, err := a.VerifyChain(ctx)
 	if err != nil {
@@ -402,16 +401,11 @@ func auditChain(ctx context.Context, rep *report.Verify, b *bundle.Bundle, q pos
 		return err
 	}
 	own, ownBroken := chain.Verify(recs)
-	head := b.Manifest.AuditHead
-	headOK := head.Seq == 0 || (uint64(len(recs)) >= head.Seq && recs[head.Seq-1].Hash == head.Hash)
-	ok := valid && own && headOK
-	var appended uint64
-	if length > head.Seq {
-		appended = length - head.Seq
-	}
-	detail := fmt.Sprintf("valid from genesis to head: %d records (source head seq %d matches; %d appended by the import)", length, head.Seq, appended)
+	first := len(recs) > 0 && recs[0].Action == schema.ImportAction && recs[0].Attributes["bundle_id"] == b.Manifest.BundleID
+	ok := valid && own && first
+	detail := fmt.Sprintf("valid from genesis to head: %d records, starting with the import record (imported from %s)", length, b.Manifest.Source.Name)
 	if !ok {
-		detail = fmt.Sprintf("audit service valid=%t broken at %d; independent walk valid=%t broken at %d; source head matches=%t", valid, broken, own, ownBroken, headOK)
+		detail = fmt.Sprintf("audit service valid=%t broken at %d; independent walk valid=%t broken at %d; starts with the import record=%t", valid, broken, own, ownBroken, first)
 		rep.Failures = append(rep.Failures, "audit chain: "+detail)
 	}
 	rep.Add("audit chain", ok, detail)
@@ -530,7 +524,7 @@ func versions(ctx context.Context, rep *report.Verify, b *bundle.Bundle, m *mapp
 		}
 	}
 	var matched string
-	err = aq.QueryRow(ctx, "SELECT coalesce(attributes->>'version_samples_matched', '') FROM public.audit_records WHERE action = 'migration.import' AND attributes->>'bundle_id' = $1 ORDER BY seq LIMIT 1", b.Manifest.BundleID).Scan(&matched)
+	err = aq.QueryRow(ctx, "SELECT coalesce(attributes->>'version_samples_matched', '') FROM public.audit_records WHERE action = $1 AND attributes->>'bundle_id' = $2 ORDER BY seq LIMIT 1", schema.ImportAction, b.Manifest.BundleID).Scan(&matched)
 	switch {
 	case errors.Is(err, postgres.ErrNoRows):
 		bad = append(bad, "older-version samples: the import's audit summary is missing")
