@@ -4,13 +4,13 @@
 # targets and build args as each service's build block in manifest/release.yaml
 # (scripts/check-manifest.py checks it), so the install test builds what ships.
 sneakers-identity  Sneakers-PAM/sneakers-identity   b82cc2cdeffcbdb53c5074b049049cc30be36b9c  -
-sneakers-vault     Sneakers-PAM/sneakers-vault      66a1ae4c4d471fb478f197a2d5f9498619063ac1  vault
-sneakers-workflow  Sneakers-PAM/sneakers-vault      66a1ae4c4d471fb478f197a2d5f9498619063ac1  workflow
+sneakers-vault     Sneakers-PAM/sneakers-vault      c36ad7bb7f996fde02e53a5e3692d4c6a081f643  vault
+sneakers-workflow  Sneakers-PAM/sneakers-vault      c36ad7bb7f996fde02e53a5e3692d4c6a081f643  workflow
 sneakers-audit     Sneakers-PAM/sneakers-audit      ddeeff2774ba6a7ad3ca9db93d6fbd4e8a0a86af  -
 sneakers-notify    Sneakers-PAM/sneakers-notify     83034cb44cc4bde651ce15b2831267c59f2cbc72  -
 sneakers-connector Sneakers-PAM/sneakers-connector  140642bcc7bf545d70cb159d51fc34c9a0b38598  -
 sneakers-sshbroker Sneakers-PAM/sneakers-sshbroker  10f5456a57d72f5bdb4a31eb83cf00f57a409f69  -
-sneakers-gateway   Sneakers-PAM/sneakers-gateway    decb857ca1e2bfdfee09d120d8f678e0dabc5b76  -
-sneakers-mcp       Sneakers-PAM/sneakers-mcp        4900974cd2352ff4b3661a47574cfbe8ebe83860  -
-sneakers-web-staff Sneakers-PAM/sneakers-web        d6b8e77ccb153b68174ffeb6bbd3f980dee858f7  -  APP=staff
-sneakers-web-admin Sneakers-PAM/sneakers-web        d6b8e77ccb153b68174ffeb6bbd3f980dee858f7  -  APP=admin
+sneakers-gateway   Sneakers-PAM/sneakers-gateway    cd9f9cf99a7b440526485c5e6c8be69854f6dc70  -
+sneakers-mcp       Sneakers-PAM/sneakers-mcp        9bb32470c0906c7e750045613c217f9c3b3324f2  -
+sneakers-web-staff Sneakers-PAM/sneakers-web        fdd24126b33d5131d6b453a16b97def677904f93  -  APP=staff
+sneakers-web-admin Sneakers-PAM/sneakers-web        fdd24126b33d5131d6b453a16b97def677904f93  -  APP=admin
