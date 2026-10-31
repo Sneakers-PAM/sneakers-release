@@ -39,6 +39,20 @@ else the chart's appVersion.
 {{- end -}}
 {{- end -}}
 
+{{/*
+The version the chart deploys, for the product's About and diagnostics, in the
+appliance's form (0.1.0-rc.3, no leading v): the service's image.tag when it's
+a version, else global.imageTag, else the chart's appVersion. image.tag may be
+a label such as "pinned", and may carry a digest.
+*/}}
+{{- define "sneakers.productVersion" -}}
+{{- $tag := .Values.image.tag | default "" | splitList "@" | first -}}
+{{- if not (regexMatch "^v?[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.+-]+)?$" $tag) -}}
+{{- $tag = ((.Values.global).imageTag) | default .Chart.AppVersion -}}
+{{- end -}}
+{{- regexReplaceAll "^v([0-9])" $tag "${1}" -}}
+{{- end -}}
+
 {{- define "sneakers.logLevel" -}}
 {{- .Values.logLevel | default ((.Values.global).logLevel) | default "error" -}}
 {{- end -}}

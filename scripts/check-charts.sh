@@ -257,6 +257,51 @@ print(f"ok: global.imageTag sets all {len(global_)} Sneakers images, a service's
 PY
 must_fail "a global.imageTag that isn't an image tag" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.imageTag=0.1.0:latest
 
+step "the gateway's product version"
+# The value About and diagnostics show: the version the chart deploys, unless
+# the installer names one, as the appliance's bundle build does.
+digest="sha256:$(printf 'a%.0s' {1..64})"
+version_case() {
+  local want="$1"; shift
+  local got
+  helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml "$@" >"$out/version.yaml"
+  got="$(python3 - "$out/version.yaml" <<'PY'
+import re, sys, yaml
+
+name = "SNEAKERS_PRODUCT_VERSION"
+text = open(sys.argv[1]).read()
+for doc in text.split("\n---\n"):
+    d = yaml.safe_load(doc)
+    if d and d["kind"] == "ConfigMap" and d["metadata"]["name"] == "sneakers-gateway":
+        assert len(re.findall(rf"^\s*{name}:", doc, re.M)) <= 1, f"{name} is in the gateway's ConfigMap twice"
+        print(d["data"].get(name, ""))
+assert not any(
+    e["name"] == name
+    for d in yaml.safe_load_all(text)
+    if d and d["kind"] == "Deployment"
+    for c in d["spec"]["template"]["spec"]["containers"]
+    for e in c.get("env") or []
+), f"{name} is also in a container's env"
+PY
+  )"
+  [ "$got" = "$want" ] || fail "product version with [$*]: got '$got', want '$want'"
+  echo "ok: ${want:-(unset)} from [$*]"
+}
+app_version="$(awk '/^appVersion:/ { gsub(/"/, "", $2); print $2 }' charts/gateway/Chart.yaml)"
+version_case "$app_version"
+version_case 0.1.0-rc.3 --set global.imageTag=0.1.0-rc.3
+version_case 0.1.0-rc.9 --set global.imageTag=0.1.0-rc.3 --set gateway.image.tag=0.1.0-rc.9
+version_case 0.1.0-rc.9 --set gateway.image.tag=v0.1.0-rc.9
+version_case 0.1.0-rc.9 --set "gateway.image.tag=0.1.0-rc.9@$digest"
+version_case 0.1.0-rc.3 --set global.imageTag=0.1.0-rc.3 --set gateway.image.tag=pinned
+version_case "$app_version" --set "gateway.image.digest=$digest"
+version_case 9.9.9 --set global.imageTag=0.1.0-rc.3 --set-string gateway.env.SNEAKERS_PRODUCT_VERSION=9.9.9
+version_case "" --set global.imageTag=0.1.0-rc.3 --set-string gateway.env.SNEAKERS_PRODUCT_VERSION=
+helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml --set global.imageTag=0.1.0-rc.3 >"$out/version-gateway.yaml"
+grep -q 'SNEAKERS_PRODUCT_VERSION: "0.1.0-rc.3"' "$out/version-gateway.yaml" \
+  || fail "the gateway chart on its own didn't set the product version"
+echo "ok: the gateway chart on its own sets the product version"
+
 step "global.arch"
 # hydra on: every workload the umbrella can render. The third-party charts
 # don't read global values, so their own nodeSelector keys carry the arch.
