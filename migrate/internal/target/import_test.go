@@ -941,8 +941,17 @@ func TestImportIntoTheNewestLayout(t *testing.T) {
 	if given != 0 {
 		t.Fatalf("the import left %d built-in ledger rows", given)
 	}
-	if _, err := r.db[schema.Vault].Querier().Exec(ctx, "INSERT INTO builtin_ledger (id) VALUES ('connection:conn-ldaps')"); err != nil {
+	if _, err := r.db[schema.Vault].Querier().Exec(ctx, "INSERT INTO secret_types (id, data) SELECT 'type-newer', data FROM secret_types LIMIT 1"); err != nil {
 		t.Fatal(err)
+	}
+	if r.verifyIt(t) {
+		t.Fatal("verify passed with a secret type that isn't in the bundle or on the ledger")
+	}
+	if _, err := r.db[schema.Vault].Querier().Exec(ctx, "INSERT INTO builtin_ledger (id) VALUES ('type:type-newer'), ('connection:conn-ldaps')"); err != nil {
+		t.Fatal(err)
+	}
+	if !r.verifyIt(t) {
+		t.Fatal("verify failed on a built-in the vault added after the import")
 	}
 	owner := r.cfg()
 	owner.Wipe = true
