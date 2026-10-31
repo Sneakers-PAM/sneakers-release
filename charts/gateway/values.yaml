@@ -61,6 +61,8 @@ probes:
 env:
   ENVIRONMENT: "{{ .Values.global.environment }}"
   OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.global.otlpEndpoint }}"
+  # The version About and diagnostics show. Empty leaves it unset.
+  SNEAKERS_PRODUCT_VERSION: '{{ include "sneakers.productVersion" . }}'
   HTTP_PORT: "9100"
   AUTH_MODE: real
   KRATOS_PUBLIC_URL: http://sneakers-kratos-public

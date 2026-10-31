@@ -87,6 +87,8 @@ helm install sneakers charts/sneakers -n sneakers ... --set global.imageTag=0.1.
 
 A service's own `image.tag` or `image.digest` still wins over `global.imageTag`.
 
+About and diagnostics show the version the chart deploys, with no value to set: here, `Sneakers 0.1.0-rc.3`.
+
 ### CPU architecture
 
 From v0.1.0-rc.3 on, every image the charts install is built for both `linux/amd64` and
