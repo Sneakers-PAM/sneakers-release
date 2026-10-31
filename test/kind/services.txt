@@ -3,14 +3,14 @@
 # The refs are each service repository's merge commit on main: the same commits,
 # targets and build args as each service's build block in manifest/release.yaml
 # (scripts/check-manifest.py checks it), so the install test builds what ships.
-sneakers-identity  Sneakers-PAM/sneakers-identity   b82cc2cdeffcbdb53c5074b049049cc30be36b9c  -
-sneakers-vault     Sneakers-PAM/sneakers-vault      c36ad7bb7f996fde02e53a5e3692d4c6a081f643  vault
-sneakers-workflow  Sneakers-PAM/sneakers-vault      c36ad7bb7f996fde02e53a5e3692d4c6a081f643  workflow
+sneakers-identity  Sneakers-PAM/sneakers-identity   166b16c3352b88090abcf77dff00b103f9ce5a24  -
+sneakers-vault     Sneakers-PAM/sneakers-vault      599afe8e3d4e4eb3fc679db0690fdf808c79a3a7  vault
+sneakers-workflow  Sneakers-PAM/sneakers-vault      599afe8e3d4e4eb3fc679db0690fdf808c79a3a7  workflow
 sneakers-audit     Sneakers-PAM/sneakers-audit      ddeeff2774ba6a7ad3ca9db93d6fbd4e8a0a86af  -
 sneakers-notify    Sneakers-PAM/sneakers-notify     83034cb44cc4bde651ce15b2831267c59f2cbc72  -
-sneakers-connector Sneakers-PAM/sneakers-connector  140642bcc7bf545d70cb159d51fc34c9a0b38598  -
+sneakers-connector Sneakers-PAM/sneakers-connector  6a440baed45d3568e6fc4c6bc5279d232e4e7fc2  -
 sneakers-sshbroker Sneakers-PAM/sneakers-sshbroker  10f5456a57d72f5bdb4a31eb83cf00f57a409f69  -
-sneakers-gateway   Sneakers-PAM/sneakers-gateway    cd9f9cf99a7b440526485c5e6c8be69854f6dc70  -
-sneakers-mcp       Sneakers-PAM/sneakers-mcp        10e0379f2065a5a07a31456a61d334bcc47a8000  -
-sneakers-web-staff Sneakers-PAM/sneakers-web        fdd24126b33d5131d6b453a16b97def677904f93  -  APP=staff
-sneakers-web-admin Sneakers-PAM/sneakers-web        fdd24126b33d5131d6b453a16b97def677904f93  -  APP=admin
+sneakers-gateway   Sneakers-PAM/sneakers-gateway    07d73ce9322b5dea95af42e7ba718b7c0a285edb  -
+sneakers-mcp       Sneakers-PAM/sneakers-mcp        f92513c150fc7a9fa9e45125749242c0260e3bb5  -
+sneakers-web-staff Sneakers-PAM/sneakers-web        8d05fc66466e89610869a7aee6a3165b0c9ddda9  -  APP=staff
+sneakers-web-admin Sneakers-PAM/sneakers-web        8d05fc66466e89610869a7aee6a3165b0c9ddda9  -  APP=admin
