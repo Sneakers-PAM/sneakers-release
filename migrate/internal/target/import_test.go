@@ -934,10 +934,26 @@ func TestImportIntoTheNewestLayout(t *testing.T) {
 	if _, err := r.db[schema.Vault].Querier().Exec(ctx, "INSERT INTO heartbeat_audit_summary (secret_id, day, started_at, last_at, checks, result) VALUES ('sec-x', current_date, now(), now(), 3, 'ok')"); err != nil {
 		t.Fatal(err)
 	}
+	var given int
+	if err := r.db[schema.Vault].Querier().QueryRow(ctx, "SELECT count(*) FROM builtin_ledger").Scan(&given); err != nil {
+		t.Fatal(err)
+	}
+	if given != 0 {
+		t.Fatalf("the import left %d built-in ledger rows", given)
+	}
+	if _, err := r.db[schema.Vault].Querier().Exec(ctx, "INSERT INTO builtin_ledger (id) VALUES ('connection:conn-ldaps')"); err != nil {
+		t.Fatal(err)
+	}
 	owner := r.cfg()
 	owner.Wipe = true
 	if _, err := r.importIt(t, owner); err != nil {
 		t.Fatalf("re-import on the newest layout: %v", err)
+	}
+	if err := r.db[schema.Vault].Querier().QueryRow(ctx, "SELECT count(*) FROM builtin_ledger").Scan(&given); err != nil {
+		t.Fatal(err)
+	}
+	if given != 0 {
+		t.Fatalf("a rehearsal wipe left %d built-in ledger rows", given)
 	}
 	var pending int
 	if err := r.db[schema.Vault].Querier().QueryRow(ctx, "SELECT count(*) FROM heartbeat_audit_summary").Scan(&pending); err != nil {

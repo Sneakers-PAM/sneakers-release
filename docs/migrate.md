@@ -104,12 +104,13 @@ carries any `audit.*` stream is refused the same way, before anything is written
   no Kratos identities. A production install is empty until its first-run
   setup, so import before setup: the bundle brings the root user, the built-in types and settings.
 - Checks every target database is at a migration version it writes: the baselines (version 1) and
-  the service migrations after them (identity 2, vault 2 to 6). Rows that predate a migration get
+  the service migrations after them (identity 2, vault 2 to 7). Rows that predate a migration get
   its new columns: a personal token's client kind (`mcp` when its client name says MCP, else `cli`),
   a break-glass event's empty session, each active secret's place in its folder (1-based, by
   name, as the vault's own backfill numbers them), and a secret's list of attached targets (its one
   target, as the vault's own backfill sets it). A carried version has no type-change note, and the
-  vault's pending heartbeat rollups start empty.
+  vault's pending heartbeat rollups and its built-in ledger start empty, so its first start counts
+  the imported store as set up before the ledger existed.
 - Creates each Kratos identity with its traits, state, addresses and password hash, so people keep
   their password (with a sign-in reset bundle, without any credential). Kratos assigns new ids; the
   identity service's `subject` follows them.
