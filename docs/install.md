@@ -366,6 +366,6 @@ name finds the same data and keys. Delete them by hand to remove everything.
 ## Logs and telemetry
 
 Every service logs JSON at `error` by default (`global.logLevel`, `global.logFormat`, or per
-service `logLevel`). Set `global.otlpEndpoint` to an OTLP gRPC collector for traces and metrics.
-With no collector set, the services still try their default `localhost:4317` and print a plain-text
-export error to stderr every few seconds; that is noise, not a fault.
+service `logLevel`). Set `global.otlpEndpoint` to an OTLP gRPC collector URL, such as
+`http://collector:4317`, for traces and metrics. With no collector set, the services run without
+exporting and log no error.
