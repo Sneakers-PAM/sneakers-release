@@ -8,7 +8,8 @@ global:
   environment: production
   logLevel: error
   logFormat: json
-  # OTLP gRPC collector (host:port) for traces and metrics. Empty: unset.
+  # OTLP gRPC collector URL for traces and metrics, such as http://collector:4317
+  # (https:// for TLS). Empty: unset.
   otlpEndpoint: ""
   # The one MFA step-up window (MFA_MAX_AGE): how long a fresh sign-in or
   # step-up counts as fresh. A Go duration, 0 to 4h.

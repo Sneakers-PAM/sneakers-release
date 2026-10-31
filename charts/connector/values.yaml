@@ -8,7 +8,8 @@ global:
   environment: production
   logLevel: error
   logFormat: json
-  # OTLP gRPC collector (host:port) for traces and metrics. Empty: unset.
+  # OTLP gRPC collector URL for traces and metrics, such as http://collector:4317
+  # (https:// for TLS). Empty: unset.
   otlpEndpoint: ""
 
 image:
