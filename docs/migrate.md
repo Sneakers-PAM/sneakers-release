@@ -267,7 +267,9 @@ Any mismatch fails the run (exit code 4):
   one identity (the first admin's, from `--owner-email`) has a password. A second factor made after
   the import (its time is the import's audit record) is a user enrolling, so it doesn't count: the
   first admin may sign in and open or finish the second-factor page before Verify. The table counts
-  leave those rows out too.
+  leave those rows out too, and the built-ins a newer vault adds on its first start: a secret type,
+  extension pack, connection or password policy that isn't in the bundle but is on the vault's
+  built-in ledger. Any other extra row fails.
 - **Personal tokens:** every active personal (MCP) token in the bundle still authenticates on the
   target, checked by id and never with the token: the same stored hash, not revoked or expired, and
   its user present, enabled and linked to a sign-in identity. A token of a disabled user is skipped.

@@ -145,8 +145,34 @@ func importedAt(ctx context.Context, aq postgres.Querier, bundleID string) (*tim
 	return &at, nil
 }
 
+// ledgerTables are the tables of built-ins a newer vault adds to on start-up,
+// and each one's prefix in its builtin_ledger. The first start after an import
+// can run before Verify, so a row that isn't in the bundle is the vault's own
+// when the ledger names it, and any other is a mismatch.
+var ledgerTables = map[string]string{
+	"vault.secret_types":      "type:",
+	"vault.extension_catalog": "extension:",
+	"vault.connections":       "connection:",
+	"vault.password_policies": "policy:",
+}
+
+// rowIDs lists the id column of a table's rows.
+func rowIDs(rows []map[string]any) []string {
+	ids := make([]string, 0, len(rows))
+	for _, r := range rows {
+		if id, ok := r["id"].(string); ok {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 func counts(ctx context.Context, rep *report.Verify, b *bundle.Bundle, m *mapping.Result, dbs map[schema.Service]*postgres.DB, kr KratosLister, at *time.Time) error {
 	want := m.Expected()
+	var ledger bool
+	if err := dbs[schema.Vault].Querier().QueryRow(ctx, "SELECT to_regclass('public.builtin_ledger') IS NOT NULL").Scan(&ledger); err != nil {
+		return fmt.Errorf("find builtin_ledger: %w", err)
+	}
 	var bad []string
 	for _, t := range schema.Tables {
 		if !t.Carried() {
@@ -158,6 +184,10 @@ func counts(ctx context.Context, rep *report.Verify, b *bundle.Bundle, m *mappin
 		if factorTables[t.Stream()] && at != nil {
 			sql += " WHERE created_at <= $1"
 			args = append(args, *at)
+		}
+		if prefix, ok := ledgerTables[t.Stream()]; ok && ledger {
+			sql += " WHERE id = ANY($1) OR NOT EXISTS (SELECT 1 FROM public.builtin_ledger l WHERE l.id = $2 || " + t.Name + ".id)"
+			args = append(args, rowIDs(m.Rows[t.Stream()]), prefix)
 		}
 		n, err := count(ctx, q, sql, args...)
 		if err != nil {
