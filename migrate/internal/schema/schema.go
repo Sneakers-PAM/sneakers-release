@@ -75,10 +75,10 @@ const TargetVersion int64 = 1
 // event's session; vault 3: a secret's place in its folder; vault 4: the
 // heartbeat rollup table, target-only; vault 5: a version's type-change note,
 // NULL for every carried version; vault 6: a secret's list of attached
-// targets).
+// targets; vault 7: the built-ins the vault has been given, target-only).
 var TargetVersions = map[Service][]int64{
 	Identity: {1, 2},
-	Vault:    {1, 2, 3, 4, 5, 6},
+	Vault:    {1, 2, 3, 4, 5, 6, 7},
 	Workflow: {1},
 	Audit:    {1},
 }
@@ -150,6 +150,7 @@ var TargetOnly = []Table{
 	{Service: Vault, Name: "target_ssh_host_keys", Key: []string{"target_id", "ordinal"}},
 	{Service: Vault, Name: "break_glass_sessions", Key: []string{"id"}},
 	{Service: Vault, Name: "heartbeat_audit_summary", Key: []string{"secret_id"}},
+	{Service: Vault, Name: "builtin_ledger", Key: []string{"id"}},
 }
 
 // Of returns a service's tables in insert order.
