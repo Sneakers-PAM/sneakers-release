@@ -13,7 +13,8 @@ global:
   environment: production
   logLevel: error
   logFormat: json
-  # OTLP gRPC collector (host:port) for traces and metrics. Empty: unset.
+  # OTLP gRPC collector URL for traces and metrics, such as http://collector:4317
+  # (https:// for TLS). Empty: unset.
   otlpEndpoint: ""
   # Single sign-on: shows the SSO sign-in in the web apps (SSO_ENABLED). Turn
   # it on with the gateway's SSO settings.

@@ -13,7 +13,7 @@ chart by `scripts/sync-schemas.sh`.
 | `global.environment` | `production` | `ENVIRONMENT` for every service. `prod` or `production` turn on the production checks: no dev worker token and no dev keys. |
 | `global.logLevel` | `error` | `LOG_LEVEL` for every service: `trace`, `debug`, `info`, `warn`, `error`. |
 | `global.logFormat` | `json` | `LOG_FORMAT` for every service. Clusters log `json`. |
-| `global.otlpEndpoint` | (empty) | OTLP gRPC collector (`host:port`) for traces and metrics. |
+| `global.otlpEndpoint` | (empty) | OTLP gRPC collector URL for traces and metrics, such as `http://collector:4317` (`https://` for TLS). A bare `host:port` still connects, but the OpenTelemetry SDK logs `parse url` errors at start. Empty runs with no collector. Needs service images on go-otel v1.4.0 or later. |
 | `bundledSecrets.enabled` | `true` | Create the Secrets the bundled pieces share (below). |
 | `<service>.enabled` | `true` | Install that service: `identity`, `vault`, `workflow`, `audit`, `notify`, `connector`, `sshbroker`, `gateway`, `mcp`, `web-staff`, `web-admin`. |
 | `rehearsal.enabled` | `false` | Migration rehearsal mode ([migrate.md](migrate.md)): a deny-all egress NetworkPolicy for the namespace (other pods in it and the cluster DNS only), and the chart refuses to render with `connector`, `sshbroker` or `mcp` enabled. Never on for production. |
