@@ -142,21 +142,21 @@ All nine service charts take the same values. Each one also works on its own, ou
 | `networkPolicy.enabled` | `true` | Only this release's pods may connect. |
 | `nodeSelector`, `tolerations`, `affinity` | | Pod placement. `global.arch` adds `kubernetes.io/arch` to `nodeSelector` unless it already has that key. |
 
-## The new cluster (`deploy/postgres-ha`)
+## The new cluster (`postgres-ha`)
 
-`sneakers-pgha` is [helm-postgres-ha](https://github.com/Bugs5382/helm-postgres-ha), its own Helm
-release beside the umbrella and not a dependency of it, because the chart's schema refuses the
-`global` values Helm hands every subchart. `manifest/release.yaml` pins it by OCI digest and
-`scripts/pull-postgres-ha.sh` fetches it; the chart's own README has every value. These are the ones
-`deploy/postgres-ha/values.yaml` sets:
+`sneakers-pgha` is [helm-postgres-ha](https://github.com/Bugs5382/helm-postgres-ha), a dependency of
+the umbrella. Its values go under `postgres-ha:`, and the chart's own README has every one.
+`manifest/release.yaml` pins the chart by OCI digest, and `scripts/check-chart-digest.sh` holds the
+fetched chart to it. These are the ones `charts/sneakers/values.yaml` sets:
 
 | Value | Set to | Meaning |
 |---|---|---|
+| `enabled` | `false` | Off until you choose to move ([install.md](install.md#moving-to-the-helm-postgres-ha-cluster)). On, it starts empty beside the old cluster and changes no service. |
 | `fullnameOverride` | `sneakers-pgha` | Its own name, so it never adopts the old cluster's volume. |
 | `replicas` | `1` | One member. A single node gets nothing from more. |
 | `image.*` | the image `charts/postgres` pins | One PostgreSQL build for both clusters. |
 | `agent.image.*` | the pinned agent image | Multi-arch, amd64 and arm64. |
-| `postgresql.allowedCIDRs` | empty, and required | Your pod network. |
+| `postgresql.allowedCIDRs` | empty, and required when on | Your pod network. |
 | `postgresql.synchronous.mode` | `off` | One member has no standby to wait for. |
 | `postgresql.initdbArgs` | en_US, UTF-8, data checksums | The old cluster's locale: identity sorts users and groups by name. |
 | `credentials.superuser`, `roles` | `sneakers-bundled` | The old cluster's passwords, so a move changes no Secret. |
@@ -164,8 +164,8 @@ release beside the umbrella and not a dependency of it, because the chart's sche
 | `pgbouncer.enabled` | `false` | One member needs no pool. |
 | `networkPolicy.allowedClients` | as `charts/postgres` | Only the pods with a database. |
 
-`deploy/postgres-ha/values-small-box.yaml` layers the small box's memory and server settings, a
-20 Gi volume, and write-ahead log settings fit for one member.
+`examples/values-small-box.yaml` has the small box's memory and server settings, a 20 Gi volume, and
+write-ahead log settings fit for one member.
 
 ## Sizing examples
 

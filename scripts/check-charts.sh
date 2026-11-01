@@ -79,19 +79,49 @@ print("ok: every DSN follows global.database, and the default is unchanged")
 PY
 must_fail "an sslmode libpq doesn't know" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.database.sslmode=maybe
 
-step "postgres-ha, the cluster the services move to (deploy/postgres-ha)"
-pgha="$(scripts/pull-postgres-ha.sh "$out/pgha")"
-pgha_values=(-n sneakers -f deploy/postgres-ha/values.yaml -f deploy/postgres-ha/values-small-box.yaml)
-helm template sneakers-pgha "$pgha" "${pgha_values[@]}" --set 'postgresql.allowedCIDRs={192.0.2.0/24}' >"$out/pgha/certmanager.yaml"
+step "postgres-ha, the cluster the services move to"
+scripts/check-chart-digest.sh
+must_fail "a postgres-ha chart that isn't the pinned digest" env PGHA_CHART="$(ls charts/sneakers/charts/valkey-*.tgz)" scripts/check-chart-digest.sh
+mkdir "$out/pgha"
+pgha_values=(-n sneakers -f test/ci/values.yaml -f charts/sneakers/examples/values-small-box.yaml --set hydra.enabled=true)
+pgha_on=(--set postgres-ha.enabled=true --set 'postgres-ha.postgresql.allowedCIDRs={192.0.2.0/24}')
+pgha_arch=(--set global.arch=arm64 --set-string 'valkey.nodeSelector.kubernetes\.io/arch=arm64'
+  --set-string 'kratos.deployment.nodeSelector.kubernetes\.io/arch=arm64'
+  --set-string 'hydra.deployment.nodeSelector.kubernetes\.io/arch=arm64')
+helm template ci charts/sneakers "${pgha_values[@]}" >"$out/pgha/off.yaml"
+helm template ci charts/sneakers "${pgha_values[@]}" "${pgha_on[@]}" >"$out/pgha/certmanager.yaml"
 # kubeconform has no schema for cert-manager's kinds, so it reads the render without them.
-helm template sneakers-pgha "$pgha" "${pgha_values[@]}" --set 'postgresql.allowedCIDRs={192.0.2.0/24}' \
-  --set tls.certManager.enabled=false --set tls.existingSecret=sneakers-pgha-tls >"$out/pgha.yaml"
-must_fail "postgres-ha without a pod network" helm template sneakers-pgha "$pgha" "${pgha_values[@]}"
-python3 - "$out/pgha/certmanager.yaml" <<'PY'
-import sys, yaml
-docs = [d for d in yaml.safe_load_all(open(sys.argv[1])) if d]
-sts = next(d for d in docs if d["kind"] == "StatefulSet")
-assert sts["metadata"]["name"] == "sneakers-pgha", "the new cluster takes the old one's name, and its volume"
+helm template ci charts/sneakers "${pgha_values[@]}" "${pgha_on[@]}" \
+  --set postgres-ha.tls.certManager.enabled=false --set postgres-ha.tls.existingSecret=sneakers-pgha-tls >"$out/pgha.yaml"
+must_fail "postgres-ha without a pod network" helm template ci charts/sneakers "${pgha_values[@]}" --set postgres-ha.enabled=true
+must_fail "global.arch with no kubernetes.io/arch on postgres-ha" helm template ci charts/sneakers "${pgha_values[@]}" "${pgha_on[@]}" "${pgha_arch[@]}"
+helm template ci charts/sneakers "${pgha_values[@]}" "${pgha_on[@]}" "${pgha_arch[@]}" \
+  --set-string 'postgres-ha.nodeSelector.kubernetes\.io/arch=arm64' >/dev/null
+python3 - "$out/pgha/off.yaml" "$out/pgha/certmanager.yaml" "$out/pgha.yaml" <<'PY'
+import collections, sys, yaml
+
+def load(path):
+    return [d for d in yaml.safe_load_all(open(path)) if d]
+
+def key(d):
+    return (d["kind"], d["metadata"]["name"])
+
+off, docs, nocm = load(sys.argv[1]), load(sys.argv[2]), load(sys.argv[3])
+# Off is the default, so a plain upgrade starts no second cluster.
+assert not any("pgha" in d["metadata"]["name"] for d in off), "postgres-ha renders while it's off"
+# Beside charts/postgres: no name twice, and nothing the umbrella renders changes.
+for render in docs, nocm:
+    dup = [k for k, n in collections.Counter(key(d) for d in render).items() if n > 1]
+    assert not dup, f"rendered twice: {dup}"
+was, now = {key(d): d for d in off}, {key(d): d for d in docs}
+# The Secrets the umbrella generates differ on every render.
+changed = [k for k, d in was.items() if k not in now or (k[0] != "Secret" and d != now[k])]
+assert not changed, f"turning postgres-ha on changed: {changed}"
+added = [d for k, d in now.items() if k not in was]
+assert all(d["metadata"]["name"].startswith("sneakers-pgha") for d in added), [key(d) for d in added]
+assert not any(d["kind"].startswith("Cluster") for d in added), "postgres-ha has a cluster-scoped object"
+print(f"ok: {len(added)} objects of its own, and none of the umbrella's {len(off)} change")
+sts = now[("StatefulSet", "sneakers-pgha")]
 assert sts["spec"]["replicas"] == 1, sts["spec"]["replicas"]
 assert not any("pgbouncer" in d["metadata"]["name"] and d["kind"] in ("Deployment", "Service") for d in docs), "PgBouncer is on"
 c = sts["spec"]["template"]["spec"]["containers"][0]
@@ -99,13 +129,13 @@ env = {e["name"]: e.get("value") for e in c["env"]}
 assert "--locale=en_US.UTF-8" in env["PGHA_INITDB_ARGS"], env["PGHA_INITDB_ARGS"]
 assert env["PGHA_SYNC_MODE"] == "off", env["PGHA_SYNC_MODE"]
 old = yaml.safe_load(open("charts/postgres/values.yaml"))
-new = yaml.safe_load(open("deploy/postgres-ha/values.yaml"))
+new = yaml.safe_load(open("charts/sneakers/values.yaml"))["postgres-ha"]
 assert [d["name"] for d in new["databases"]] == old["databases"], "the two clusters' databases differ"
 assert all(d["owner"] == old["auth"]["username"] for d in new["databases"]), new["databases"]
 want = [{"podSelector": {"matchLabels": f}} for f in old["networkPolicy"]["from"]]
 assert new["networkPolicy"]["allowedClients"] == want, "the two clusters' client lists differ"
-small = yaml.safe_load(open("charts/sneakers/examples/values-small-box.yaml"))["postgres"]
-got = yaml.safe_load(open("deploy/postgres-ha/values-small-box.yaml"))
+box = yaml.safe_load(open("charts/sneakers/examples/values-small-box.yaml"))
+small, got = box["postgres"], box["postgres-ha"]
 assert got["resources"] == small["resources"], "the small box's PostgreSQL sizes differ"
 for k in ("shared_buffers", "effective_cache_size", "work_mem", "maintenance_work_mem"):
     assert got["postgresql"]["parameters"][k] == small["parameters"][k], k
@@ -365,7 +395,7 @@ echo "ok: the gateway chart on its own sets the product version"
 
 step "global.arch"
 # hydra on: every workload the umbrella can render. The third-party charts
-# don't read global values, so their own nodeSelector keys carry the arch.
+# don't read global.arch, so their own nodeSelector keys carry the arch.
 arch_args=(-f test/ci/values.yaml --set hydra.enabled=true)
 arch_bundled=(--set-string 'valkey.nodeSelector.kubernetes\.io/arch=arm64'
   --set-string 'kratos.deployment.nodeSelector.kubernetes\.io/arch=arm64'

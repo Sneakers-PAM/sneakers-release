@@ -45,9 +45,10 @@ global:
   # The CPU architecture every pod runs on: "" (any node), amd64 or arm64.
   # The images are multi-arch, so this only picks the nodes, through a
   # kubernetes.io/arch nodeSelector (a service's own nodeSelector key wins).
-  # Valkey, Kratos and Hydra don't read global values: when it's set, also
+  # Valkey, Kratos, Hydra and postgres-ha don't read it: when it's set, also
   # set valkey.nodeSelector and kratos.deployment.nodeSelector (and
-  # hydra.deployment.nodeSelector with Hydra on) to the same kubernetes.io/arch,
+  # hydra.deployment.nodeSelector with Hydra on, and postgres-ha.nodeSelector
+  # with that on) to the same kubernetes.io/arch,
   # or the chart refuses to render. docs/install.md has the block to copy.
   arch: ""
 
@@ -162,6 +163,126 @@ postgres:
   enabled: true
   auth:
     existingSecret: sneakers-bundled
+
+# The cluster the services move to: helm-postgres-ha, off until you choose to
+# move (docs/install.md#moving-to-the-helm-postgres-ha-cluster). Turning it on
+# starts it empty beside charts/postgres and changes no service: those follow
+# global.database. docs/values.md lists what's set here, and the chart's own
+# README has every value.
+postgres-ha:
+  enabled: false
+
+  # Its own name, so it never takes over the old cluster's volume.
+  fullnameOverride: sneakers-pgha
+
+  # One member. Failover needs three, and a single node gets nothing from them.
+  replicas: 1
+
+  # The image charts/postgres runs, so the two clusters share one PostgreSQL
+  # build and a dump comes back with the same collations.
+  image:
+    repository: library/postgres
+    tag: "18.6"
+    digest: sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+
+  agent:
+    image:
+      tag: "1.0.0"
+      digest: sha256:fb3d536548571d67106f6140da144a9e9a53218196feadeda544b5d710e467d4
+
+  postgresql:
+    # Your cluster's pod network. Required, and there's no safe default.
+    allowedCIDRs: []
+    # One member has no standby to wait for.
+    synchronous:
+      mode: "off"
+    # charts/postgres runs in en_US, and identity sorts users and groups by name.
+    initdbArgs: "--encoding=UTF8 --locale=en_US.UTF-8 --data-checksums"
+
+  # The superuser and the application role keep the passwords of the old cluster,
+  # so a move changes no Secret. The replication and rewind roles aren't used by
+  # one member; the chart generates their Secrets.
+  credentials:
+    superuser:
+      existingSecret: sneakers-bundled
+      passwordKey: postgres-password
+
+  roles:
+    - name: sneakers
+      existingSecret: sneakers-bundled
+      passwordKey: password
+
+  databases:
+    - {name: sneakers_identity, owner: sneakers}
+    - {name: sneakers_vault, owner: sneakers}
+    - {name: sneakers_workflow, owner: sneakers}
+    - {name: sneakers_audit, owner: sneakers}
+    - {name: sneakers_kratos, owner: sneakers}
+    - {name: sneakers_hydra, owner: sneakers}
+
+  # WAL archives continuously and a base backup runs nightly, to a directory of
+  # their own on the backup volume. On a box that volume is the encrypted backup
+  # partition. The times are UTC and stay clear of each other.
+  backup:
+    enabled: true
+    storage: file
+    # One member, so it's the primary that takes them.
+    source: primary
+    schedule: "15 1 * * *"
+    # Seven nightly base backups and the WAL between them.
+    retainFull: 7
+    retainDays: 0
+    file:
+      prefix: walg
+      persistence:
+        size: 20Gi
+        accessModes: [ReadWriteOnce]
+    verify:
+      enabled: true
+      schedule: "45 3 * * *"
+      database: sneakers_audit
+
+  # One member needs no pool, and the services keep session state.
+  pgbouncer:
+    enabled: false
+
+  podDisruptionBudget:
+    enabled: false
+
+  affinity:
+    zoneSpread: false
+
+  podLabels:
+    app.kubernetes.io/part-of: sneakers
+    app.kubernetes.io/component: postgres
+
+  # Only the pods with a database may connect: the same list as charts/postgres.
+  networkPolicy:
+    allowedClients:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/part-of: sneakers
+            app.kubernetes.io/component: identity
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/part-of: sneakers
+            app.kubernetes.io/component: vault
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/part-of: sneakers
+            app.kubernetes.io/component: workflow
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/part-of: sneakers
+            app.kubernetes.io/component: audit
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/part-of: sneakers
+            app.kubernetes.io/name: kratos
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/part-of: sneakers
+            app.kubernetes.io/name: hydra
 
 # Valkey, for sessions, inboxes, SSH tickets and cache invalidation
 # (https://github.com/valkey-io/valkey-helm).

@@ -37,13 +37,12 @@ Two things to know before changing it:
 - `charts/<service>/` - one chart per service, including the two web apps (`web-staff`,
   `web-admin`): `values.yaml`, `values.schema.json`, and a template that includes the library
 - `charts/postgres/` - the bundled single-instance PostgreSQL
-- `deploy/postgres-ha/` - the values of `sneakers-pgha`, the helm-postgres-ha cluster the services
-  move to: its own Helm release, not an umbrella dependency, since the chart's schema refuses
-  `global`. `manifest/release.yaml` pins it by OCI digest, `scripts/pull-postgres-ha.sh` fetches it,
-  and `scripts/check-manifest.py` holds its images to the pins
 - `charts/sneakers/` - the umbrella: dependencies, the bundled Secrets, the `helm test` pod, and
   `examples/` (the small-box and large-box sizing examples; documentation, never loaded by the
-  chart)
+  chart). `postgres-ha`, the helm-postgres-ha cluster the services move to, is a dependency here
+  named `sneakers-pgha`, off by default. `manifest/release.yaml` pins it by OCI digest,
+  `scripts/check-chart-digest.sh` holds the fetched chart to that digest, and
+  `scripts/check-manifest.py` holds its images to the pins
 - `manifest/release.yaml` - the pinned release
 - `scripts/` - `install-tools.sh` (pinned, checksum-checked tools), `check-charts.sh`, the
   manifest, defaults, probes, edges, web and resources checks, `sync-schemas.sh`

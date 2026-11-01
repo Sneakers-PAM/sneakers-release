@@ -166,15 +166,15 @@ spec:
       image: docker.io/library/postgres
       version: "18.6"
       digest: sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
-    # The cluster the services move to, its own Helm release beside the umbrella
-    # (deploy/postgres-ha). It runs the PostgreSQL image pinned above; this is
-    # its agent image, multi-arch, and the chart by its OCI digest.
+    # The cluster the services move to, a dependency of the umbrella that's off
+    # by default. It runs the PostgreSQL image pinned above; this is its agent
+    # image, multi-arch, and the chart by its OCI digest.
     postgres-ha:
       chart:
         name: postgres-ha
-        version: 1.0.0
+        version: 1.0.1
         repository: oci://ghcr.io/bugs5382/charts
-        digest: sha256:722aa21a290bdd30d4aa0f20bb637040df39b973eeb1378cc8f633e15487a264
+        digest: sha256:849728d92dbbb195210a199a7e46e10c59f41c6096fdb211aedb3368ee3d79ef
       image: ghcr.io/bugs5382/helm-postgres-ha/pgha
       version: 1.0.0
       digest: sha256:fb3d536548571d67106f6140da144a9e9a53218196feadeda544b5d710e467d4

@@ -98,7 +98,7 @@ to keep every pod on nodes of that architecture (a `kubernetes.io/arch` nodeSele
 empty for any node. v0.1.0-rc.1 and rc.2 published `linux/amd64` images only and won't be
 rebuilt, so install rc.3 or later on arm64.
 
-The Valkey, Kratos and Hydra charts don't read global values, so each one you run needs the same
+The Valkey, Kratos, Hydra and postgres-ha charts don't read it, so each one you run needs the same
 setting in its own nodeSelector. The chart refuses to render until they match, and the error names
 the key to set. On a Raspberry Pi (or any arm64 node):
 
@@ -350,44 +350,48 @@ until the service images have a migrate-only command.
 `helm upgrade` never moves your data, and on its own it never changes where the services connect:
 the umbrella keeps the bundled `charts/postgres`, and a new install gets the same. The appliance
 moves a box's data as one step of an update; on your own cluster the move is these steps, when you
-choose to. The new cluster is `sneakers-pgha`, a Helm release of its own beside the umbrella, on its
-own volume, so the old cluster stays untouched as the way back.
+choose to. The new cluster is `sneakers-pgha`, the umbrella's `postgres-ha` dependency, off until you
+turn it on. It runs beside the old cluster on its own volume, so the old cluster stays untouched as
+the way back.
 
 ### Before you start
 
-- cert-manager in the cluster, which `deploy/postgres-ha/values.yaml` leaves the chart to use for its
-  TLS. To bring your own certificate instead, set `tls.certManager.enabled=false` and
-  `tls.existingSecret`.
+- cert-manager in the cluster, which the chart uses for its TLS by default. To bring your own
+  certificate instead, set `postgres-ha.tls.certManager.enabled=false` and
+  `postgres-ha.tls.existingSecret`.
 - Room on the storage class for the data again, plus its write-ahead log, on top of the old volume.
-  Set `storage.size`, or use `deploy/postgres-ha/values-small-box.yaml` for a small box.
-- Downtime: the services are stopped from step 3 to step 5.
+  Set `postgres-ha.storage.size`. `charts/sneakers/examples/values-small-box.yaml` has a small box's
+  sizes.
+- With `global.arch` set, `kubernetes.io/arch` in `postgres-ha.nodeSelector` too.
+- Downtime: the services are stopped from step 2 to step 4.
 
-The commands use the release `sneakers` in the namespace `sneakers`, and need `helm` and `kubectl`.
-Change `192.0.2.0/24` to your cluster's pod network.
+The commands use the release `sneakers` in the namespace `sneakers`, your values in `my-values.yaml`,
+and need `helm` and `kubectl`. Change `192.0.2.0/24` to your cluster's pod network.
 
 ### The steps
 
-1. Fetch the chart at the digest `manifest/release.yaml` pins:
+1. Turn the new cluster on. Add this to your values file, and upgrade. The services stay on the old
+   cluster:
 
-   ```sh
-   pgha="$(scripts/pull-postgres-ha.sh)"
+   ```yaml
+   postgres-ha:
+     enabled: true
+     postgresql:
+       allowedCIDRs: [192.0.2.0/24]
    ```
 
-2. Install the new cluster, and wait for it:
-
    ```sh
-   helm install sneakers-pgha "$pgha" -n sneakers -f deploy/postgres-ha/values.yaml \
-     --set 'postgresql.allowedCIDRs={192.0.2.0/24}' --wait --timeout 5m
+   helm upgrade sneakers charts/sneakers -n sneakers -f my-values.yaml --wait --timeout 15m
    ```
 
-3. Stop everything that connects to the database. Valkey stays up:
+2. Stop everything that connects to the database. Valkey stays up:
 
    ```sh
    kubectl -n sneakers get deployments -o name | grep -v valkey |
      xargs kubectl -n sneakers scale --replicas=0
    ```
 
-4. Copy each database. `--clean` replaces the empty one the chart made:
+3. Copy each database. `--clean` replaces the empty one the chart made:
 
    ```sh
    for db in identity vault workflow audit kratos hydra; do
@@ -397,7 +401,7 @@ Change `192.0.2.0/24` to your cluster's pod network.
    done
    ```
 
-5. Point the services at it. Add these two to your values file, so later upgrades keep them, and
+4. Point the services at it. Add these two to your values file, so later upgrades keep them, and
    upgrade:
 
    ```yaml
@@ -412,7 +416,7 @@ Change `192.0.2.0/24` to your cluster's pod network.
    ```
 
 To go back, take the two values out and upgrade again: the services return to the old cluster as it
-stood at step 3. Remove the old cluster only once you've taken a backup from the new one, with
+stood at step 2. Remove the old cluster only once you've taken a backup from the new one, with
 `postgres.enabled=false`; its volume is kept until you delete it.
 
 ## Backups
@@ -426,7 +430,7 @@ Back up together:
 
 `sneakers-pgha` archives its WAL continuously and takes a base backup nightly at 01:15 UTC, into the
 20 Gi claim `sneakers-pgha-backup`, and a restore check runs at 03:45 UTC. The values are under
-`backup:` in `deploy/postgres-ha/values.yaml`. That claim is on the cluster, so copy it somewhere else
+`postgres-ha.backup` in `charts/sneakers/values.yaml`. That claim is on the cluster, so copy it somewhere else
 as well; it survives `helm uninstall`.
 
 ## Uninstall
