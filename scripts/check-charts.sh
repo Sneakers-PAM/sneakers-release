@@ -51,6 +51,34 @@ for box in small large; do
   helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f "charts/sneakers/examples/values-${box}-box.yaml" --set hydra.enabled=true >"$out/sneakers-${box}-box-hydra.yaml"
 done
 
+step "the database host and sslmode"
+helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set hydra.enabled=true --set global.database.host=sneakers-db-new --set global.database.sslmode=require >"$out/sneakers-db.yaml"
+python3 - "$out/sneakers-hydra.yaml" "$out/sneakers-db.yaml" <<'PY'
+import base64, re, sys, yaml
+
+def dsns(path):
+    found = {}
+    for d in yaml.safe_load_all(open(path)):
+        if not d:
+            continue
+        if d["kind"] == "Secret":
+            for k, v in (d.get("data") or {}).items():
+                if k == "dsn":
+                    found[d["metadata"]["name"]] = re.sub(r":[^:@]+@", ":x@", base64.b64decode(v).decode())
+        if d["kind"] == "ConfigMap" and (d.get("data") or {}).get("DATABASE_DSN", "").startswith("postgres://"):
+            found[d["metadata"]["name"]] = d["data"]["DATABASE_DSN"]
+    return found
+
+defaults, moved = dsns(sys.argv[1]), dsns(sys.argv[2])
+assert len(defaults) == 6, defaults
+assert defaults.keys() == moved.keys(), (defaults, moved)
+for name, dsn in defaults.items():
+    assert "@sneakers-postgres:5432/" in dsn and dsn.endswith("?sslmode=disable"), dsn
+    assert moved[name] == dsn.replace("@sneakers-postgres:", "@sneakers-db-new:").replace("sslmode=disable", "sslmode=require"), moved[name]
+print("ok: every DSN follows global.database, and the default is unchanged")
+PY
+must_fail "an sslmode libpq doesn't know" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.database.sslmode=maybe
+
 # The API server address a cluster's rehearsal names (test/migrate/rehearsal.sh reads it from the
 # kubernetes endpoints); a documentation address here.
 rehearsal_api=(--set 'rehearsal.apiServer.addresses={192.0.2.10/32}' --set rehearsal.apiServer.port=6443)

@@ -13,6 +13,13 @@ global:
   environment: production
   logLevel: error
   logFormat: json
+  # Where the services and the bundled Kratos and Hydra reach PostgreSQL. The
+  # defaults are the bundled charts/postgres.
+  database:
+    host: sneakers-postgres
+    # The libpq sslmode. charts/postgres doesn't serve TLS, so it stays
+    # disable with that chart.
+    sslmode: disable
   # OTLP gRPC collector URL for traces and metrics, such as http://collector:4317
   # (https:// for TLS). Empty: unset.
   otlpEndpoint: ""
@@ -75,7 +82,7 @@ bundledSecrets:
 identity:
   enabled: true
   env:
-    DATABASE_DSN: postgres://sneakers@sneakers-postgres:5432/sneakers_identity?sslmode=disable
+    DATABASE_DSN: postgres://sneakers@{{ .Values.global.database.host }}:5432/sneakers_identity?sslmode={{ .Values.global.database.sslmode }}
   secretEnv:
     PGPASSWORD:
       secretName: sneakers-bundled
@@ -83,7 +90,7 @@ identity:
 vault:
   enabled: true
   env:
-    DATABASE_DSN: postgres://sneakers@sneakers-postgres:5432/sneakers_vault?sslmode=disable
+    DATABASE_DSN: postgres://sneakers@{{ .Values.global.database.host }}:5432/sneakers_vault?sslmode={{ .Values.global.database.sslmode }}
   secretEnv:
     PGPASSWORD:
       secretName: sneakers-bundled
@@ -99,7 +106,7 @@ vault:
 workflow:
   enabled: true
   env:
-    DATABASE_DSN: postgres://sneakers@sneakers-postgres:5432/sneakers_workflow?sslmode=disable
+    DATABASE_DSN: postgres://sneakers@{{ .Values.global.database.host }}:5432/sneakers_workflow?sslmode={{ .Values.global.database.sslmode }}
   secretEnv:
     PGPASSWORD:
       secretName: sneakers-bundled
@@ -107,7 +114,7 @@ workflow:
 audit:
   enabled: true
   env:
-    DATABASE_DSN: postgres://sneakers@sneakers-postgres:5432/sneakers_audit?sslmode=disable
+    DATABASE_DSN: postgres://sneakers@{{ .Values.global.database.host }}:5432/sneakers_audit?sslmode={{ .Values.global.database.sslmode }}
   secretEnv:
     PGPASSWORD:
       secretName: sneakers-bundled
