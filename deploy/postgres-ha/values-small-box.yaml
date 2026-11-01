@@ -34,3 +34,20 @@ postgresql:
     min_wal_size: 64MB
     wal_keep_size: "0"
     max_slot_wal_keep_size: 256MB
+
+# The backups run beside the database on the same small allowance: one upload
+# and one disk reader at a time, and a restore check no larger than the
+# database itself.
+backup:
+  env:
+    WALG_UPLOAD_CONCURRENCY: "1"
+    WALG_UPLOAD_DISK_CONCURRENCY: "1"
+    WALG_DOWNLOAD_CONCURRENCY: "1"
+  verify:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi

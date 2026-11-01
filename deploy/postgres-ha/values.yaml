@@ -51,6 +51,28 @@ databases:
   - {name: sneakers_kratos, owner: sneakers}
   - {name: sneakers_hydra, owner: sneakers}
 
+# WAL archives continuously and a base backup runs nightly, to a directory of
+# their own on the backup volume. On a box that volume is the encrypted backup
+# partition. The times are UTC and stay clear of each other.
+backup:
+  enabled: true
+  storage: file
+  # One member, so it's the primary that takes them.
+  source: primary
+  schedule: "15 1 * * *"
+  # Seven nightly base backups and the WAL between them.
+  retainFull: 7
+  retainDays: 0
+  file:
+    prefix: walg
+    persistence:
+      size: 20Gi
+      accessModes: [ReadWriteOnce]
+  verify:
+    enabled: true
+    schedule: "45 3 * * *"
+    database: sneakers_audit
+
 # One member needs no pool, and the services keep session state.
 pgbouncer:
   enabled: false

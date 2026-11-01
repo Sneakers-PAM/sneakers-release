@@ -424,6 +424,11 @@ Back up together:
 - `sneakers-bundled`, `sneakers-kratos` and `sneakers-hydra` when the bundled pieces are used;
 - any `sneakers-<service>-generated` Secret.
 
+`sneakers-pgha` archives its WAL continuously and takes a base backup nightly at 01:15 UTC, into the
+20 Gi claim `sneakers-pgha-backup`, and a restore check runs at 03:45 UTC. The values are under
+`backup:` in `deploy/postgres-ha/values.yaml`. That claim is on the cluster, so copy it somewhere else
+as well; it survives `helm uninstall`.
+
 ## Uninstall
 
 ```bash
