@@ -345,6 +345,76 @@ rolled back by `helm rollback`.
 Each service chart also has a pre-upgrade migration Job (`migrations.job.enabled`). It stays off
 until the service images have a migrate-only command.
 
+## Moving to the helm-postgres-ha cluster
+
+`helm upgrade` never moves your data, and on its own it never changes where the services connect:
+the umbrella keeps the bundled `charts/postgres`, and a new install gets the same. The appliance
+moves a box's data as one step of an update; on your own cluster the move is these steps, when you
+choose to. The new cluster is `sneakers-pgha`, a Helm release of its own beside the umbrella, on its
+own volume, so the old cluster stays untouched as the way back.
+
+### Before you start
+
+- cert-manager in the cluster, which `deploy/postgres-ha/values.yaml` leaves the chart to use for its
+  TLS. To bring your own certificate instead, set `tls.certManager.enabled=false` and
+  `tls.existingSecret`.
+- Room on the storage class for the data again, plus its write-ahead log, on top of the old volume.
+  Set `storage.size`, or use `deploy/postgres-ha/values-small-box.yaml` for a small box.
+- Downtime: the services are stopped from step 3 to step 5.
+
+The commands use the release `sneakers` in the namespace `sneakers`, and need `helm` and `kubectl`.
+Change `192.0.2.0/24` to your cluster's pod network.
+
+### The steps
+
+1. Fetch the chart at the digest `manifest/release.yaml` pins:
+
+   ```sh
+   pgha="$(scripts/pull-postgres-ha.sh)"
+   ```
+
+2. Install the new cluster, and wait for it:
+
+   ```sh
+   helm install sneakers-pgha "$pgha" -n sneakers -f deploy/postgres-ha/values.yaml \
+     --set 'postgresql.allowedCIDRs={192.0.2.0/24}' --wait --timeout 5m
+   ```
+
+3. Stop everything that connects to the database. Valkey stays up:
+
+   ```sh
+   kubectl -n sneakers get deployments -o name | grep -v valkey |
+     xargs kubectl -n sneakers scale --replicas=0
+   ```
+
+4. Copy each database. `--clean` replaces the empty one the chart made:
+
+   ```sh
+   for db in identity vault workflow audit kratos hydra; do
+     kubectl -n sneakers exec sneakers-postgres-0 -- pg_dump -U postgres --format=custom "sneakers_$db" |
+       kubectl -n sneakers exec -i sneakers-pgha-0 -c postgres -- \
+         pg_restore -U postgres --clean --if-exists --exit-on-error -d "sneakers_$db"
+   done
+   ```
+
+5. Point the services at it. Add these two to your values file, so later upgrades keep them, and
+   upgrade:
+
+   ```yaml
+   global:
+     database:
+       host: sneakers-pgha-primary
+       sslmode: require
+   ```
+
+   ```sh
+   helm upgrade sneakers charts/sneakers -n sneakers -f my-values.yaml --wait --timeout 15m
+   ```
+
+To go back, take the two values out and upgrade again: the services return to the old cluster as it
+stood at step 3. Remove the old cluster only once you've taken a backup from the new one, with
+`postgres.enabled=false`; its volume is kept until you delete it.
+
 ## Backups
 
 Back up together:

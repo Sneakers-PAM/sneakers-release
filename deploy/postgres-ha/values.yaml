@@ -1,0 +1,94 @@
+# Values for sneakers-pgha, the helm-postgres-ha cluster the services move to.
+# It is its own Helm release beside the umbrella, not a dependency: the chart's
+# schema refuses the `global` values Helm hands every subchart. scripts/pull-postgres-ha.sh
+# fetches the chart at the digest manifest/release.yaml pins. docs/install.md has the steps.
+
+# Its own name, so it never takes over the old cluster's volume.
+fullnameOverride: sneakers-pgha
+
+# One member. Failover needs three, and a single node gets nothing from them.
+replicas: 1
+
+# The image charts/postgres runs, so the two clusters share one PostgreSQL
+# build and a dump comes back with the same collations.
+image:
+  repository: library/postgres
+  tag: "18.6"
+  digest: sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+
+agent:
+  image:
+    tag: "1.0.0"
+    digest: sha256:fb3d536548571d67106f6140da144a9e9a53218196feadeda544b5d710e467d4
+
+postgresql:
+  # Your cluster's pod network. Required, and there's no safe default.
+  allowedCIDRs: []
+  # One member has no standby to wait for.
+  synchronous:
+    mode: "off"
+  # charts/postgres runs in en_US, and identity sorts users and groups by name.
+  initdbArgs: "--encoding=UTF8 --locale=en_US.UTF-8 --data-checksums"
+
+# The superuser and the application role keep the passwords of the old cluster,
+# so a move changes no Secret. The replication and rewind roles aren't used by
+# one member; the chart generates their Secrets.
+credentials:
+  superuser:
+    existingSecret: sneakers-bundled
+    passwordKey: postgres-password
+
+roles:
+  - name: sneakers
+    existingSecret: sneakers-bundled
+    passwordKey: password
+
+databases:
+  - {name: sneakers_identity, owner: sneakers}
+  - {name: sneakers_vault, owner: sneakers}
+  - {name: sneakers_workflow, owner: sneakers}
+  - {name: sneakers_audit, owner: sneakers}
+  - {name: sneakers_kratos, owner: sneakers}
+  - {name: sneakers_hydra, owner: sneakers}
+
+# One member needs no pool, and the services keep session state.
+pgbouncer:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false
+
+affinity:
+  zoneSpread: false
+
+podLabels:
+  app.kubernetes.io/part-of: sneakers
+  app.kubernetes.io/component: postgres
+
+# Only the pods with a database may connect: the same list as charts/postgres.
+networkPolicy:
+  allowedClients:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: sneakers
+          app.kubernetes.io/component: identity
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: sneakers
+          app.kubernetes.io/component: vault
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: sneakers
+          app.kubernetes.io/component: workflow
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: sneakers
+          app.kubernetes.io/component: audit
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: sneakers
+          app.kubernetes.io/name: kratos
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: sneakers
+          app.kubernetes.io/name: hydra

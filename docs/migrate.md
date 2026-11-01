@@ -440,7 +440,7 @@ no rollback). For a Helm install of the umbrella chart the steps are the same, w
   and then `verify` in the new install, from the Secrets `sneakers-migrate-key` (`import.key`) and
   `sneakers-migrate-bundle` (`bundle.age`). It assumes the umbrella chart's names for a release
   called `sneakers` with the bundled PostgreSQL and Kratos; change the DSNs and addresses for
-  anything else.
+  anything else, such as an install [moved to the new cluster](install.md#moving-to-the-helm-postgres-ha-cluster).
 - Layer `migrate/deploy/migrate-callers-values.yaml` for the Jobs' lifetime only, restart the vault
   after the import, and upgrade without it afterwards.
 

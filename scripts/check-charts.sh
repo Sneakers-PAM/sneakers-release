@@ -79,6 +79,39 @@ print("ok: every DSN follows global.database, and the default is unchanged")
 PY
 must_fail "an sslmode libpq doesn't know" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.database.sslmode=maybe
 
+step "postgres-ha, the cluster the services move to (deploy/postgres-ha)"
+pgha="$(scripts/pull-postgres-ha.sh "$out/pgha")"
+pgha_values=(-n sneakers -f deploy/postgres-ha/values.yaml -f deploy/postgres-ha/values-small-box.yaml)
+helm template sneakers-pgha "$pgha" "${pgha_values[@]}" --set 'postgresql.allowedCIDRs={192.0.2.0/24}' >"$out/pgha/certmanager.yaml"
+# kubeconform has no schema for cert-manager's kinds, so it reads the render without them.
+helm template sneakers-pgha "$pgha" "${pgha_values[@]}" --set 'postgresql.allowedCIDRs={192.0.2.0/24}' \
+  --set tls.certManager.enabled=false --set tls.existingSecret=sneakers-pgha-tls >"$out/pgha.yaml"
+must_fail "postgres-ha without a pod network" helm template sneakers-pgha "$pgha" "${pgha_values[@]}"
+python3 - "$out/pgha/certmanager.yaml" <<'PY'
+import sys, yaml
+docs = [d for d in yaml.safe_load_all(open(sys.argv[1])) if d]
+sts = next(d for d in docs if d["kind"] == "StatefulSet")
+assert sts["metadata"]["name"] == "sneakers-pgha", "the new cluster takes the old one's name, and its volume"
+assert sts["spec"]["replicas"] == 1, sts["spec"]["replicas"]
+assert not any("pgbouncer" in d["metadata"]["name"] and d["kind"] in ("Deployment", "Service") for d in docs), "PgBouncer is on"
+c = sts["spec"]["template"]["spec"]["containers"][0]
+env = {e["name"]: e.get("value") for e in c["env"]}
+assert "--locale=en_US.UTF-8" in env["PGHA_INITDB_ARGS"], env["PGHA_INITDB_ARGS"]
+assert env["PGHA_SYNC_MODE"] == "off", env["PGHA_SYNC_MODE"]
+old = yaml.safe_load(open("charts/postgres/values.yaml"))
+new = yaml.safe_load(open("deploy/postgres-ha/values.yaml"))
+assert [d["name"] for d in new["databases"]] == old["databases"], "the two clusters' databases differ"
+assert all(d["owner"] == old["auth"]["username"] for d in new["databases"]), new["databases"]
+want = [{"podSelector": {"matchLabels": f}} for f in old["networkPolicy"]["from"]]
+assert new["networkPolicy"]["allowedClients"] == want, "the two clusters' client lists differ"
+small = yaml.safe_load(open("charts/sneakers/examples/values-small-box.yaml"))["postgres"]
+got = yaml.safe_load(open("deploy/postgres-ha/values-small-box.yaml"))
+assert got["resources"] == small["resources"], "the small box's PostgreSQL sizes differ"
+for k in ("shared_buffers", "effective_cache_size", "work_mem", "maintenance_work_mem"):
+    assert got["postgresql"]["parameters"][k] == small["parameters"][k], k
+print("ok: its own name, one member, no PgBouncer, en_US, the old cluster's databases and clients")
+PY
+
 # The API server address a cluster's rehearsal names (test/migrate/rehearsal.sh reads it from the
 # kubernetes endpoints); a documentation address here.
 rehearsal_api=(--set 'rehearsal.apiServer.addresses={192.0.2.10/32}' --set rehearsal.apiServer.port=6443)
@@ -585,11 +618,19 @@ elif what == "migrate-short-commit":
     m["spec"]["jobs"]["migrate"]["build"]["commit"] = "59056d5"
 elif what == "migrate-other-repo":
     m["spec"]["jobs"]["migrate"]["build"]["repository"] = "Sneakers-PAM/sneakers-vault"
+elif what == "no-postgres-ha":
+    del m["spec"]["thirdParty"]["postgres-ha"]
+elif what == "postgres-ha-no-digest":
+    del m["spec"]["thirdParty"]["postgres-ha"]["chart"]["digest"]
+elif what == "postgres-ha-other-agent":
+    m["spec"]["thirdParty"]["postgres-ha"]["digest"] = "sha256:" + "0" * 64
+elif what == "postgres-ha-pseudo-version":
+    m["spec"]["thirdParty"]["postgres-ha"]["chart"]["version"] = "1.0.1-0.20261101"
 yaml.safe_dump(m, open(out, "w"), sort_keys=False)
 PY
   python3 scripts/check-manifest.py "$out/bad-release.yaml"
 }
-for what in no-build short-commit other-repo no-dockerfile other-commit other-target other-args unknown-key no-migrate migrate-short-commit migrate-other-repo; do
+for what in no-build short-commit other-repo no-dockerfile other-commit other-target other-args unknown-key no-migrate migrate-short-commit migrate-other-repo no-postgres-ha postgres-ha-no-digest postgres-ha-other-agent postgres-ha-pseudo-version; do
   must_fail "a service build block: ${what}" bad_manifest "$what"
 done
 
