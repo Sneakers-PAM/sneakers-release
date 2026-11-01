@@ -25,6 +25,15 @@
         "logLevel": { "enum": ["trace", "debug", "info", "warn", "error", "fatal", "panic", "disabled"] },
         "logFormat": { "enum": ["json", "console", "pretty", "both"] },
         "otlpEndpoint": { "type": "string" },
+        "database": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["host", "sslmode"],
+          "properties": {
+            "host": { "type": "string", "minLength": 1 },
+            "sslmode": { "enum": ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"] }
+          }
+        },
         "sso": {
           "type": "object",
           "additionalProperties": false,
@@ -82,6 +91,7 @@
     "web-staff": { "$ref": "#/definitions/toggle" },
     "web-admin": { "$ref": "#/definitions/toggle" },
     "postgres": { "$ref": "#/definitions/toggle" },
+    "postgres-ha": { "$ref": "#/definitions/toggle" },
     "valkey": { "$ref": "#/definitions/toggle" },
     "kratos": { "$ref": "#/definitions/toggle" },
     "hydra": { "$ref": "#/definitions/toggle" },

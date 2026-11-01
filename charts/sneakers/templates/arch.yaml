@@ -1,6 +1,6 @@
 {{- /*
 global.arch pins the Sneakers services, PostgreSQL and the smoke test to one
-architecture. The Valkey, Kratos and Hydra charts don't read global values, so
+architecture. The Valkey, Kratos, Hydra and postgres-ha charts don't read it, so
 each enabled one must carry the same kubernetes.io/arch in its own nodeSelector,
 or part of the install would land on any node. The chart refuses to render
 until they match, naming the key to set.
@@ -10,6 +10,9 @@ until they match, naming the key to set.
 {{- $keys := list }}
 {{- if $.Values.valkey.enabled }}
 {{- $keys = append $keys (list "valkey" (list "nodeSelector")) }}
+{{- end }}
+{{- if (index $.Values "postgres-ha").enabled }}
+{{- $keys = append $keys (list "postgres-ha" (list "nodeSelector")) }}
 {{- end }}
 {{- range $chart := list "kratos" "hydra" }}
 {{- $v := index $.Values $chart }}
@@ -36,7 +39,7 @@ until they match, naming the key to set.
 {{- end }}
 {{- $path := printf "%s.%s" (index $k 0) (join "." (index $k 1)) }}
 {{- if ne (get $sel "kubernetes.io/arch" | toString) $arch }}
-{{- fail (printf "global.arch is %s: set kubernetes.io/arch: %s in %s too (that chart doesn't read global values)" $arch $arch $path) }}
+{{- fail (printf "global.arch is %s: set kubernetes.io/arch: %s in %s too (that chart doesn't read global.arch)" $arch $arch $path) }}
 {{- end }}
 {{- end }}
 {{- end }}

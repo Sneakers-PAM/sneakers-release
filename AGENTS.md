@@ -39,7 +39,10 @@ Two things to know before changing it:
 - `charts/postgres/` - the bundled single-instance PostgreSQL
 - `charts/sneakers/` - the umbrella: dependencies, the bundled Secrets, the `helm test` pod, and
   `examples/` (the small-box and large-box sizing examples; documentation, never loaded by the
-  chart)
+  chart). `postgres-ha`, the helm-postgres-ha cluster the services move to, is a dependency here
+  named `sneakers-pgha`, off by default. `manifest/release.yaml` pins it by OCI digest,
+  `scripts/check-chart-digest.sh` holds the fetched chart to that digest, and
+  `scripts/check-manifest.py` holds its images to the pins
 - `manifest/release.yaml` - the pinned release
 - `scripts/` - `install-tools.sh` (pinned, checksum-checked tools), `check-charts.sh`, the
   manifest, defaults, probes, edges, web and resources checks, `sync-schemas.sh`

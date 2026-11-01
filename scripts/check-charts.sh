@@ -51,6 +51,97 @@ for box in small large; do
   helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f "charts/sneakers/examples/values-${box}-box.yaml" --set hydra.enabled=true >"$out/sneakers-${box}-box-hydra.yaml"
 done
 
+step "the database host and sslmode"
+helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set hydra.enabled=true --set global.database.host=sneakers-db-new --set global.database.sslmode=require >"$out/sneakers-db.yaml"
+python3 - "$out/sneakers-hydra.yaml" "$out/sneakers-db.yaml" <<'PY'
+import base64, re, sys, yaml
+
+def dsns(path):
+    found = {}
+    for d in yaml.safe_load_all(open(path)):
+        if not d:
+            continue
+        if d["kind"] == "Secret":
+            for k, v in (d.get("data") or {}).items():
+                if k == "dsn":
+                    found[d["metadata"]["name"]] = re.sub(r":[^:@]+@", ":x@", base64.b64decode(v).decode())
+        if d["kind"] == "ConfigMap" and (d.get("data") or {}).get("DATABASE_DSN", "").startswith("postgres://"):
+            found[d["metadata"]["name"]] = d["data"]["DATABASE_DSN"]
+    return found
+
+defaults, moved = dsns(sys.argv[1]), dsns(sys.argv[2])
+assert len(defaults) == 6, defaults
+assert defaults.keys() == moved.keys(), (defaults, moved)
+for name, dsn in defaults.items():
+    assert "@sneakers-postgres:5432/" in dsn and dsn.endswith("?sslmode=disable"), dsn
+    assert moved[name] == dsn.replace("@sneakers-postgres:", "@sneakers-db-new:").replace("sslmode=disable", "sslmode=require"), moved[name]
+print("ok: every DSN follows global.database, and the default is unchanged")
+PY
+must_fail "an sslmode libpq doesn't know" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set global.database.sslmode=maybe
+
+step "postgres-ha, the cluster the services move to"
+scripts/check-chart-digest.sh
+must_fail "a postgres-ha chart that isn't the pinned digest" env PGHA_CHART="$(ls charts/sneakers/charts/valkey-*.tgz)" scripts/check-chart-digest.sh
+mkdir "$out/pgha"
+pgha_values=(-n sneakers -f test/ci/values.yaml -f charts/sneakers/examples/values-small-box.yaml --set hydra.enabled=true)
+pgha_on=(--set postgres-ha.enabled=true --set 'postgres-ha.postgresql.allowedCIDRs={192.0.2.0/24}')
+pgha_arch=(--set global.arch=arm64 --set-string 'valkey.nodeSelector.kubernetes\.io/arch=arm64'
+  --set-string 'kratos.deployment.nodeSelector.kubernetes\.io/arch=arm64'
+  --set-string 'hydra.deployment.nodeSelector.kubernetes\.io/arch=arm64')
+helm template ci charts/sneakers "${pgha_values[@]}" >"$out/pgha/off.yaml"
+helm template ci charts/sneakers "${pgha_values[@]}" "${pgha_on[@]}" >"$out/pgha/certmanager.yaml"
+# kubeconform has no schema for cert-manager's kinds, so it reads the render without them.
+helm template ci charts/sneakers "${pgha_values[@]}" "${pgha_on[@]}" \
+  --set postgres-ha.tls.certManager.enabled=false --set postgres-ha.tls.existingSecret=sneakers-pgha-tls >"$out/pgha.yaml"
+must_fail "postgres-ha without a pod network" helm template ci charts/sneakers "${pgha_values[@]}" --set postgres-ha.enabled=true
+must_fail "global.arch with no kubernetes.io/arch on postgres-ha" helm template ci charts/sneakers "${pgha_values[@]}" "${pgha_on[@]}" "${pgha_arch[@]}"
+helm template ci charts/sneakers "${pgha_values[@]}" "${pgha_on[@]}" "${pgha_arch[@]}" \
+  --set-string 'postgres-ha.nodeSelector.kubernetes\.io/arch=arm64' >/dev/null
+python3 - "$out/pgha/off.yaml" "$out/pgha/certmanager.yaml" "$out/pgha.yaml" <<'PY'
+import collections, sys, yaml
+
+def load(path):
+    return [d for d in yaml.safe_load_all(open(path)) if d]
+
+def key(d):
+    return (d["kind"], d["metadata"]["name"])
+
+off, docs, nocm = load(sys.argv[1]), load(sys.argv[2]), load(sys.argv[3])
+# Off is the default, so a plain upgrade starts no second cluster.
+assert not any("pgha" in d["metadata"]["name"] for d in off), "postgres-ha renders while it's off"
+# Beside charts/postgres: no name twice, and nothing the umbrella renders changes.
+for render in docs, nocm:
+    dup = [k for k, n in collections.Counter(key(d) for d in render).items() if n > 1]
+    assert not dup, f"rendered twice: {dup}"
+was, now = {key(d): d for d in off}, {key(d): d for d in docs}
+# The Secrets the umbrella generates differ on every render.
+changed = [k for k, d in was.items() if k not in now or (k[0] != "Secret" and d != now[k])]
+assert not changed, f"turning postgres-ha on changed: {changed}"
+added = [d for k, d in now.items() if k not in was]
+assert all(d["metadata"]["name"].startswith("sneakers-pgha") for d in added), [key(d) for d in added]
+assert not any(d["kind"].startswith("Cluster") for d in added), "postgres-ha has a cluster-scoped object"
+print(f"ok: {len(added)} objects of its own, and none of the umbrella's {len(off)} change")
+sts = now[("StatefulSet", "sneakers-pgha")]
+assert sts["spec"]["replicas"] == 1, sts["spec"]["replicas"]
+assert not any("pgbouncer" in d["metadata"]["name"] and d["kind"] in ("Deployment", "Service") for d in docs), "PgBouncer is on"
+c = sts["spec"]["template"]["spec"]["containers"][0]
+env = {e["name"]: e.get("value") for e in c["env"]}
+assert "--locale=en_US.UTF-8" in env["PGHA_INITDB_ARGS"], env["PGHA_INITDB_ARGS"]
+assert env["PGHA_SYNC_MODE"] == "off", env["PGHA_SYNC_MODE"]
+old = yaml.safe_load(open("charts/postgres/values.yaml"))
+new = yaml.safe_load(open("charts/sneakers/values.yaml"))["postgres-ha"]
+assert [d["name"] for d in new["databases"]] == old["databases"], "the two clusters' databases differ"
+assert all(d["owner"] == old["auth"]["username"] for d in new["databases"]), new["databases"]
+want = [{"podSelector": {"matchLabels": f}} for f in old["networkPolicy"]["from"]]
+assert new["networkPolicy"]["allowedClients"] == want, "the two clusters' client lists differ"
+box = yaml.safe_load(open("charts/sneakers/examples/values-small-box.yaml"))
+small, got = box["postgres"], box["postgres-ha"]
+assert got["resources"] == small["resources"], "the small box's PostgreSQL sizes differ"
+for k in ("shared_buffers", "effective_cache_size", "work_mem", "maintenance_work_mem"):
+    assert got["postgresql"]["parameters"][k] == small["parameters"][k], k
+print("ok: its own name, one member, no PgBouncer, en_US, the old cluster's databases and clients")
+PY
+
 # The API server address a cluster's rehearsal names (test/migrate/rehearsal.sh reads it from the
 # kubernetes endpoints); a documentation address here.
 rehearsal_api=(--set 'rehearsal.apiServer.addresses={192.0.2.10/32}' --set rehearsal.apiServer.port=6443)
@@ -304,7 +395,7 @@ echo "ok: the gateway chart on its own sets the product version"
 
 step "global.arch"
 # hydra on: every workload the umbrella can render. The third-party charts
-# don't read global values, so their own nodeSelector keys carry the arch.
+# don't read global.arch, so their own nodeSelector keys carry the arch.
 arch_args=(-f test/ci/values.yaml --set hydra.enabled=true)
 arch_bundled=(--set-string 'valkey.nodeSelector.kubernetes\.io/arch=arm64'
   --set-string 'kratos.deployment.nodeSelector.kubernetes\.io/arch=arm64'
@@ -557,11 +648,19 @@ elif what == "migrate-short-commit":
     m["spec"]["jobs"]["migrate"]["build"]["commit"] = "59056d5"
 elif what == "migrate-other-repo":
     m["spec"]["jobs"]["migrate"]["build"]["repository"] = "Sneakers-PAM/sneakers-vault"
+elif what == "no-postgres-ha":
+    del m["spec"]["thirdParty"]["postgres-ha"]
+elif what == "postgres-ha-no-digest":
+    del m["spec"]["thirdParty"]["postgres-ha"]["chart"]["digest"]
+elif what == "postgres-ha-other-agent":
+    m["spec"]["thirdParty"]["postgres-ha"]["digest"] = "sha256:" + "0" * 64
+elif what == "postgres-ha-pseudo-version":
+    m["spec"]["thirdParty"]["postgres-ha"]["chart"]["version"] = "1.0.1-0.20261101"
 yaml.safe_dump(m, open(out, "w"), sort_keys=False)
 PY
   python3 scripts/check-manifest.py "$out/bad-release.yaml"
 }
-for what in no-build short-commit other-repo no-dockerfile other-commit other-target other-args unknown-key no-migrate migrate-short-commit migrate-other-repo; do
+for what in no-build short-commit other-repo no-dockerfile other-commit other-target other-args unknown-key no-migrate migrate-short-commit migrate-other-repo no-postgres-ha postgres-ha-no-digest postgres-ha-other-agent postgres-ha-pseudo-version; do
   must_fail "a service build block: ${what}" bad_manifest "$what"
 done
 

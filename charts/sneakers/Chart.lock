@@ -35,6 +35,9 @@ dependencies:
 - name: postgres
   repository: file://../postgres
   version: 0.1.0
+- name: postgres-ha
+  repository: oci://ghcr.io/bugs5382/charts
+  version: 1.0.1
 - name: valkey
   repository: https://valkey.io/valkey-helm/
   version: 0.12.0
@@ -44,5 +47,5 @@ dependencies:
 - name: hydra
   repository: https://k8s.ory.sh/helm/charts
   version: 0.59.0
-digest: sha256:0c6adacc4565d4e10793dd1dc873c1f3ea0afe0cbe90ef7dc01b2ee01e3735bd
-generated: "2026-10-02T11:53:41.409413383-04:00"
+digest: sha256:f0ca3d4ca9480761dcd95284f70cb748e4d951333f722b92549e618685d792af
+generated: "2026-11-01T16:31:54.819584-05:00"

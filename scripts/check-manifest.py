@@ -106,6 +106,8 @@ for name, part in spec["thirdParty"].items():
     if not DIGEST.match(part["digest"]):
         errors.append(f"{name}: digest {part['digest']!r} is not a sha256 digest")
     expect(f"{name} chart version", deps[name]["version"], part["chart"]["version"])
+    if name == "postgres-ha":
+        continue
     if part["chart"]["repository"].startswith("http"):
         expect(f"{name} chart repository", deps[name]["repository"], part["chart"]["repository"])
         expect(f"{name} image tag", values[name]["image"]["tag"], f"{part['version']}@{part['digest']}")
@@ -114,6 +116,29 @@ for name, part in spec["thirdParty"].items():
         expect(f"{name} image", local["repository"], part["image"])
         expect(f"{name} image tag", local["tag"], str(part["version"]))
         expect(f"{name} image digest", local["digest"], part["digest"])
+
+# postgres-ha is an OCI dependency of the umbrella, off by default. The manifest
+# pins it by digest (scripts/check-chart-digest.sh holds the fetched chart to it).
+# Its values pin the agent image above, and the PostgreSQL image charts/postgres
+# pins, so the two clusters run one build.
+pgha = spec["thirdParty"].get("postgres-ha")
+if not pgha:
+    errors.append("spec.thirdParty pins no postgres-ha")
+else:
+    expect("postgres-ha chart repository", deps["postgres-ha"]["repository"], pgha["chart"]["repository"])
+    if not DIGEST.match(str(pgha["chart"].get("digest"))):
+        errors.append(f"postgres-ha: chart digest {pgha['chart'].get('digest')!r} is not a sha256 digest")
+    if not pgha["chart"]["repository"].startswith("oci://"):
+        errors.append("postgres-ha: the chart comes from an OCI registry, pulled by its digest")
+    if re.search(r"-|\+", str(pgha["chart"]["version"])):
+        errors.append(f"postgres-ha: {pgha['chart']['version']} isn't a published release")
+    pv = values["postgres-ha"]
+    expect("postgres-ha agent image tag", pv["agent"]["image"]["tag"], pgha["version"])
+    expect("postgres-ha agent image digest", pv["agent"]["image"]["digest"], pgha["digest"])
+    pg = spec["thirdParty"]["postgres"]
+    expect("postgres-ha PostgreSQL image", "docker.io/" + pv["image"]["repository"], pg["image"])
+    expect("postgres-ha PostgreSQL image tag", pv["image"]["tag"], str(pg["version"]))
+    expect("postgres-ha PostgreSQL image digest", pv["image"]["digest"], pg["digest"])
 
 # The platform the appliance runs under the charts: the bundle carries these
 # images too, and the appliance's bundle check refuses one that's missing.
