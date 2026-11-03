@@ -4,8 +4,8 @@
 # targets and build args as each service's build block in manifest/release.yaml
 # (scripts/check-manifest.py checks it), so the install test builds what ships.
 sneakers-identity  Sneakers-PAM/sneakers-identity   d0617c688ebd916ca5bf39d2b63423b4e5601450  -
-sneakers-vault     Sneakers-PAM/sneakers-vault      c8f6120122a2f3d729d2ee4cedffdee25c6039e3  vault
-sneakers-workflow  Sneakers-PAM/sneakers-vault      c8f6120122a2f3d729d2ee4cedffdee25c6039e3  workflow
+sneakers-vault     Sneakers-PAM/sneakers-vault      d68f3e0e9375206fecad2a278241db90d2e6272a  vault
+sneakers-workflow  Sneakers-PAM/sneakers-vault      d68f3e0e9375206fecad2a278241db90d2e6272a  workflow
 sneakers-audit     Sneakers-PAM/sneakers-audit      2db54060db2a3647c25c55ad00f72f97e12af9ba  -
 sneakers-notify    Sneakers-PAM/sneakers-notify     4ef7d2aee989f53fa9f3a351c4ef2aeac6865eb7  -
 sneakers-connector Sneakers-PAM/sneakers-connector  641581e27e467563fe4b129bd451790aa2f5ec39  -
