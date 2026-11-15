@@ -685,11 +685,15 @@ elif what == "postgres-ha-other-agent":
     m["spec"]["thirdParty"]["postgres-ha"]["digest"] = "sha256:" + "0" * 64
 elif what == "postgres-ha-pseudo-version":
     m["spec"]["thirdParty"]["postgres-ha"]["chart"]["version"] = "1.0.1-0.20261101"
+elif what == "no-acmesolver":
+    del m["spec"]["platform"]["cert-manager-acmesolver"]
+elif what == "acmesolver-other-version":
+    m["spec"]["platform"]["cert-manager-acmesolver"]["version"] = "v1.0.0"
 yaml.safe_dump(m, open(out, "w"), sort_keys=False)
 PY
   python3 scripts/check-manifest.py "$out/bad-release.yaml"
 }
-for what in no-build short-commit other-repo no-dockerfile other-commit other-target other-args unknown-key no-migrate migrate-short-commit migrate-other-repo no-postgres-ha postgres-ha-no-digest postgres-ha-other-agent postgres-ha-pseudo-version; do
+for what in no-build short-commit other-repo no-dockerfile other-commit other-target other-args unknown-key no-migrate migrate-short-commit migrate-other-repo no-postgres-ha postgres-ha-no-digest postgres-ha-other-agent postgres-ha-pseudo-version no-acmesolver acmesolver-other-version; do
   must_fail "a service build block: ${what}" bad_manifest "$what"
 done
 
