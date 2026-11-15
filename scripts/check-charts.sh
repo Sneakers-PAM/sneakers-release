@@ -97,6 +97,14 @@ must_fail "postgres-ha without a pod network" helm template ci charts/sneakers "
 must_fail "global.arch with no kubernetes.io/arch on postgres-ha" helm template ci charts/sneakers "${pgha_values[@]}" "${pgha_on[@]}" "${pgha_arch[@]}"
 helm template ci charts/sneakers "${pgha_values[@]}" "${pgha_on[@]}" "${pgha_arch[@]}" \
   --set-string 'postgres-ha.nodeSelector.kubernetes\.io/arch=arm64' >/dev/null
+# On Cilium the members reach the API server only through its kube-apiserver entity, so the
+# chart has to be able to render that policy, and not by default.
+helm template ci charts/sneakers "${pgha_values[@]}" "${pgha_on[@]}" --set postgres-ha.networkPolicy.cilium.enabled=true >"$out/pgha/cilium.yaml"
+grep -q '^kind: CiliumNetworkPolicy' "$out/pgha/cilium.yaml" || fail "postgres-ha.networkPolicy.cilium.enabled renders no CiliumNetworkPolicy"
+if grep -q '^kind: CiliumNetworkPolicy' "$out/pgha/certmanager.yaml"; then
+  fail "postgres-ha renders a CiliumNetworkPolicy by default"
+fi
+echo "ok: the Cilium policy renders only when asked for"
 python3 - "$out/pgha/off.yaml" "$out/pgha/certmanager.yaml" "$out/pgha.yaml" <<'PY'
 import collections, sys, yaml
 
