@@ -168,7 +168,8 @@ sshbroker:
 They all use `global.host`, each with its own paths: the staff web app serves `/` and the admin web
 app `/admin` (the path is passed on unchanged: each app's base is fixed when its image is built),
 and the more specific paths go to the other services. The gateway serves `/graphql`, `/machine`,
-`/auth`, `/setup`, `/oauth2` and `/.well-known/oauth-authorization-server`; the MCP server `/mcp`
+`/auth`, `/setup`, `/oauth2`, `/.well-known/oauth-authorization-server`, `/.well-known/sneakers` (the
+product release and API level) and `/share` (one-time share links); the MCP server `/mcp`
 and `/.well-known/oauth-protected-resource`; the SSH broker `/ssh` (a WebSocket). The edge
 services' NetworkPolicies let any pod in the cluster reach their HTTP port; set
 `<service>.networkPolicy.ingressFrom` to your ingress controller's namespace to narrow that.
