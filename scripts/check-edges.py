@@ -20,7 +20,7 @@ EDGES = {
     "audit": {"gateway", "vault", "sshbroker", "identity", "workflow"},
     "notify": {"vault", "gateway"},
     "identity": {"gateway", "notify"},
-    "connector": set(),
+    "connector": {"gateway"},
     "gateway": {"mcp"},
     "mcp": set(),
 }

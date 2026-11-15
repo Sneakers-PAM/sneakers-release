@@ -229,7 +229,7 @@ must_fail "a writable root filesystem" helm template ci charts/sneakers -n sneak
 must_fail "a misspelt service key" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml --set gateway.replica=3
 must_fail "an ingress with no host" helm template ci charts/mcp -n sneakers -f test/ci/standalone/mcp.yaml --set ingress.enabled=true --set global.host=
 must_fail "postgres without its Secret" helm template ci charts/postgres -n sneakers
-must_fail "a token check with no callers" helm template ci charts/connector -n sneakers -f test/ci/standalone/connector.yaml --set workloadIdentity.verify=true
+must_fail "a token check with no callers" helm template ci charts/connector -n sneakers -f test/ci/standalone/connector.yaml --set-json 'workloadIdentity.callers=[]'
 must_fail "an unknown caller" helm template ci charts/vault -n sneakers -f test/ci/standalone/vault.yaml --set 'workloadIdentity.callers={gateway,admin}'
 must_fail "SSO without its client secret" helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml --set sso.enabled=true --set sso.publicURL=https://sso.example.org
 must_fail "SSO without its public URL" helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml --set sso.enabled=true --set sso.clientSecret.secretName=polis
@@ -539,11 +539,40 @@ print("ok: envFromConfigMaps loads each ConfigMap after the chart's own, optiona
 PY
 must_fail "an envFromConfigMaps entry with no name" helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml --set-json 'envFromConfigMaps=[{"optional":true}]'
 
+step "connector has no database setting"
+# The connector holds no database, and its config loader no longer reads
+# DATABASE_DSN, so the chart must not set a placeholder for it.
+helm template ci charts/connector -n sneakers -f test/ci/standalone/connector.yaml >"$out/connector-nodsn.yaml"
+if grep -q DATABASE_DSN "$out/connector-nodsn.yaml"; then
+  fail "the connector chart still sets DATABASE_DSN"
+fi
+echo "ok: the connector chart sets no DATABASE_DSN"
+
 step "web apps"
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml \
   --set gateway.ingress.enabled=true --set web-staff.ingress.enabled=true \
   --set web-admin.ingress.enabled=true --set global.sso.enabled=true >"$out/sneakers-web.yaml"
 python3 scripts/check-web.py "$out/sneakers.yaml" "$out/sneakers-web.yaml"
+# The gateway answers these itself, outside any sign-in, so the edge sends them
+# past the staff app that owns / (its discovery document for the phone apps and
+# the one-time share links). A path missing here falls through to the staff app
+# and answers 404 on a box.
+python3 - "$out/sneakers-web.yaml" <<'PY'
+import sys, yaml
+docs = [d for d in yaml.safe_load_all(open(sys.argv[1])) if d]
+ing = [d for d in docs if d["kind"] == "Ingress" and d["metadata"]["name"] == "sneakers-gateway"]
+assert len(ing) == 1, f"want one gateway Ingress, got {len(ing)}"
+rules = ing[0]["spec"]["rules"]
+assert len(rules) == 1, f"the gateway Ingress has {len(rules)} rules"
+got = {p["path"]: p["pathType"] for p in rules[0]["http"]["paths"]}
+want = {p: "Prefix" for p in (
+    "/graphql", "/machine", "/auth", "/setup", "/oauth2",
+    "/.well-known/oauth-authorization-server",
+    "/.well-known/sneakers", "/share",
+)}
+assert got == want, f"gateway Ingress paths: missing {sorted(set(want) - set(got))}, unexpected {sorted(set(got) - set(want))}"
+print("ok: the gateway Ingress routes /.well-known/sneakers and /share, with its other paths, ahead of the staff app")
+PY
 must_fail "rehearsal mode without the API server address" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f migrate/deploy/migrate-callers-values.yaml -f test/migrate/rehearsal-values.yaml
 for svc in connector sshbroker mcp; do
   must_fail "rehearsal mode with the ${svc} on" helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml -f migrate/deploy/migrate-callers-values.yaml -f test/migrate/rehearsal-values.yaml "${rehearsal_api[@]}" --set "${svc}.enabled=true"

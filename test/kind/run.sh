@@ -61,7 +61,7 @@ declare -A callers=(
   [audit]="gateway vault sshbroker identity workflow"
   [notify]="vault gateway"
   [identity]="gateway notify"
-  [connector]=""
+  [connector]="gateway"
 )
 declare -A grpc_port=([vault]=9091 [workflow]=9193 [sshbroker]=9096 [audit]=9194 [notify]=9195 [identity]=9192 [connector]=9196)
 # The bundled pieces, by Service address: the services allowed to connect
