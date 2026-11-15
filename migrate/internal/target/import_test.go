@@ -941,6 +941,16 @@ func TestImportIntoTheNewestLayout(t *testing.T) {
 	if given != 0 {
 		t.Fatalf("the import left %d built-in ledger rows", given)
 	}
+	var pins int
+	if err := r.db[schema.Vault].Querier().QueryRow(ctx, "SELECT count(*) FROM target_tls_cert_pins").Scan(&pins); err != nil {
+		t.Fatal(err)
+	}
+	if pins != 0 {
+		t.Fatalf("the import left %d target TLS certificate pins", pins)
+	}
+	if _, err := r.db[schema.Vault].Querier().Exec(ctx, "INSERT INTO target_tls_cert_pins (target_id, ordinal, fingerprint) VALUES ('tgt-x', 0, repeat('a', 64))"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := r.db[schema.Vault].Querier().Exec(ctx, "INSERT INTO secret_types (id, data) SELECT 'type-newer', data FROM secret_types LIMIT 1"); err != nil {
 		t.Fatal(err)
 	}
@@ -963,6 +973,12 @@ func TestImportIntoTheNewestLayout(t *testing.T) {
 	}
 	if given != 0 {
 		t.Fatalf("a rehearsal wipe left %d built-in ledger rows", given)
+	}
+	if err := r.db[schema.Vault].Querier().QueryRow(ctx, "SELECT count(*) FROM target_tls_cert_pins").Scan(&pins); err != nil {
+		t.Fatal(err)
+	}
+	if pins != 0 {
+		t.Fatalf("a rehearsal wipe left %d target TLS certificate pins", pins)
 	}
 	var pending int
 	if err := r.db[schema.Vault].Querier().QueryRow(ctx, "SELECT count(*) FROM heartbeat_audit_summary").Scan(&pending); err != nil {
