@@ -142,7 +142,7 @@ else:
 
 # The platform the appliance runs under the charts: the bundle carries these
 # images too, and the appliance's bundle check refuses one that's missing.
-PLATFORM = {"traefik", "cert-manager-controller", "cert-manager-webhook", "cert-manager-cainjector"}
+PLATFORM = {"traefik", "cert-manager-controller", "cert-manager-webhook", "cert-manager-cainjector", "cert-manager-acmesolver"}
 platform = spec.get("platform") or {}
 missing = PLATFORM - set(platform)
 if missing:
@@ -152,6 +152,11 @@ for name, part in platform.items():
         errors.append(f"platform {name}: digest {part.get('digest')!r} is not a sha256 digest")
     if not part.get("image") or not part.get("version"):
         errors.append(f"platform {name}: needs an image and a version")
+# cert-manager's four images are one release: the controller starts the
+# acmesolver pods, so a different version would run a solver it wasn't built for.
+cm_versions = {n: str(p.get("version")) for n, p in platform.items() if n.startswith("cert-manager-")}
+if len(set(cm_versions.values())) > 1:
+    errors.append(f"platform cert-manager images pin different versions: {cm_versions}")
 
 curl = spec["tools"]["curl"]
 test_image = values["tests"]["image"]
