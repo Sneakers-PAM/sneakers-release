@@ -74,6 +74,7 @@ env:
   AUDIT_ADDR: sneakers-audit:9194
   NOTIFY_ADDR: sneakers-notify:9195
   SSHBROKER_ADDR: sneakers-sshbroker:9096
+  CONNECTOR_ADDR: sneakers-connector:9196
   OAUTH_PUBLIC_URL: "https://{{ .Values.global.host }}"
   COOKIE_SECURE: "true"
   MFA_ENFORCED: "true"
