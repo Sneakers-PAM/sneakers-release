@@ -117,7 +117,7 @@ All nine service charts take the same values. Each one also works on its own, ou
 | workflow | 9193 | `sneakers_workflow` | `PGPASSWORD` | |
 | audit | 9194 | `sneakers_audit` | `PGPASSWORD` | One replica, `Recreate`. |
 | notify | 9195 | | `REDIS_URL` (required) | The inboxes live in Valkey or Redis. |
-| connector | 9196 (health) | | | Sends a projected token with audience `sneakers-vault`. Mount a CA bundle with `caBundle` for LDAPS to a private CA. |
+| connector | 9196 (health) | | | Sends a projected token with audience `sneakers-vault`. Mount a CA bundle with `caBundle` for LDAPS to a private CA. Serves the TLS certificate scan to the gateway only: the NetworkPolicy admits the gateway and the connector checks its token (`workloadIdentity.callers: [gateway]`). |
 | sshbroker | 9096, 9097 | | `REDIS_URL` | Without Redis the tickets stay in memory: run one replica. |
 | gateway | 9100 | | `REDIS_URL` (required), `SETUP_TOKEN`, `POLIS_API_KEY`, `POLIS_CLIENT_SECRET` (with `sso.enabled`) | `AUTH_MODE=real`, secure cookies, MFA enforced. |
 | mcp | 9101 | | | Accepts service-account and personal tokens; Hydra JWTs once `HYDRA_ISSUER` is set. |

@@ -129,8 +129,8 @@ projectedToken:
 # `kubectl get --raw /.well-known/openid-configuration`.
 workloadIdentity:
   caller: true
-  verify: false
-  callers: []
+  verify: true
+  callers: [gateway]
   audience: sneakers
   expirationSeconds: 3600
   issuer: https://kubernetes.default.svc.cluster.local
