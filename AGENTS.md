@@ -42,7 +42,8 @@ Two things to know before changing it:
   chart). `postgres-ha`, the helm-postgres-ha cluster the services move to, is a dependency here
   named `sneakers-pgha`, off by default. `manifest/release.yaml` pins it by OCI digest,
   `scripts/check-chart-digest.sh` holds the fetched chart to that digest, and
-  `scripts/check-manifest.py` holds its images to the pins
+  `scripts/check-manifest.py` holds its images to the pins; `check-manifest.py --platforms` (the `Image Platforms` workflow, not a required check) fails when
+  any image digest the manifest pins lacks `linux/amd64` or `linux/arm64`
 - `manifest/release.yaml` - the pinned release
 - `scripts/` - `install-tools.sh` (pinned, checksum-checked tools), `check-charts.sh`, the
   manifest, defaults, probes, edges, web and resources checks, `sync-schemas.sh`

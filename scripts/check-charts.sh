@@ -705,5 +705,65 @@ for what in no-build short-commit other-repo no-dockerfile other-commit other-ta
   must_fail "a service build block: ${what}" bad_manifest "$what"
 done
 
+# Every image the bundle carries is an index with linux/amd64 and linux/arm64
+# (appliance platform design, section 5.2). check-manifest.py --platforms reads
+# each real digest's index from the registry; here the indexes come from
+# fixtures in CHECK_MANIFEST_INDEX_DIR, one file per digest, so the check
+# runs offline. A placeholder digest is skipped, as is the postgres-ha chart's.
+step "release manifest: image platforms"
+platform_fixtures() {
+  python3 - "$out/index-$1" "$1" <<'PY'
+import json, os, sys, yaml
+dest, what = sys.argv[1:3]
+os.makedirs(dest)
+m = yaml.safe_load(open("manifest/release.yaml"))["spec"]
+digests = []
+def walk(o):
+    if isinstance(o, dict):
+        d = o.get("digest")
+        if isinstance(o.get("image"), str) and isinstance(d, str) and d.startswith("sha256:") and "TBD" not in d:
+            digests.append(d)
+        for v in o.values():
+            walk(v)
+    elif isinstance(o, list):
+        for v in o:
+            walk(v)
+walk(m)
+def entry(os_, arch, variant=None):
+    p = {"os": os_, "architecture": arch}
+    if variant:
+        p["variant"] = variant
+    return {"mediaType": "application/vnd.oci.image.manifest.v1+json", "digest": "sha256:" + "1" * 64, "size": 1, "platform": p}
+def index(*entries, media="application/vnd.oci.image.index.v1+json"):
+    return {"schemaVersion": 2, "mediaType": media, "manifests": list(entries)}
+good = index(entry("linux", "amd64"), entry("linux", "arm64", "v8"), entry("unknown", "unknown"))
+for i, d in enumerate(digests):
+    body = good
+    if i == 0:
+        body = index(entry("linux", "amd64"), entry("linux", "arm64"), media="application/vnd.docker.distribution.manifest.list.v2+json")
+    if i == 1:
+        if what == "no-arm64":
+            body = index(entry("linux", "amd64"), entry("linux", "arm", "v7"))
+        elif what == "no-amd64":
+            body = index(entry("linux", "arm64"))
+        elif what == "single-platform":
+            body = {"schemaVersion": 2, "mediaType": "application/vnd.oci.image.manifest.v1+json", "config": {}, "layers": []}
+        elif what == "wrong-os":
+            body = index(entry("linux", "amd64"), entry("windows", "arm64"))
+        elif what == "not-in-registry":
+            continue
+    json.dump(body, open(os.path.join(dest, d.split(":", 1)[1] + ".json"), "w"))
+PY
+}
+platform_fixtures ok
+CHECK_MANIFEST_INDEX_DIR="$out/index-ok" python3 scripts/check-manifest.py --platforms
+bad_platforms() {
+  platform_fixtures "$1"
+  CHECK_MANIFEST_INDEX_DIR="$out/index-$1" python3 scripts/check-manifest.py --platforms
+}
+for what in no-arm64 no-amd64 single-platform wrong-os not-in-registry; do
+  must_fail "an image without both platforms: ${what}" bad_platforms "$what"
+done
+
 echo
 echo "all chart checks passed"
