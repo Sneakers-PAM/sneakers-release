@@ -221,7 +221,7 @@ below; any other pod, including the other pods of the release, can't connect.
 | audit | gateway, vault, sshbroker, identity, workflow |
 | notify | vault, gateway |
 | identity | gateway, notify |
-| connector | none (health probes only) |
+| connector | gateway (the certificate scan), plus health probes |
 | gateway (HTTP) | the edge (any pod in the cluster, which takes in the web apps) and mcp |
 | mcp (HTTP) | the edge |
 

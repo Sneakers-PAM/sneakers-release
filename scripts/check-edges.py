@@ -147,6 +147,22 @@ for svc in sorted(EDGES):
     elif any(k.startswith("WORKLOAD_OIDC_") or k == "WORKLOAD_ALLOWED_SERVICEACCOUNTS" for k in env):
         errors.append(f"{svc}: verifies workload tokens but has no callers")
 
+# Every gRPC caller is told its callee's address: <CALLEE>_ADDR, sneakers-<callee>:<port>.
+# A caller left without it cannot reach the callee even when the NetworkPolicy admits it.
+for callee, callers in sorted(EDGES.items()):
+    callee_dep = deployments.get(callee)
+    if callee_dep is None:
+        continue
+    port = callee_dep["spec"]["template"]["spec"]["containers"][0]["ports"][0]["containerPort"]
+    key = f"{callee.upper()}_ADDR"
+    for caller in sorted(callers - {"mcp"}):
+        caller_dep = deployments.get(caller)
+        if caller_dep is None:
+            continue
+        got = env_of(caller_dep["metadata"]["name"], caller_dep).get(key)
+        if got != f"sneakers-{callee}:{port}":
+            errors.append(f"{caller}: {key} is {got!r}, want sneakers-{callee}:{port}")
+
 mcp = policies.get("sneakers-mcp")
 if mcp is not None:
     if "Egress" not in mcp["spec"].get("policyTypes", []):
