@@ -42,6 +42,14 @@ organization secret.
   placeholders in git. To ship newer service code, bump the commits here (and the same refs in
   `test/kind/services.txt`; `scripts/check-manifest.py` refuses a mismatch) and pin the new
   sneakers-release commit in the appliance.
+- Every image `manifest/release.yaml` pins by a real digest has to be an index with `linux/amd64`
+  and `linux/arm64`, so the bundle installs on the appliance's arm64 build as well as amd64.
+  `scripts/check-manifest.py --platforms` reads each index from its registry (anonymously, and
+  holds the bytes to the pinned digest) and fails on a missing platform, a single-platform
+  image or an unreadable one; the `Image Platforms` workflow runs it on pull requests that touch
+  the manifest. A digest still at `sha256:TBD-at-release` is skipped, so the same command is
+  the check to run on the release.yaml the appliance's release job writes, once the first-party
+  digests are real.
 - No workflow here signs a release. The appliance takes `manifest/release.yaml` from this
   repository at a full commit it pins (its `build/release/pins.env`), not from a release asset,
   and its own release job countersigns that file and every image it pins with the appliance's

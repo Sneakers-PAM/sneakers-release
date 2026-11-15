@@ -1,10 +1,24 @@
 #!/usr/bin/env python3
 """Fail when manifest/release.yaml and the charts pin different versions.
 
-Usage: check-manifest.py [release.yaml] (default manifest/release.yaml).
+Usage: check-manifest.py [--platforms] [release.yaml] (default manifest/release.yaml).
+
+--platforms also reads the index behind every image digest the manifest pins
+and fails when it lacks linux/amd64 or linux/arm64, so the bundle runs on the
+appliance's arm64 build as well as amd64. It needs the network: the indexes
+come from each registry, anonymously, and the bytes are held to the pinned
+digest. A digest still at the release placeholder is skipped. For tests,
+CHECK_MANIFEST_INDEX_DIR names a folder of <digest hex>.json files that stand
+in for the registries.
 """
+import hashlib
+import json
+import os
 import re
 import sys
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import yaml
@@ -15,6 +29,15 @@ COMMIT = re.compile(r"^[a-f0-9]{40}$")
 BUILD_KEYS = {"repository", "commit", "dockerfile", "context", "target", "args"}
 PLACEHOLDER = "sha256:TBD-at-release"
 errors = []
+REQUIRED_PLATFORMS = (("linux", "amd64"), ("linux", "arm64"))
+INDEX_TYPES = (
+    "application/vnd.oci.image.index.v1+json",
+    "application/vnd.docker.distribution.manifest.list.v2+json",
+)
+MANIFEST_TYPES = (
+    "application/vnd.oci.image.manifest.v1+json",
+    "application/vnd.docker.distribution.manifest.v2+json",
+)
 
 
 def load(rel):
@@ -26,7 +49,11 @@ def expect(what, got, want):
         errors.append(f"{what}: charts have {got!r}, the manifest has {want!r}")
 
 
-manifest = yaml.safe_load(Path(sys.argv[1] if len(sys.argv) > 1 else ROOT / "manifest/release.yaml").read_text())
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+flags = {a for a in sys.argv[1:] if a.startswith("--")}
+if flags - {"--platforms"}:
+    sys.exit(f"check-manifest.py: unknown option {', '.join(sorted(flags - {'--platforms'}))}")
+manifest = yaml.safe_load(Path(args[0] if args else ROOT / "manifest/release.yaml").read_text())
 spec = manifest["spec"]
 umbrella = load("charts/sneakers/Chart.yaml")
 values = load("charts/sneakers/values.yaml")
@@ -176,6 +203,101 @@ for im in k0s.get("images") or []:
         errors.append(f"k0s image {im['image']}: digest {im.get('digest')!r} is not a sha256 digest")
 for name in sorted(K0S_IMAGES - pinned.keys()):
     errors.append(f"spec.kubernetes.k0s.images pins no {name} image")
+
+def pinned_images(node, path="spec"):
+    """Every (where, image, digest) the manifest pins by a real digest.
+
+    An image is a map with both `image` and `digest`. That leaves out the
+    postgres-ha chart's digest (a Helm artifact, no `image`), the k0s binary
+    checksums, and any digest still at the release placeholder.
+    """
+    if isinstance(node, dict):
+        image, digest = node.get("image"), node.get("digest")
+        if isinstance(image, str) and isinstance(digest, str) and DIGEST.match(digest):
+            yield path, image, digest
+        for key, value in node.items():
+            yield from pinned_images(value, f"{path}.{key}")
+    elif isinstance(node, list):
+        for i, value in enumerate(node):
+            yield from pinned_images(value, f"{path}[{i}]")
+
+
+def registry_ref(image):
+    """(host, repository) for an image name, Docker Hub's defaults included."""
+    first, _, rest = image.partition("/")
+    if "." in first or ":" in first or first == "localhost":
+        host, repo = first, rest
+    else:
+        host, repo = "docker.io", image
+    if host == "docker.io":
+        host = "registry-1.docker.io"
+        repo = repo if "/" in repo else f"library/{repo}"
+    return host, repo
+
+
+def fetch_manifest(image, digest):
+    """The bytes of the manifest `image@digest`, held to the digest."""
+    stub = os.environ.get("CHECK_MANIFEST_INDEX_DIR")
+    if stub:
+        return (Path(stub) / f"{digest.split(':', 1)[1]}.json").read_bytes()
+    host, repo = registry_ref(image)
+    url = f"https://{host}/v2/{repo}/manifests/{digest}"
+    accept = ",".join(INDEX_TYPES + MANIFEST_TYPES)
+    token = None
+    for attempt in range(4):
+        headers = {"Accept": accept}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as r:
+                body = r.read()
+        except urllib.error.HTTPError as e:
+            if e.code == 401 and not token:
+                # Anonymous pull token, from the registry's own challenge.
+                challenge = dict(re.findall(r'(\w+)="([^"]*)"', e.headers.get("WWW-Authenticate", "")))
+                if "realm" not in challenge:
+                    raise
+                query = f"service={challenge.get('service', '')}&scope=repository:{repo}:pull"
+                with urllib.request.urlopen(f"{challenge['realm']}?{query}", timeout=30) as t:
+                    reply = json.load(t)
+                token = reply.get("token") or reply.get("access_token")
+                continue
+            if e.code in (429, 500, 502, 503, 504) and attempt < 3:
+                time.sleep(2 ** attempt)
+                continue
+            raise
+        except urllib.error.URLError:
+            if attempt < 3:
+                time.sleep(2 ** attempt)
+                continue
+            raise
+        if "sha256:" + hashlib.sha256(body).hexdigest() != digest:
+            raise ValueError("the registry's bytes don't hash to the pinned digest")
+        return body
+    raise RuntimeError("no manifest after retries")
+
+
+def check_platforms(spec):
+    """Each real image digest is an index holding linux/amd64 and linux/arm64."""
+    for where, image, digest in pinned_images(spec):
+        try:
+            body = json.loads(fetch_manifest(image, digest))
+        except (OSError, ValueError, urllib.error.URLError, RuntimeError) as e:
+            errors.append(f"{where}: can't read {image}@{digest[:19]}: {e}")
+            continue
+        entries = body.get("manifests") if isinstance(body, dict) else None
+        if not isinstance(entries, list):
+            errors.append(f"{where}: {image}@{digest[:19]} is a single-platform manifest, not an index with {', '.join('/'.join(p) for p in REQUIRED_PLATFORMS)}")
+            continue
+        # os and architecture only: a variant (arm64/v8) doesn't matter, and
+        # attestation entries (unknown/unknown) never count.
+        have = {(m["platform"].get("os"), m["platform"].get("architecture")) for m in entries if isinstance(m.get("platform"), dict)}
+        for plat in REQUIRED_PLATFORMS:
+            if plat not in have:
+                errors.append(f"{where}: {image}@{digest[:19]} has no {'/'.join(plat)} (it has {', '.join(sorted('/'.join(map(str, h)) for h in have)) or 'no platforms'})")
+
+if "--platforms" in flags:
+    check_platforms(spec)
 
 for e in errors:
     print(f"manifest: {e}", file=sys.stderr)
