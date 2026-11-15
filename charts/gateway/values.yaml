@@ -217,6 +217,8 @@ ingress:
     - path: /setup
     - path: /oauth2
     - path: /.well-known/oauth-authorization-server
+    - path: /.well-known/sneakers
+    - path: /share
 
 certManager:
   # false: TLS comes from the Secret named in ingress.tlsSecretName, which you
