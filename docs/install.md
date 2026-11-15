@@ -36,10 +36,14 @@ same pinned release, but some things the appliance does for you become yours:
 The charts aren't published to a registry yet; install from a checkout of this repository.
 
 ```bash
-helm repo add valkey https://valkey.io/valkey-helm/
-helm repo add ory https://k8s.ory.sh/helm/charts
-helm dependency build charts/sneakers
+scripts/build-deps.sh
 ```
+
+The script adds the Valkey and Ory chart repositories, builds each service chart's library
+dependency, then builds the umbrella, which packages the service charts. Running
+`helm dependency build charts/sneakers` alone is not enough: the service charts have no library yet
+and the render fails. It needs `helm` and network access to the chart repositories and
+`ghcr.io`.
 
 Create the vault root key first. It's 32 random bytes, base64-encoded, and it is permanent for the
 database: without it no stored secret can be opened. Keep a copy in your secret store.
@@ -365,6 +369,25 @@ the way back.
   sizes.
 - With `global.arch` set, `kubernetes.io/arch` in `postgres-ha.nodeSelector` too.
 - Downtime: the services are stopped from step 2 to step 4.
+- On Cilium: the members of `sneakers-pgha` never become ready, and the agent logs
+  `get lease ... context deadline exceeded`, unless the API server is allowed through Cilium's
+  `kube-apiserver` entity, because Cilium does not match it by address. Use helm-postgres-ha 1.0.2
+  or later and set `postgres-ha.networkPolicy.cilium.enabled=true`, which adds a
+  CiliumNetworkPolicy (it needs the Cilium CRDs). The umbrella pins 1.0.1 today, so until it moves
+  to 1.0.2 apply that policy yourself: egress from the pods labelled
+  `app.kubernetes.io/name: postgres-ha` to the `kube-apiserver` entity on ports 443 and 6443.
+- A backup of the old cluster, taken before step 1, kept off the cluster: one custom-format dump per
+  database, plus the Secrets listed under [Backups](#backups).
+
+  ```sh
+  mkdir -p sneakers-backup
+  for db in identity vault workflow audit kratos hydra; do
+    kubectl -n sneakers exec sneakers-postgres-0 -- pg_dump -U postgres --format=custom "sneakers_$db" \
+      >"sneakers-backup/sneakers_$db.dump"
+  done
+  ```
+
+  `pg_restore --list sneakers-backup/sneakers_vault.dump` reads a dump back without a database.
 
 The commands use the release `sneakers` in the namespace `sneakers`, your values in `my-values.yaml`,
 and need `helm` and `kubectl`. Change `192.0.2.0/24` to your cluster's pod network.
@@ -401,6 +424,33 @@ and need `helm` and `kubectl`. Change `192.0.2.0/24` to your cluster's pod netwo
          pg_restore -U postgres --clean --if-exists --exit-on-error -d "sneakers_$db"
    done
    ```
+
+   All six databases exist on both clusters whether or not you use the bundled Kratos and Hydra
+   (an unused one is empty), so the loop is the same for every install. The restore is safe to run
+   again: `--clean --if-exists` drops what a failed run left behind. If a copy stops part way, fix
+   the cause and run the loop again for that database only; the old cluster is untouched and the
+   services are still stopped.
+
+   Check the copy before you go on. The services are stopped, so the row counts of the two clusters
+   must be equal, table by table:
+
+   ```sh
+   cat > row-counts.sql <<'SQL'
+   select format('select %L, count(*) from %I.%I', n.nspname || '.' || c.relname, n.nspname, c.relname)
+   from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where c.relkind in ('r', 'p') and n.nspname not in ('pg_catalog', 'information_schema', 'pg_toast')
+   order by 1 \gexec
+   SQL
+   for db in identity vault workflow audit kratos hydra; do
+     kubectl -n sneakers exec -i sneakers-postgres-0 -- psql -U postgres -At -d "sneakers_$db" \
+       <row-counts.sql >"old-$db.counts"
+     kubectl -n sneakers exec -i sneakers-pgha-0 -c postgres -- psql -U postgres -At -d "sneakers_$db" \
+       <row-counts.sql >"new-$db.counts"
+     diff "old-$db.counts" "new-$db.counts" && echo "$db: row counts match"
+   done
+   ```
+
+   A difference lists the table and the two counts. Do not go on until every database matches.
 
 4. Point the services at it. Add these two to your values file, so later upgrades keep them, and
    upgrade:
