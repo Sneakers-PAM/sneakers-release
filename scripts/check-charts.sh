@@ -539,6 +539,15 @@ print("ok: envFromConfigMaps loads each ConfigMap after the chart's own, optiona
 PY
 must_fail "an envFromConfigMaps entry with no name" helm template ci charts/gateway -n sneakers -f test/ci/standalone/gateway.yaml --set-json 'envFromConfigMaps=[{"optional":true}]'
 
+step "connector has no database setting"
+# The connector holds no database, and its config loader no longer reads
+# DATABASE_DSN, so the chart must not set a placeholder for it.
+helm template ci charts/connector -n sneakers -f test/ci/standalone/connector.yaml >"$out/connector-nodsn.yaml"
+if grep -q DATABASE_DSN "$out/connector-nodsn.yaml"; then
+  fail "the connector chart still sets DATABASE_DSN"
+fi
+echo "ok: the connector chart sets no DATABASE_DSN"
+
 step "web apps"
 helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml \
   --set gateway.ingress.enabled=true --set web-staff.ingress.enabled=true \

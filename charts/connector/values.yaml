@@ -63,9 +63,6 @@ env:
   # The caller token under its older name, until the connector reads
   # WORKLOAD_TOKEN_FILE.
   CONNECTOR_TOKEN_FILE: /var/run/secrets/sneakers/token
-  # The connector has no database, but its config loader still requires the
-  # variable to be set.
-  DATABASE_DSN: unused
 requiredEnv: []
 
 # Secret-backed settings, by variable name. Each one reads key from the
