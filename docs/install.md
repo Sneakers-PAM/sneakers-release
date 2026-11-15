@@ -371,11 +371,9 @@ the way back.
 - Downtime: the services are stopped from step 2 to step 4.
 - On Cilium: the members of `sneakers-pgha` never become ready, and the agent logs
   `get lease ... context deadline exceeded`, unless the API server is allowed through Cilium's
-  `kube-apiserver` entity, because Cilium does not match it by address. Use helm-postgres-ha 1.0.2
-  or later and set `postgres-ha.networkPolicy.cilium.enabled=true`, which adds a
-  CiliumNetworkPolicy (it needs the Cilium CRDs). The umbrella pins 1.0.1 today, so until it moves
-  to 1.0.2 apply that policy yourself: egress from the pods labelled
-  `app.kubernetes.io/name: postgres-ha` to the `kube-apiserver` entity on ports 443 and 6443.
+  `kube-apiserver` entity, because Cilium does not match it by address. Set
+  `postgres-ha.networkPolicy.cilium.enabled=true`, which adds a CiliumNetworkPolicy (it needs the
+  Cilium CRDs). The switch is in helm-postgres-ha 1.0.2, the version the umbrella pins.
 - A backup of the old cluster, taken before step 1, kept off the cluster: one custom-format dump per
   database, plus the Secrets listed under [Backups](#backups).
 
