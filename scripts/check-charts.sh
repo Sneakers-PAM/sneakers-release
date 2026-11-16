@@ -652,6 +652,16 @@ step "service-to-service edges"
 python3 scripts/check-edges.py <"$out/sneakers.yaml"
 python3 scripts/check-edges.py <"$out/sneakers-hydra.yaml"
 
+step "install docs"
+# The install steps must build every chart's dependencies the way the script
+# does: helm dependency build on the umbrella alone leaves the service charts
+# without their library, and the render fails.
+grep -q 'scripts/build-deps.sh' docs/install.md || fail "docs/install.md does not tell the reader to run scripts/build-deps.sh"
+if grep -q '^helm dependency build charts/sneakers' docs/install.md; then
+  fail "docs/install.md builds only the umbrella's dependencies"
+fi
+echo "ok: the install steps build every chart's dependencies"
+
 step "release manifest"
 python3 scripts/check-manifest.py
 # Each service's build block: the source commit the appliance release builds
