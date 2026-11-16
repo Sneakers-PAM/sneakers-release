@@ -65,7 +65,8 @@ Two things to know before changing it:
 - Chart checks: `PATH="$PWD/bin:$PATH" scripts/check-charts.sh` (lint, render, schema refusals,
   kubeconform, production-safe defaults, probe timings, PostgreSQL's clean stop, service-to-service edges,
   manifest)
-- Install test: create a kind cluster, then `test/kind/build-images.sh` and `test/kind/run.sh`
+- Install test: create a kind cluster, then `test/kind/install-cert-manager.sh` (the chart issues the service
+  certificates through it; the install test runs with `global.internalTLS` on), `test/kind/build-images.sh` and `test/kind/run.sh`
   (`BASE_VALUES=charts/sneakers/examples/values-small-box.yaml` layers a sizing example under the
   test values, as the arm64 job does), then `test/kind/memory-peak.sh` for the pods' peak memory, then `test/kind/late-deps.sh` (a cold
   start with PostgreSQL, Kratos and Hydra 60 s late; fails on any container restart), then

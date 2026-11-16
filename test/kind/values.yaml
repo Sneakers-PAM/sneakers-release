@@ -5,9 +5,6 @@
 global:
   host: sneakers.example.org
   logLevel: debug
-  # Off until the install test installs cert-manager, which the certificates need.
-  internalTLS:
-    enabled: false
 
 postgres:
   persistence:

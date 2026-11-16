@@ -128,6 +128,7 @@ api_port="$(kubectl get endpoints kubernetes -n default -o jsonpath='{.subsets[0
 helm install "$release" charts/sneakers -n "$ns" --create-namespace \
   -f test/kind/values.yaml -f migrate/deploy/migrate-callers-values.yaml -f test/migrate/rehearsal-values.yaml \
   --set "rehearsal.apiServer.addresses={${api_ips%,}}" --set "rehearsal.apiServer.port=${api_port}" \
+  --set global.internalTLS.enabled=false \
   --wait --timeout "$timeout"
 kubectl -n "$ns" get pods
 
