@@ -117,7 +117,7 @@ Source: `Sneakers-PAM/sneakers-identity` at `574276214447`, `internal/telemetry/
 
 ### vault
 
-Source: `Sneakers-PAM/sneakers-vault` at `57255803af15`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-vault` at `8439a19900ad`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `vault`; attributes that leave: `service.name`.
 - Metrics: `rpc.server.call.duration`, `rpc.client.call.duration`, `db.client.operation.duration`, `db.client.operation.errors`.
@@ -129,7 +129,7 @@ Source: `Sneakers-PAM/sneakers-vault` at `57255803af15`, `internal/telemetry/tel
 
 ### workflow
 
-Source: `Sneakers-PAM/sneakers-vault` at `57255803af15`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-vault` at `8439a19900ad`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `workflow`; attributes that leave: `service.name`.
 - Metrics: `rpc.server.call.duration`, `rpc.client.call.duration`, `db.client.operation.duration`, `db.client.operation.errors`.
@@ -191,7 +191,7 @@ Source: `Sneakers-PAM/sneakers-sshbroker` at `de68e5156d22`, `internal/telemetry
 
 ### gateway
 
-Source: `Sneakers-PAM/sneakers-gateway` at `13cd05d8cbe6`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-gateway` at `5bebf5dab08d`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `gateway`; attributes that leave: `service.name`.
 - Metrics: `rpc.client.call.duration`, `http.server.request.duration`, `http.server.request.count`, `http.server.request.duration`, `http.server.request.body.size`, `http.server.response.body.size`.
@@ -203,7 +203,7 @@ Source: `Sneakers-PAM/sneakers-gateway` at `13cd05d8cbe6`, `internal/telemetry/t
 
 ### mcp
 
-Source: `Sneakers-PAM/sneakers-mcp` at `528f52f483cb`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-mcp` at `e6910cd4b423`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `mcp`; attributes that leave: `service.name`.
 - Metrics: `http.server.request.duration`, `http.server.request.count`.
