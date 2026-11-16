@@ -58,7 +58,7 @@ dependencies:
     repository: file://../postgres
     condition: postgres.enabled
   - name: postgres-ha
-    version: 1.0.2
+    version: 1.0.3
     repository: oci://ghcr.io/bugs5382/charts
     condition: postgres-ha.enabled
   - name: valkey
