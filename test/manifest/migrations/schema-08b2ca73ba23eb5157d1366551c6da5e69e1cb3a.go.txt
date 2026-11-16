@@ -1,0 +1,9 @@
+// An excerpt of migrate/internal/schema/schema.go at 08b2ca73ba23eb5157d1366551c6da5e69e1cb3a, as the check reads it.
+package schema
+
+var TargetVersions = map[Service][]int64{
+	Identity: {1, 2},
+	Vault:    {1, 2, 3, 4, 5, 6, 7, 8},
+	Workflow: {1},
+	Audit:    {1},
+}

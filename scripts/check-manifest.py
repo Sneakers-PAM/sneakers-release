@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail when manifest/release.yaml and the charts pin different versions.
 
-Usage: check-manifest.py [--platforms] [release.yaml] (default manifest/release.yaml).
+Usage: check-manifest.py [--platforms | --migrations] [release.yaml] (default manifest/release.yaml).
 
 --platforms also reads the index behind every image digest the manifest pins
 and fails when it lacks linux/amd64 or linux/arm64, so the bundle runs on the
@@ -10,6 +10,14 @@ come from each registry, anonymously, and the bytes are held to the pinned
 digest. A digest still at the release placeholder is skipped. For tests,
 CHECK_MANIFEST_INDEX_DIR names a folder of <digest hex>.json files that stand
 in for the registries.
+
+--migrations checks only that the sneakers-migrate image the manifest pins
+writes the newest migration of every service at its pinned commit (the tool
+refuses a database at any other version, code 2001): it reads each service's
+migrations folder, and the tool's schema.go, at the pinned commits from GitHub
+(GITHUB_TOKEN is used when set). For tests, CHECK_MANIFEST_MIGRATIONS_DIR names
+a folder of <owner>__<repo>__<commit>.txt path lists and schema-<commit>.go.txt files
+that stand in for GitHub.
 """
 import hashlib
 import json
@@ -51,10 +59,91 @@ def expect(what, got, want):
 
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
 flags = {a for a in sys.argv[1:] if a.startswith("--")}
-if flags - {"--platforms"}:
-    sys.exit(f"check-manifest.py: unknown option {', '.join(sorted(flags - {'--platforms'}))}")
+if flags - {"--platforms", "--migrations"}:
+    sys.exit(f"check-manifest.py: unknown option {', '.join(sorted(flags - {'--platforms', '--migrations'}))}")
 manifest = yaml.safe_load(Path(args[0] if args else ROOT / "manifest/release.yaml").read_text())
 spec = manifest["spec"]
+
+
+# Each service's migrations folder in the repository it is built from, and the key of the
+# tool's schema.TargetVersions it must be listed under.
+MIGRATIONS = {
+    "identity": "migrations/",
+    "vault": "migrations/vault/",
+    "workflow": "migrations/workflow/",
+    "audit": "migrations/",
+}
+SCHEMA_PATH = "migrate/internal/schema/schema.go"
+
+
+def github(url):
+    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json", "User-Agent": "check-manifest"})
+    if os.environ.get("GITHUB_TOKEN") and url.startswith("https://api.github.com/"):
+        req.add_header("Authorization", "Bearer " + os.environ["GITHUB_TOKEN"])
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.read().decode()
+
+
+def source_paths(repo, commit):
+    """Every path in a repository at a commit."""
+    fixtures = os.environ.get("CHECK_MANIFEST_MIGRATIONS_DIR")
+    if fixtures:
+        return (Path(fixtures) / f"{repo.replace('/', '__')}__{commit}.txt").read_text().split()
+    tree = json.loads(github(f"https://api.github.com/repos/{repo}/git/trees/{commit}?recursive=1"))
+    if tree.get("truncated"):
+        raise RuntimeError("the repository tree is too large to list")
+    return [e["path"] for e in tree["tree"]]
+
+
+def source_schema(repo, commit):
+    """The tool's schema.go at a commit."""
+    fixtures = os.environ.get("CHECK_MANIFEST_MIGRATIONS_DIR")
+    if fixtures:
+        return (Path(fixtures) / f"schema-{commit}.go.txt").read_text()
+    return github(f"https://raw.githubusercontent.com/{repo}/{commit}/{SCHEMA_PATH}")
+
+
+def parse_target_versions(text):
+    """schema.TargetVersions as {service: [versions]} from its Go source."""
+    block = re.search(r"var TargetVersions = map\[Service\]\[\]int64\{(.*?)\n\}", text, re.S)
+    if not block:
+        raise ValueError("no TargetVersions map in schema.go")
+    return {name.lower(): [int(v) for v in re.findall(r"\d+", nums)] for name, nums in re.findall(r"(\w+):\s*\{([\d,\s]*)\}", block.group(1))}
+
+
+def check_migrations(spec):
+    """The pinned sneakers-migrate writes the newest migration of every pinned service."""
+    tool = spec["jobs"]["migrate"]["build"]
+    try:
+        writes = parse_target_versions(source_schema(tool["repository"], tool["commit"]))
+    except (OSError, ValueError, urllib.error.URLError) as e:
+        errors.append(f"jobs.migrate: can't read the tool's schema at {tool['commit'][:7]}: {e}")
+        return
+    for svc, folder in MIGRATIONS.items():
+        build = spec["services"][svc]["build"]
+        where = f"{svc} ({build['repository']}@{build['commit'][:7]})"
+        try:
+            paths = source_paths(build["repository"], build["commit"])
+        except (OSError, ValueError, RuntimeError, urllib.error.URLError) as e:
+            errors.append(f"{where}: can't list its migrations: {e}")
+            continue
+        found = [int(m.group(1)) for p in paths if p.startswith(folder) and p.endswith(".up.sql") and (m := re.match(r"(\d+)_", p.rsplit("/", 1)[-1]))]
+        if not found:
+            errors.append(f"{where}: no migrations under {folder}")
+            continue
+        newest = max(found)
+        if newest not in writes.get(svc, []):
+            errors.append(f"{where} ships migration {newest}, but the sneakers-migrate pinned at {tool['commit'][:7]} writes {svc} {writes.get(svc, [])}: pin a migrate commit whose schema.go lists {svc} {newest}")
+
+
+if "--migrations" in flags:
+    check_migrations(spec)
+    for e in errors:
+        print(f"manifest: {e}", file=sys.stderr)
+    if not errors:
+        print("ok: the pinned sneakers-migrate writes the newest migration of every pinned service")
+    sys.exit(1 if errors else 0)
+
 umbrella = load("charts/sneakers/Chart.yaml")
 values = load("charts/sneakers/values.yaml")
 

@@ -1,0 +1,4 @@
+migrations/0001_baseline.down.sql
+migrations/0001_baseline.up.sql
+migrations/0002_user_token_client_kind.down.sql
+migrations/0002_user_token_client_kind.up.sql
