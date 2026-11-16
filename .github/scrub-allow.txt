@@ -1,0 +1,4 @@
+# The public API group of cert-manager, the apiVersion of every manifest it reads.
+fqdn cert-manager.io charts/*  # apiVersion of the mTLS Certificate and Issuer templates
+fqdn cert-manager.io scripts/check-charts.sh  # the chart check reads those objects
+fqdn cert-manager.io test/*  # install and chart tests that create or read them
