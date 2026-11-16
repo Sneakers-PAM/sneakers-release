@@ -3,7 +3,8 @@ name: Image Platforms
 # linux/amd64 and linux/arm64 (scripts/check-manifest.py --platforms). It reads
 # each index from its registry, so it is its own workflow and not a step of
 # Build & Test: a registry outage or rate limit fails this check alone and
-# never blocks the required ones. Pull requests that touch the manifest or
+# never blocks the required ones. It also checks that the pinned sneakers-migrate
+# writes the newest migration of every pinned service (--migrations). Pull requests that touch the manifest or
 # the script, and by hand; a draft runs nothing.
 on:
   pull_request:
@@ -34,3 +35,9 @@ jobs:
         run: |
           pip install pyyaml==6.0.2
           python3 scripts/check-manifest.py --platforms
+      # sneakers-migrate refuses a database at a migration it does not write, so the tool the release pins has to
+      # write the newest migration of every service at its pinned commit. Reads GitHub, so it lives here too.
+      - name: The pinned migrate tool writes every pinned service's newest migration
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/check-manifest.py --migrations

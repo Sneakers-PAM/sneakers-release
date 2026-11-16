@@ -1,0 +1,14 @@
+# A minimal manifest for scripts/check-manifest.py --migrations (the pins as they were: identity 57427621444784da5291a55ec80b82f340a58c12, vault and workflow 57255803af1570ed2e9735fd5770103e7d5e987a, audit bca59c03835883dd846847e7ee63b75be68d0254).
+spec:
+  services:
+    identity:
+      build: {repository: Sneakers-PAM/sneakers-identity, commit: 57427621444784da5291a55ec80b82f340a58c12}
+    vault:
+      build: {repository: Sneakers-PAM/sneakers-vault, commit: 57255803af1570ed2e9735fd5770103e7d5e987a}
+    workflow:
+      build: {repository: Sneakers-PAM/sneakers-vault, commit: 57255803af1570ed2e9735fd5770103e7d5e987a}
+    audit:
+      build: {repository: Sneakers-PAM/sneakers-audit, commit: bca59c03835883dd846847e7ee63b75be68d0254}
+  jobs:
+    migrate:
+      build: {repository: Sneakers-PAM/sneakers-release, commit: 7dae3c57c3c4194437436a42cdf9ee9520133335}

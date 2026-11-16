@@ -880,6 +880,19 @@ assert open(".github/workflows/migrate-rehearsal.yml").read().count("test/kind/i
 print("ok: the install test and the migration rehearsal install cert-manager at the pinned version and run with mTLS on")
 PY
 
+step "the pinned migrate tool writes every pinned service's newest migration"
+# sneakers-migrate refuses a target database at a migration it does not write (code 2001), so the migrate image the
+# release pins must write the newest migration of each service at its pinned commit. The fixtures are the pins as they
+# were when the vault shipped migration 8 and the tool pin still stopped at 7.
+mig=test/manifest/migrations
+if CHECK_MANIFEST_MIGRATIONS_DIR="$mig" python3 scripts/check-manifest.py --migrations "$mig/manifest-stale.yaml" >"$out/mig-stale.log" 2>&1; then
+  fail "a migrate pin that writes vault migrations 1 to 7 passed against a vault pin that ships migration 8"
+fi
+grep -q 'vault' "$out/mig-stale.log" && grep -q 'migration 8' "$out/mig-stale.log" || { cat "$out/mig-stale.log" >&2; fail "the stale migrate pin was refused for the wrong reason"; }
+echo "ok (refused): a migrate pin that writes vault 1 to 7 against a vault pin at migration 8"
+CHECK_MANIFEST_MIGRATIONS_DIR="$mig" python3 scripts/check-manifest.py --migrations "$mig/manifest-current.yaml"
+echo "ok: a migrate pin that writes vault 1 to 8 covers every pinned service"
+
 step "install docs"
 # The install steps must build every chart's dependencies the way the script
 # does: helm dependency build on the umbrella alone leaves the service charts
