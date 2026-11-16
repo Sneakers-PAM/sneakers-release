@@ -373,7 +373,7 @@ the way back.
   `get lease ... context deadline exceeded`, unless the API server is allowed through Cilium's
   `kube-apiserver` entity, because Cilium does not match it by address. Set
   `postgres-ha.networkPolicy.cilium.enabled=true`, which adds a CiliumNetworkPolicy (it needs the
-  Cilium CRDs). The switch is in helm-postgres-ha 1.0.2, the version the umbrella pins.
+  Cilium CRDs). The switch is in helm-postgres-ha 1.0.2 and later; the umbrella pins 1.0.3.
 - A backup of the old cluster, taken before step 1, kept off the cluster: one custom-format dump per
   database, plus the Secrets listed under [Backups](#backups).
 

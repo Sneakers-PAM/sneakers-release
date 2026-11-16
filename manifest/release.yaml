@@ -120,7 +120,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-web
-        commit: 72877bd75eae7461f8d192dd355a8f77cf5c70f8
+        commit: bece5cbd2d7aabc85e28b55f8eb8b07a17cb056a
         dockerfile: Dockerfile
         context: .
         args:
@@ -132,7 +132,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-web
-        commit: 72877bd75eae7461f8d192dd355a8f77cf5c70f8
+        commit: bece5cbd2d7aabc85e28b55f8eb8b07a17cb056a
         dockerfile: Dockerfile
         context: .
         args:
@@ -172,12 +172,12 @@ spec:
     postgres-ha:
       chart:
         name: postgres-ha
-        version: 1.0.2
+        version: 1.0.3
         repository: oci://ghcr.io/bugs5382/charts
-        digest: sha256:81c1f88f9ca713d53f8c9862ff0ee21f47dc7e33c961e27868b460b5ffe45187
+        digest: sha256:94047a2eccc541cedde30ebb8a972c7550dd013cb4b005bfd16bb145d35b425b
       image: ghcr.io/bugs5382/helm-postgres-ha/pgha
-      version: 1.0.0
-      digest: sha256:fb3d536548571d67106f6140da144a9e9a53218196feadeda544b5d710e467d4
+      version: 1.0.3
+      digest: sha256:64f6c7af362ffceb39d87e4b8d657c1e878c5479f86041ce775df512e841677c
     valkey:
       chart:
         name: valkey
