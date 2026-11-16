@@ -74,7 +74,7 @@ declare -A bundled=(
   [sneakers-postgres:5432]="identity vault workflow audit"
 )
 edge_targets="sneakers-gateway:9100 sneakers-sshbroker:9097 sneakers-hydra-public:4444 sneakers-web-staff:3000 sneakers-web-admin:3000"
-targets="$edge_targets"
+targets="$edge_targets sneakers-gateway:9443"
 for svc in "${!grpc_port[@]}"; do targets+=" sneakers-${svc}:${grpc_port[$svc]}"; done
 for t in "${!bundled[@]}"; do targets+=" $t"; done
 
@@ -93,8 +93,15 @@ pod() {
     app.kubernetes.io/component: ${comp}"
     case "$comp" in mcp | web-staff) labels+="
     app.kubernetes.io/name: sneakers-${comp}" ;; esac
-    mounts="volumeMounts: [{name: token, mountPath: /var/run/secrets/sneakers, readOnly: true}]"
-    volumes="volumes: [{name: token, projected: {sources: [{serviceAccountToken: {audience: sneakers, expirationSeconds: 600, path: token}}]}}]"
+    mounts="volumeMounts: [{name: token, mountPath: /var/run/secrets/sneakers, readOnly: true}"
+    volumes="volumes: [{name: token, projected: {sources: [{serviceAccountToken: {audience: sneakers, expirationSeconds: 600, path: token}}]}}"
+    # The component's own certificate, which its callees' mutual TLS needs (the web apps have none).
+    case "$comp" in web-staff) ;; *)
+      mounts+=", {name: mtls, mountPath: /var/run/sneakers/tls, readOnly: true}"
+      volumes+=", {name: mtls, secret: {secretName: sneakers-${comp}-tls, defaultMode: 0440}}" ;;
+    esac
+    mounts="${mounts}]"
+    volumes="${volumes}]"
   fi
   kubectl -n "$ns" apply -f - >/dev/null <<EOF
 apiVersion: v1
@@ -110,6 +117,7 @@ spec:
   securityContext:
     runAsNonRoot: true
     runAsUser: 65532
+    fsGroup: 65532
     seccompProfile: {type: RuntimeDefault}
   containers:
     - name: probe
@@ -132,6 +140,11 @@ wait_logs() {
 want() { # <probe> <host:port>: open or refused
   local probe="$1" target="$2" svc port
   svc="${target%%:*}"; svc="${svc#sneakers-}"; port="${target#*:}"
+  # The gateway's mTLS-only port is for mcp alone.
+  if [ "$target" = sneakers-gateway:9443 ]; then
+    [ "$probe" = mcp ] && echo open || echo refused
+    return
+  fi
   if [ "$probe" = web-staff ]; then
     [ "$target" = sneakers-gateway:9100 ] && echo open || echo refused
     return
@@ -176,13 +189,21 @@ echo "== callees check the caller's service account"
 # refuse a token from a service account it doesn't list (Unauthenticated), a
 # listed caller on a method outside its allow-list (PermissionDenied), and a
 # call with no token (Unauthenticated).
-# call <service:port> <method> [token]: one unary gRPC call with an empty
-# request, sent raw over HTTP/2 so the callee's check runs on the method itself
-# (grpcurl's reflection lookup would be checked first). Prints grpc-status.
+# call <service:port> <method> [token] [plain|nocert]: one unary gRPC call with an
+# empty request, sent raw over HTTP/2 so the callee's check runs on the method itself
+# (grpcurl's reflection lookup would be checked first). Prints grpc-status. The
+# services run mutual TLS: the call presents the pod's own certificate and checks the
+# callee's against the cluster CA and the name dialed. "plain" is a plaintext call and
+# "nocert" a TLS call with no client certificate; both must be refused, which shows as
+# no grpc-status at all.
 call() {
-  local auth=""
+  local auth="" flags="--http2 --cacert /var/run/sneakers/tls/ca.crt --cert /var/run/sneakers/tls/tls.crt --key /var/run/sneakers/tls/tls.key" scheme=https
   [ "${3:-}" = token ] && auth='-H "authorization: Bearer $(cat /var/run/secrets/sneakers/token)"'
-  printf "printf '\\\\000\\\\000\\\\000\\\\000\\\\000' | curl -s -m 10 --http2-prior-knowledge -o /dev/null -D - -H 'content-type: application/grpc' -H 'te: trailers' %s --data-binary @- http://%s/%s | grep -i '^grpc-'" "$auth" "$1" "$2"
+  case "${4:-}" in
+    plain) flags="--http2-prior-knowledge"; scheme=http ;;
+    nocert) flags="--http2 --cacert /var/run/sneakers/tls/ca.crt" ;;
+  esac
+  printf "printf '\\\\000\\\\000\\\\000\\\\000\\\\000' | curl -s -m 10 %s -o /dev/null -D - -H 'content-type: application/grpc' -H 'te: trailers' %s --data-binary @- %s://%s/%s | grep -i '^grpc-'; true" "$flags" "$auth" "$scheme" "$1" "$2"
 }
 reveal=sneakers.vault.v1.VaultService/RevealSecretField
 pod tok-wrong-vault gateway sneakers-mcp "$test_image" "$(call sneakers-vault:9091 "$reveal" token)"
@@ -190,6 +211,10 @@ pod tok-wrong-broker gateway sneakers-mcp "$test_image" "$(call sneakers-sshbrok
 pod tok-connector-vault connector sneakers-connector "$test_image" "$(call sneakers-vault:9091 "$reveal" token)"
 pod tok-none-vault gateway sneakers-gateway "$test_image" "$(call sneakers-vault:9091 "$reveal")"
 pod tok-right-vault gateway sneakers-gateway "$test_image" "$(call sneakers-vault:9091 "$reveal" token)"
+# Mutual TLS: a plaintext call, and a TLS call with no client certificate, never reach the vault's methods
+# even with the gateway's token.
+pod tok-plain-vault gateway sneakers-gateway "$test_image" "$(call sneakers-vault:9091 "$reveal" token plain)"
+pod tok-nocert-vault gateway sneakers-gateway "$test_image" "$(call sneakers-vault:9091 "$reveal" token nocert)"
 # 16 is Unauthenticated, 7 PermissionDenied.
 expect() { # <pod> <grpc-status pattern> <yes|no> <what>
   local out code
@@ -206,6 +231,8 @@ expect tok-wrong-broker 16 yes "the broker took a token from sneakers-mcp"
 expect tok-connector-vault 7 yes "the vault let the connector call a user-facing method"
 expect tok-none-vault 16 yes "the vault took a call with no token"
 expect tok-right-vault '16|7|' no "the vault refused the gateway's token"
+expect tok-plain-vault '' yes "the vault answered a plaintext call"
+expect tok-nocert-vault '' yes "the vault answered a call with no client certificate"
 [ "$failed" = 0 ] || exit 1
 
 echo "== web apps render"

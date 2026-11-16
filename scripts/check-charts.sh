@@ -790,6 +790,26 @@ step "service-to-service edges"
 python3 scripts/check-edges.py <"$out/sneakers.yaml"
 python3 scripts/check-edges.py <"$out/sneakers-hydra.yaml"
 
+step "kind install test: cert-manager for the service certificates"
+# The install test runs with global.internalTLS on, so it installs cert-manager first, at the version the
+# manifest pins and the sum the appliance checks, before the images build and before helm install.
+python3 - <<'PY'
+import re, yaml
+pin = yaml.safe_load(open("manifest/release.yaml"))["spec"]["platform"]["cert-manager-controller"]["version"]
+script = open("test/kind/install-cert-manager.sh").read()
+m = re.search(r'^CERT_MANAGER_VERSION="?(v[0-9.]+)"?$', script, re.M)
+assert m and m.group(1) == pin, f"test/kind/install-cert-manager.sh installs {m and m.group(1)}, the manifest pins {pin}"
+assert re.search(r'^CERT_MANAGER_SHA256="?[0-9a-f]{64}"?$', script, re.M), "no SHA-256 for the cert-manager manifest"
+assert "sha256sum" in script and "rollout status" in script, "the script must check the sum and wait for the deployments"
+flow = open(".github/workflows/install-test.yml").read()
+assert flow.count("test/kind/install-cert-manager.sh") == 2, "both install jobs must install cert-manager"
+for f in ("test/kind/values.yaml",):
+    v = yaml.safe_load(open(f))
+    assert "internalTLS" not in (v.get("global") or {}), f"{f} turns internalTLS off: the install test runs with it on"
+assert "global.internalTLS.enabled=false" in open("test/migrate/rehearsal.sh").read(), "the migrate rehearsal has no cert-manager and must keep internalTLS off"
+print("ok: the install test installs cert-manager at the pinned version and runs with mTLS on; the rehearsal keeps it off")
+PY
+
 step "install docs"
 # The install steps must build every chart's dependencies the way the script
 # does: helm dependency build on the umbrella alone leaves the service charts

@@ -73,9 +73,11 @@ PATH="$PWD/bin:$PATH" scripts/check-charts.sh  # lint, render, schemas, defaults
 ```
 
 The install test (`test/kind/run.sh`, run by the Install Test workflow) builds every service image
-from its repository, installs the umbrella on a throwaway kind cluster, upgrades it in place, runs
-`helm test` and checks that each service's port takes only its callers, and that a callee refuses a
-caller with the wrong service account.
+from its repository, installs cert-manager (`test/kind/install-cert-manager.sh`, at the version the
+manifest pins) and the umbrella with mutual TLS on, on a throwaway kind cluster, upgrades it in place, runs
+`helm test` and checks that each service's port takes only its callers, that a callee refuses a
+caller with the wrong service account, and that a plaintext call and a call with no client
+certificate are refused.
 It runs twice: with the chart defaults on amd64, and with the small-box example values on an
 arm64 runner (`ubuntu-24.04-arm`), where every image is built natively for arm64. Both record each
 pod's peak memory (`test/kind/memory-peak.sh`) and fail when the sum passes 4 GiB. The arm64 job
