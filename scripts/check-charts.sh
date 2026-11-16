@@ -285,6 +285,17 @@ assert sorted(rl) == sorted(f"sneakers-{s}" for s in services if s != "mcp"), so
 assert all(c["spec"]["issuerRef"]["name"] == "corp-ca" and c["spec"]["issuerRef"]["kind"] == "ClusterIssuer" for c in rl.values())
 print(f"ok: mTLS renders the CA chain and {len(leaf)} service certificates, and none when off")
 PY
+# The umbrella's own template renders the CA and the certificates, so it must not depend on a helper that only an
+# enabled service subchart brings in (the sneakers-lib library): with every service off, the CA chain still renders.
+bash -c 'off=(); for s in identity vault workflow audit notify connector sshbroker gateway mcp web-staff web-admin; do off+=(--set "$s.enabled=false"); done; helm template ci charts/sneakers -n sneakers -f test/ci/values.yaml "${off[@]}" --set global.internalTLS.enabled=true' >"$out/mtls-no-services.yaml" ||
+  fail "the umbrella does not render with every service off and global.internalTLS on"
+python3 - "$out/mtls-no-services.yaml" <<'PY'
+import sys, yaml
+docs = [d for d in yaml.safe_load_all(open(sys.argv[1])) if d]
+names = sorted(d["metadata"]["name"] for d in docs if d["kind"] in ("Issuer", "Certificate"))
+assert names == ["sneakers-mtls", "sneakers-mtls-bootstrap", "sneakers-mtls-ca"], f"the CA chain alone, no service certificate: {names}"
+print("ok: with every service off the umbrella still renders the CA chain, and no service certificate")
+PY
 must_fail "an issuerRef kind cert-manager doesn't have" helm template ci charts/sneakers "${mtls_args[@]}" --set global.internalTLS.issuerRef.name=x --set global.internalTLS.issuerRef.kind=Secret
 must_fail "internalTLS.enabled that isn't a boolean" helm template ci charts/sneakers "${mtls_args[@]}" --set global.internalTLS.enabled=maybe
 
