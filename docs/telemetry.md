@@ -117,7 +117,7 @@ Source: `Sneakers-PAM/sneakers-identity` at `574276214447`, `internal/telemetry/
 
 ### vault
 
-Source: `Sneakers-PAM/sneakers-vault` at `8439a19900ad`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-vault` at `5de3d1a79c58`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `vault`; attributes that leave: `service.name`.
 - Metrics: `rpc.server.call.duration`, `rpc.client.call.duration`, `db.client.operation.duration`, `db.client.operation.errors`.
@@ -129,7 +129,7 @@ Source: `Sneakers-PAM/sneakers-vault` at `8439a19900ad`, `internal/telemetry/tel
 
 ### workflow
 
-Source: `Sneakers-PAM/sneakers-vault` at `8439a19900ad`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-vault` at `5de3d1a79c58`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `workflow`; attributes that leave: `service.name`.
 - Metrics: `rpc.server.call.duration`, `rpc.client.call.duration`, `db.client.operation.duration`, `db.client.operation.errors`.
