@@ -376,7 +376,7 @@
       "service_name": "vault",
       "source": {
         "repository": "Sneakers-PAM/sneakers-vault",
-        "commit": "57255803af1570ed2e9735fd5770103e7d5e987a",
+        "commit": "8439a19900ada3acfdc6f4893a9598e12ba34fea",
         "file": "internal/telemetry/telemetry.go"
       },
       "resource": [
@@ -498,7 +498,7 @@
       "service_name": "workflow",
       "source": {
         "repository": "Sneakers-PAM/sneakers-vault",
-        "commit": "57255803af1570ed2e9735fd5770103e7d5e987a",
+        "commit": "8439a19900ada3acfdc6f4893a9598e12ba34fea",
         "file": "internal/telemetry/telemetry.go"
       },
       "resource": [
@@ -926,7 +926,7 @@
       "service_name": "gateway",
       "source": {
         "repository": "Sneakers-PAM/sneakers-gateway",
-        "commit": "13cd05d8cbe6281dc2c394a08789d590cd58b298",
+        "commit": "5bebf5dab08d9ab1d9ee7b21c6efef675fd85f75",
         "file": "internal/telemetry/telemetry.go"
       },
       "resource": [
@@ -1051,7 +1051,7 @@
       "service_name": "mcp",
       "source": {
         "repository": "Sneakers-PAM/sneakers-mcp",
-        "commit": "528f52f483cb39d644eb869fdba9ceb52e145c28",
+        "commit": "e6910cd4b423b41e99635f1a18d17471da0d0252",
         "file": "internal/telemetry/telemetry.go"
       },
       "resource": [
