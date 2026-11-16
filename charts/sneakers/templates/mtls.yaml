@@ -58,4 +58,9 @@ spec:
 {{ include "sneakers.mtls.certificate" (dict "root" $ "service" $svc) }}
 {{- end }}
 {{- end }}
+{{- /* The migrate Job dials the vault and the audit service: its certificate exists where the vault admits it as a caller. */}}
+{{- if and .Values.vault.enabled (has "migrate" (.Values.vault.workloadIdentity.callers | default list)) }}
+---
+{{ include "sneakers.mtls.certificate" (dict "root" $ "service" "migrate") }}
+{{- end }}
 {{- end }}
