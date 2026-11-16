@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	mtls "github.com/Bugs5382/go-mtls"
 	auditv1 "github.com/Sneakers-PAM/sneakers-release/gen/go/thirdparty/audit/v1"
 	vaultv1 "github.com/Sneakers-PAM/sneakers-release/gen/go/thirdparty/vault/v1"
 	"google.golang.org/grpc"
@@ -25,12 +26,20 @@ const SealBatch = 200
 
 const callTimeout = 60 * time.Second
 
-// Dial connects to a service's gRPC address inside the cluster. A non-empty
-// tokenFile is the projected ServiceAccount token (audience sneakers) sent as
-// the caller's workload identity on every call, read again each time so a
-// rotated token is picked up.
+// Dial connects to a service's gRPC address inside the cluster. With
+// MTLS_CERT_FILE, MTLS_KEY_FILE and MTLS_CA_FILE all set it dials over mutual
+// TLS 1.3: it presents the Job's certificate and checks the server's against
+// the cluster CA and the host name in addr. With none set it is plaintext, as
+// before. Some set, or a file that cannot be read, is an error, never a
+// silent fall back to plaintext. A non-empty tokenFile is the projected
+// ServiceAccount token (audience sneakers) sent as the caller's workload
+// identity on every call, read again each time so a rotated token is picked up.
 func Dial(addr, tokenFile string) (*grpc.ClientConn, error) {
-	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	creds, err := transport()
+	if err != nil {
+		return nil, fmt.Errorf("dial %s: %w", addr, err)
+	}
+	opts := []grpc.DialOption{creds}
 	if tokenFile != "" {
 		if _, err := os.ReadFile(tokenFile); err != nil { // #nosec G304 -- the operator-set WORKLOAD_TOKEN_FILE
 			return nil, fmt.Errorf("workload token: %w", err)
@@ -42,6 +51,29 @@ func Dial(addr, tokenFile string) (*grpc.ClientConn, error) {
 		return nil, fmt.Errorf("dial %s: %w", addr, err)
 	}
 	return cc, nil
+}
+
+// transport is the connection security for every dial: mutual TLS from the
+// MTLS_* files, or plaintext when none of the three is set.
+func transport() (grpc.DialOption, error) {
+	set := 0
+	for _, k := range []string{mtls.EnvCertFile, mtls.EnvKeyFile, mtls.EnvCAFile} {
+		if os.Getenv(k) != "" {
+			set++
+		}
+	}
+	if set == 0 {
+		return grpc.WithTransportCredentials(insecure.NewCredentials()), nil
+	}
+	files, err := mtls.FilesFromEnv() // names every variable still missing when only some are set
+	if err != nil {
+		return nil, err
+	}
+	p, err := mtls.NewProvider(files)
+	if err != nil {
+		return nil, err
+	}
+	return p.DialOption(), nil
 }
 
 type tokenCreds string

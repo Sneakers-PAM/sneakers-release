@@ -342,6 +342,7 @@ sneakers-migrate wait --dns kubernetes.default.svc.cluster.local \
 | `TARGET_VAULT_ADDR`, `TARGET_AUDIT_ADDR` | import, verify | the target vault and audit gRPC addresses |
 | `TARGET_TOTP_ENC_KEY` | import | the target identity's `TOTP_ENC_KEY` |
 | `MIGRATE_PRINCIPAL` | import | who ran the import: the actor and `imported_by` on its audit record (default `system:sneakers-migrate`) |
+| `MTLS_CERT_FILE`, `MTLS_KEY_FILE`, `MTLS_CA_FILE` | import, verify | the Job's certificate, its key and the cluster CA. With `global.internalTLS` on (the default) the vault and audit require them: the Job dials both over mutual TLS 1.3 and checks the host name in `TARGET_VAULT_ADDR` and `TARGET_AUDIT_ADDR`. The chart issues the certificate (Secret `sneakers-migrate-tls`) when the migrate callers layer is on; `import-job.yaml` mounts it at `/var/run/sneakers/tls`, and its three variables take `/var/run/sneakers/tls/tls.crt`, `tls.key` and `ca.crt`. All three empty is plaintext, for an install with it off; only some set is an error |
 | `WORKLOAD_TOKEN_FILE` | import, verify | the projected ServiceAccount token sent as the caller's workload identity |
 | `MIGRATE_OWNER_PASSWORD_FILE` | import | where `--owner-email`'s one-time password is written (0600, must not exist) instead of the terminal |
 | `MIGRATE_OUTPUT_FILE` | all | also copy everything the command prints into this file, and its exit code into the file plus `.exit` (the appliance's Import page reads both) |
