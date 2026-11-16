@@ -153,6 +153,27 @@ class Build(unittest.TestCase):
         self.assertEqual(by["http.server.request.count"]["mcp"], ["http.request.method", "http.route", "http.response.status_code"])
         self.assertEqual(by["http.server.request.count"]["gateway"], ["http.request.method", "http.route"])
 
+    def test_pgx_metrics_come_from_services_with_database_spans(self):
+        by = {m["name"]: m for m in sample()["metrics"]}
+        for name, kind in (("db.client.operation.duration", "histogram"), ("db.client.operation.errors", "counter")):
+            self.assertEqual(by[name]["type"], kind)
+            self.assertEqual(by[name]["scope"], "github.com/exaring/otelpgx")
+            self.assertEqual(by[name]["library"], "otelpgx")
+            self.assertEqual(sorted(by[name]["services"]), ["identity"])
+        self.assertEqual(by["db.client.operation.duration"]["unit"], "s")
+        names = {m["name"] for m in sample()["services"]["identity"]["metrics"]}
+        self.assertIn("db.client.operation.duration", names)
+        self.assertNotIn("db.client.operation.duration", {m["name"] for m in sample()["services"]["gateway"]["metrics"]})
+
+    def test_pgx_labels_are_what_survives_the_service_filter(self):
+        src = TELEMETRY_GO.replace('var allowedMetricAttributes = []string{"rpc.method", "rpc.response.status_code"}',
+                                   'var allowedMetricAttributes = []string{"rpc.method", "db.system.name", "pgx.operation.type"}')
+        data = tl.build_data(["identity"], {"identity": ("Sneakers-PAM/sneakers-identity", "a" * 40)},
+                             {"identity": {"internal/telemetry/telemetry.go": src, "cmd/identity/main.go": MAIN_CLIENT}},
+                             "v0.1.0-rc.7")
+        by = {m["name"]: m["services"] for m in data["metrics"]}
+        self.assertEqual(by["db.client.operation.duration"]["identity"], ["db.system.name", "pgx.operation.type"])
+
     def test_services_carry_service_name_spans_and_resource(self):
         svc = sample()["services"]
         self.assertEqual(svc["identity"]["service_name"], "identity")
@@ -205,10 +226,15 @@ class Check(unittest.TestCase):
 
 
 class Versions(unittest.TestCase):
+    PGX = "require " + "/".join(["github.com", "exaring", "otelpgx"]) + " "
     OK = "\tgithub.com/Bugs5382/go-otel v1.6.0\n\tgo.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.70.0\n"
 
     def test_the_read_versions_pass(self):
         self.assertEqual(tl.version_problems("identity", self.OK), [])
+
+    def test_a_bumped_otelpgx_fails_until_the_table_is_reread(self):
+        self.assertEqual(tl.version_problems("identity", self.PGX + "v0.11.1\n"), [])
+        self.assertTrue(tl.version_problems("identity", self.PGX + "v0.12.0\n"))
 
     def test_a_bumped_library_fails_until_the_table_is_reread(self):
         bumped = self.OK.replace("v0.70.0", "v0.71.0")
