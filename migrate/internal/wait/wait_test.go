@@ -48,7 +48,13 @@ func (r *countingResolver) callCount() int {
 // address. The caller stops it with the returned func.
 func acceptingListener(t *testing.T, label string, accepted chan<- string) (addr string, stop func()) {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	return acceptingListenerAt(t, "127.0.0.1:0", label, accepted)
+}
+
+// acceptingListenerAt is acceptingListener on a given address.
+func acceptingListenerAt(t *testing.T, listenAddr, label string, accepted chan<- string) (addr string, stop func()) {
+	t.Helper()
+	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
@@ -70,26 +76,52 @@ func acceptingListener(t *testing.T, label string, accepted chan<- string) (addr
 	return ln.Addr().String(), func() { close(done); _ = ln.Close() }
 }
 
+// The second target's listener comes up only after the first has accepted, so a
+// connection to the second can only be accepted after the first one: the order
+// is causal, not a race between two accept goroutines. A Run that dialed the
+// second target first would wait on it, never reach the first, and time out.
 func TestRunDialsTargetsInGivenOrder(t *testing.T) {
 	accepted := make(chan string, 4)
 	addr1, stop1 := acceptingListener(t, "t1", accepted)
 	defer stop1()
-	addr2, stop2 := acceptingListener(t, "t2", accepted)
-	defer stop2()
+	// Reserve the second address without listening on it: dials to it are refused until it comes up.
+	reserve, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr2 := reserve.Addr().String()
+	if err := reserve.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
 
 	r := &countingResolver{}
 	cfg := Config{DNS: "kubernetes.default.svc.cluster.local", TCP: []string{addr1, addr2}, Every: 2 * time.Millisecond}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := Run(ctx, cfg, r, testLogger()); err != nil {
+	done := make(chan error, 1)
+	go func() { done <- Run(ctx, cfg, r, testLogger()) }()
+
+	select {
+	case got := <-accepted:
+		if got != "t1" {
+			t.Fatalf("first accepted = %q, want t1", got)
+		}
+	case err := <-done:
+		t.Fatalf("Run returned %v before the first target accepted anything", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("the first target was never dialed first")
+	}
+	_, stop2 := acceptingListenerAt(t, addr2, "t2", accepted)
+	defer stop2()
+
+	if err := <-done; err != nil {
 		t.Fatalf("Run: %v", err)
+	}
+	if got := <-accepted; got != "t2" {
+		t.Fatalf("second accepted = %q, want t2", got)
 	}
 	if r.callCount() != 1 {
 		t.Fatalf("resolver calls = %d, want 1 (DNS resolves once)", r.callCount())
-	}
-	first, second := <-accepted, <-accepted
-	if first != "t1" || second != "t2" {
-		t.Fatalf("accept order = %q, %q, want t1, t2", first, second)
 	}
 }
 
