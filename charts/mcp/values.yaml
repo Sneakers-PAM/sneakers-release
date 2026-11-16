@@ -163,7 +163,8 @@ networkPolicy:
   ingressFrom:
     - namespaceSelector: {}
   ingressPorts: [http]
-  # The MCP server talks only to the gateway's HTTP port, and to the bundled
+  # The MCP server talks only to the gateway's HTTP port (and its mTLS-only port, which it calls under
+  # global.internalTLS; with that off no pod has a port of that name), and to the bundled
   # Hydra's public port for its signing keys, plus DNS. Add a rule here for an
   # external Hydra or an OTLP collector.
   egress:
@@ -181,6 +182,7 @@ networkPolicy:
               app.kubernetes.io/component: gateway
       ports:
         - port: http
+        - port: mtls
     - to:
         - podSelector:
             matchLabels:
