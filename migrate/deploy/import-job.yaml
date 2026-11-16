@@ -3,6 +3,11 @@
 #   NAMESPACE      the target install's namespace
 #   JOB_NAME       e.g. sneakers-migrate-import
 #   MIGRATE_IMAGE  the sneakers-migrate image, by digest
+#   MTLS_CERT_FILE, MTLS_KEY_FILE, MTLS_CA_FILE
+#                  the paths of the Job's certificate, key and the cluster CA when the install
+#                  has global.internalTLS on (the default): /var/run/sneakers/tls/tls.crt,
+#                  /var/run/sneakers/tls/tls.key and /var/run/sneakers/tls/ca.crt. Leave all
+#                  three empty for an install with it off; some set is an error.
 #   COMMAND_ARGS   the command and its flags, as a YAML flow list, e.g.
 #                  ["import", "--bundle", "/bundle/bundle.age", "--identity", "/key/import.key", "--rehearsal"]
 # It reads the bundle from the Secret sneakers-migrate-bundle and the import
@@ -78,6 +83,12 @@ spec:
                 secretKeyRef:
                   name: sneakers-identity-generated
                   key: TOTP_ENC_KEY
+            - name: MTLS_CERT_FILE
+              value: "${MTLS_CERT_FILE}"
+            - name: MTLS_KEY_FILE
+              value: "${MTLS_KEY_FILE}"
+            - name: MTLS_CA_FILE
+              value: "${MTLS_CA_FILE}"
             - name: MIGRATE_PRINCIPAL
               value: system:sneakers-migrate
             - name: WORKLOAD_TOKEN_FILE
@@ -108,6 +119,9 @@ spec:
             - name: workload-token
               mountPath: /var/run/secrets/sneakers
               readOnly: true
+            - name: mtls
+              mountPath: /var/run/sneakers/tls
+              readOnly: true
       volumes:
         - name: bundle
           secret:
@@ -115,6 +129,13 @@ spec:
         - name: key
           secret:
             secretName: sneakers-migrate-key
+            defaultMode: 0440
+        # The certificate Secret the chart issues for the migrate caller; optional, so an install with
+        # global.internalTLS off still starts the Job.
+        - name: mtls
+          secret:
+            secretName: sneakers-migrate-tls
+            optional: true
             defaultMode: 0440
         - name: workload-token
           projected:
