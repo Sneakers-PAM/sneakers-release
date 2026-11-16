@@ -43,6 +43,13 @@ service:
   portName: grpc
   extraPorts: []
 
+# Under global.internalTLS the pod mounts its certificate and reads it by MTLS_CERT_FILE, MTLS_KEY_FILE
+# and MTLS_CA_FILE. The kubelet's gRPC probe can't present a client certificate, so the
+# probes ask a plain health-only port, HEALTH_PORT, which answers the health service and nothing else.
+mtls:
+  enabled: true
+  healthPort: 9091
+
 probes:
   type: grpc
   port: 9194

@@ -288,6 +288,61 @@ PY
 must_fail "an issuerRef kind cert-manager doesn't have" helm template ci charts/sneakers "${mtls_args[@]}" --set global.internalTLS.issuerRef.name=x --set global.internalTLS.issuerRef.kind=Secret
 must_fail "internalTLS.enabled that isn't a boolean" helm template ci charts/sneakers "${mtls_args[@]}" --set global.internalTLS.enabled=maybe
 
+step "mTLS pod wiring (global.internalTLS)"
+helm template ci charts/sneakers "${mtls_args[@]}" >"$out/mtls-pods-on.yaml"
+helm template ci charts/sneakers "${mtls_args[@]}" --set global.internalTLS.enabled=false >"$out/mtls-pods-off.yaml"
+python3 - "$out/mtls-pods-on.yaml" "$out/mtls-pods-off.yaml" <<'PY'
+import sys, yaml
+
+def load(path):
+    return [d for d in yaml.safe_load_all(open(path)) if d]
+
+def pod(docs, svc):
+    dep = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == f"sneakers-{svc}")
+    spec = dep["spec"]["template"]["spec"]
+    cm = next(d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"] == f"sneakers-{svc}")
+    return spec, spec["containers"][0], cm["data"]
+
+on, off = load(sys.argv[1]), load(sys.argv[2])
+# The services that read the three files, and the plain health port each one answers on.
+health = {"identity": 9091, "audit": 9091, "notify": 9091, "vault": 9092, "sshbroker": 9098}
+no_health_port = ["gateway", "mcp"]   # their probes stay on the plain HTTP port
+not_yet = ["workflow", "connector"]   # no mTLS in the service yet
+D = "/var/run/sneakers/tls"
+for svc in list(health) + no_health_port:
+    spec, c, data = pod(on, svc)
+    vols = {v["name"]: v for v in spec["volumes"]}
+    assert vols["mtls"]["secret"]["secretName"] == f"sneakers-{svc}-tls", vols["mtls"]
+    assert vols["mtls"]["secret"]["defaultMode"] == 0o440, vols["mtls"]
+    mounts = {m["name"]: m for m in c["volumeMounts"]}
+    assert mounts["mtls"] == {"name": "mtls", "mountPath": D, "readOnly": True}, mounts["mtls"]
+    assert not any(m.get("subPath") for m in c["volumeMounts"]), f"{svc}: a subPath mount never updates"
+    assert (data["MTLS_CERT_FILE"], data["MTLS_KEY_FILE"], data["MTLS_CA_FILE"]) == (f"{D}/tls.crt", f"{D}/tls.key", f"{D}/ca.crt"), data
+for svc, port in health.items():
+    spec, c, data = pod(on, svc)
+    assert data["HEALTH_PORT"] == str(port), (svc, data.get("HEALTH_PORT"))
+    assert {"name": "health", "containerPort": port} in c["ports"], c["ports"]
+    for probe in ("startupProbe", "livenessProbe", "readinessProbe"):
+        assert c[probe]["grpc"]["port"] == port, (svc, probe, c[probe])
+    assert c["livenessProbe"]["grpc"]["service"] == "liveness", c["livenessProbe"]
+for svc, port in (("gateway", 9100), ("mcp", 9101)):
+    spec, c, data = pod(on, svc)
+    assert "HEALTH_PORT" not in data, svc
+    assert all(c[p]["httpGet"]["port"] == port for p in ("startupProbe", "livenessProbe", "readinessProbe")), svc
+for svc in not_yet:
+    spec, c, data = pod(on, svc)
+    assert "mtls" not in {v["name"] for v in spec["volumes"]} and not any(k.startswith("MTLS_") for k in data), svc
+# Off is the rc.7 pod: no mount, no variable, the probes on the service port.
+for svc in list(health) + no_health_port + not_yet:
+    spec, c, data = pod(off, svc)
+    assert "mtls" not in {v["name"] for v in spec["volumes"]}, svc
+    assert not any(k.startswith("MTLS_") or k == "HEALTH_PORT" for k in data), svc
+    assert "health" not in {p["name"] for p in c["ports"]}, svc
+for svc, port in (("identity", 9192), ("vault", 9091), ("sshbroker", 9096)):
+    assert pod(off, svc)[1]["readinessProbe"]["grpc"]["port"] == port, svc
+print("ok: with mTLS on, the pods mount their certificate, read it by variable and probe the health port; off is the rc.7 pod")
+PY
+
 step "guards and schema refusals"
 must_fail "the umbrella without a vault root key" helm template ci charts/sneakers -n sneakers
 must_fail "a service without its database DSN" helm template ci charts/vault -n sneakers

@@ -43,6 +43,12 @@ service:
   portName: grpc
   extraPorts: []
 
+# The service has no mutual TLS yet, so the pod keeps its plaintext port under global.internalTLS.
+# Set enabled and healthPort when its image reads MTLS_CERT_FILE.
+mtls:
+  enabled: false
+  healthPort: 0
+
 probes:
   type: grpc
   port: 9196

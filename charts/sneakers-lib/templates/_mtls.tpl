@@ -63,3 +63,22 @@ spec:
   issuerRef:
     {{- include "sneakers.mtls.issuerRef" $root | nindent 4 }}
 {{- end -}}
+
+{{- /*
+"true" when this service's pod runs with mTLS: global.internalTLS.enabled and the
+service's own mtls.enabled (off for a service whose image has no mTLS yet).
+*/ -}}
+{{- define "sneakers.mtls.pod" -}}
+{{- $tls := (.Values.global).internalTLS | default dict -}}
+{{- $own := .Values.mtls | default dict -}}
+{{- if and $tls.enabled $own.enabled -}}true{{- end -}}
+{{- end -}}
+
+{{- /* The plain health-only port a gRPC service answers the kubelet on under mTLS, or empty. */ -}}
+{{- define "sneakers.mtls.healthPort" -}}
+{{- if include "sneakers.mtls.pod" . -}}
+{{- with (.Values.mtls | default dict).healthPort -}}{{ int . }}{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "sneakers.mtls.dir" -}}/var/run/sneakers/tls{{- end -}}
