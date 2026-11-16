@@ -81,4 +81,11 @@ service's own mtls.enabled (off for a service whose image has no mTLS yet).
 {{- end -}}
 {{- end -}}
 
+{{- /* The mTLS-only port a service serves besides its main one (the gateway's 9443 for mcp), or empty. */ -}}
+{{- define "sneakers.mtls.port" -}}
+{{- if include "sneakers.mtls.pod" . -}}
+{{- with (.Values.mtls | default dict).port -}}{{ int . }}{{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "sneakers.mtls.dir" -}}/var/run/sneakers/tls{{- end -}}

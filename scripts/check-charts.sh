@@ -305,9 +305,9 @@ def pod(docs, svc):
 
 on, off = load(sys.argv[1]), load(sys.argv[2])
 # The services that read the three files, and the plain health port each one answers on.
-health = {"identity": 9091, "audit": 9091, "notify": 9091, "vault": 9092, "sshbroker": 9098}
+health = {"identity": 9091, "audit": 9091, "notify": 9091, "vault": 9092, "sshbroker": 9098, "connector": 9099}
 no_health_port = ["gateway", "mcp"]   # their probes stay on the plain HTTP port
-not_yet = ["workflow", "connector"]   # no mTLS in the service yet
+not_yet = ["workflow"]   # no mTLS in the service yet
 D = "/var/run/sneakers/tls"
 for svc in list(health) + no_health_port:
     spec, c, data = pod(on, svc)
@@ -320,7 +320,8 @@ for svc in list(health) + no_health_port:
     assert (data["MTLS_CERT_FILE"], data["MTLS_KEY_FILE"], data["MTLS_CA_FILE"]) == (f"{D}/tls.crt", f"{D}/tls.key", f"{D}/ca.crt"), data
 for svc, port in health.items():
     spec, c, data = pod(on, svc)
-    assert data["HEALTH_PORT"] == str(port), (svc, data.get("HEALTH_PORT"))
+    # The services read HEALTH_PORT or MTLS_HEALTH_PORT; a variable a service doesn't read is ignored.
+    assert data["HEALTH_PORT"] == data["MTLS_HEALTH_PORT"] == str(port), (svc, data.get("HEALTH_PORT"), data.get("MTLS_HEALTH_PORT"))
     assert {"name": "health", "containerPort": port} in c["ports"], c["ports"]
     for probe in ("startupProbe", "livenessProbe", "readinessProbe"):
         assert c[probe]["grpc"]["port"] == port, (svc, probe, c[probe])
@@ -340,6 +341,28 @@ for svc in list(health) + no_health_port + not_yet:
     assert "health" not in {p["name"] for p in c["ports"]}, svc
 for svc, port in (("identity", 9192), ("vault", 9091), ("sshbroker", 9096)):
     assert pod(off, svc)[1]["readinessProbe"]["grpc"]["port"] == port, svc
+# The gateway's second listener and the mcp server that calls it.
+gspec, gc, gdata = pod(on, "gateway")
+assert {"name": "mtls", "containerPort": 9443} in gc["ports"] and gdata["MTLS_PORT"] == "9443", (gc["ports"], gdata)
+assert pod(on, "mcp")[2]["GATEWAY_MACHINE_GRAPHQL_URL"] == "https://sneakers-gateway:9443/machine/graphql", pod(on, "mcp")[2]
+goff = pod(off, "gateway")
+assert "MTLS_PORT" not in goff[2] and "mtls" not in {p["name"] for p in goff[1]["ports"]}, "off still opens 9443"
+assert pod(off, "mcp")[2]["GATEWAY_MACHINE_GRAPHQL_URL"] == "http://sneakers-gateway:9100/machine/graphql", pod(off, "mcp")[2]
+
+# NetworkPolicies: 9443 only from the gateway's callers (mcp); no pod may reach a health port.
+def policy(docs, svc):
+    return next(d for d in docs if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == f"sneakers-{svc}")
+def ports(rule):
+    return [pt["port"] for pt in rule.get("ports", [])]
+for svc in list(health) + no_health_port + not_yet:
+    for rule in policy(on, svc)["spec"]["ingress"]:
+        assert "health" not in ports(rule) and not any(p in health.values() for p in ports(rule) if isinstance(p, int)), (svc, rule)
+rules = policy(on, "gateway")["spec"]["ingress"]
+to_mtls = [r for r in rules if "mtls" in ports(r)]
+assert len(to_mtls) == 1, to_mtls
+assert [f["podSelector"]["matchLabels"]["app.kubernetes.io/component"] for f in to_mtls[0]["from"]] == ["mcp"], to_mtls
+assert all("mtls" not in ports(r) for r in policy(off, "gateway")["spec"]["ingress"]), "off opens the mTLS port"
+print("ok: the gateway opens 9443 to mcp only, and no policy admits a pod to a health port")
 print("ok: with mTLS on, the pods mount their certificate, read it by variable and probe the health port; off is the rc.7 pod")
 PY
 

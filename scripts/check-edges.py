@@ -91,6 +91,7 @@ for svc in sorted(EDGES):
         errors.append(f"{svc}: no NetworkPolicy")
         continue
     main_port = dep["spec"]["template"]["spec"]["containers"][0]["ports"][0]["name"]
+    container_ports = {p["name"] for p in dep["spec"]["template"]["spec"]["containers"][0]["ports"]}
     admitted = set()
     for rule in policy["spec"].get("ingress") or []:
         for peer in rule.get("from") or []:
@@ -106,8 +107,10 @@ for svc in sorted(EDGES):
             if caller is None:
                 errors.append(f"{svc}: a peer selects every pod of the release {sel}")
                 continue
-            if port_names(rule) != {main_port}:
-                errors.append(f"{svc}: {caller} is admitted on {sorted(port_names(rule))}, want [{main_port}]")
+            # Under mTLS a caller may also use the service's mTLS-only port, when the pod has one.
+            want = {main_port} | ({"mtls"} & container_ports)
+            if port_names(rule) != want:
+                errors.append(f"{svc}: {caller} is admitted on {sorted(port_names(rule))}, want {sorted(want)}")
             admitted.add(caller)
     if admitted != EDGES[svc]:
         errors.append(f"{svc}: NetworkPolicy admits {sorted(admitted)}, want {sorted(EDGES[svc])}")

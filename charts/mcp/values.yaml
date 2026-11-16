@@ -66,7 +66,7 @@ env:
   ENVIRONMENT: "{{ .Values.global.environment }}"
   OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.global.otlpEndpoint }}"
   HTTP_PORT: "9101"
-  GATEWAY_MACHINE_GRAPHQL_URL: http://sneakers-gateway:9100/machine/graphql
+  GATEWAY_MACHINE_GRAPHQL_URL: '{{ if and ((.Values.global).internalTLS).enabled .Values.mtls.enabled }}https://sneakers-gateway:9443/machine/graphql{{ else }}http://sneakers-gateway:9100/machine/graphql{{ end }}'
   MCP_ACCEPT_API_TOKENS: "true"
   MCP_AUTHORIZATION_SERVER: "https://{{ .Values.global.host }}"
   HYDRA_ISSUER: ""
