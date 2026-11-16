@@ -229,6 +229,65 @@ assert migrate_data(load(sys.argv[2])) == (False, False, False), "the default in
 print("ok: the migrate callers, in a rehearsal and a cutover, admit sneakers-migrate to the vault, audit, PostgreSQL and Kratos admin; the default install doesn't")
 PY
 
+step "mTLS certificates (global.internalTLS)"
+# kubeconform has no schema for cert-manager's kinds, so the checks read the render.
+mtls_args=(-n sneakers -f test/ci/values.yaml)
+helm template ci charts/sneakers "${mtls_args[@]}" >"$out/mtls-on.yaml"
+helm template ci charts/sneakers "${mtls_args[@]}" --set global.internalTLS.enabled=false >"$out/mtls-off.yaml"
+helm template ci charts/sneakers "${mtls_args[@]}" --set global.internalTLS.issuerRef.name=corp-ca --set global.internalTLS.issuerRef.kind=ClusterIssuer \
+  --set mcp.enabled=false >"$out/mtls-ref.yaml"
+python3 - "$out/mtls-on.yaml" "$out/mtls-off.yaml" "$out/mtls-ref.yaml" <<'PY'
+import sys, yaml
+
+def load(path):
+    return [d for d in yaml.safe_load_all(open(path)) if d]
+
+def by(docs, kind):
+    return {d["metadata"]["name"]: d for d in docs if d["kind"] == kind}
+
+CM = ("Issuer", "Certificate", "ClusterIssuer")
+on, off, ref = (load(p) for p in sys.argv[1:4])
+services = ["identity", "vault", "workflow", "audit", "notify", "connector", "sshbroker", "gateway", "mcp"]
+
+# The default is on, and the chain is bootstrap Issuer, root Certificate, CA Issuer.
+issuers, certs = by(on, "Issuer"), by(on, "Certificate")
+boot = issuers["sneakers-mtls-bootstrap"]
+assert boot["spec"] == {"selfSigned": {}}, boot["spec"]
+ca = certs["sneakers-mtls-ca"]["spec"]
+assert ca["isCA"] is True and ca["secretName"] == "sneakers-mtls-ca", ca
+assert ca["issuerRef"]["name"] == "sneakers-mtls-bootstrap" and ca["issuerRef"]["kind"] == "Issuer", ca["issuerRef"]
+assert ca["duration"] == "87600h", "the root is valid 10 years"
+assert ca["privateKey"] == {"algorithm": "ECDSA", "size": 256}, ca["privateKey"]
+assert issuers["sneakers-mtls"]["spec"] == {"ca": {"secretName": "sneakers-mtls-ca"}}, issuers["sneakers-mtls"]["spec"]
+
+# One Certificate per service that speaks gRPC, none for the web apps or the root.
+leaf = {n: c for n, c in certs.items() if n != "sneakers-mtls-ca"}
+assert sorted(leaf) == sorted(f"sneakers-{s}" for s in services), sorted(leaf)
+for svc in services:
+    c = leaf[f"sneakers-{svc}"]["spec"]
+    assert c["secretName"] == f"sneakers-{svc}-tls", c["secretName"]
+    assert c["issuerRef"] == {"name": "sneakers-mtls", "kind": "Issuer", "group": "cert-manager.io"}, c["issuerRef"]
+    assert c["usages"] == ["server auth", "client auth"], c["usages"]
+    assert c["privateKey"] == {"algorithm": "ECDSA", "size": 256, "rotationPolicy": "Always"}, c["privateKey"]
+    assert c["duration"] == "720h" and c["renewBefore"] == "240h", (c["duration"], c["renewBefore"])
+    n = f"sneakers-{svc}"
+    assert c["dnsNames"] == [n, f"{n}.sneakers", f"{n}.sneakers.svc", f"{n}.sneakers.svc.cluster.local"], c["dnsNames"]
+    assert c["uris"] == [f"spiffe://sneakers/ns/sneakers/sa/{n}"], c["uris"]
+    assert leaf[n]["metadata"]["labels"]["app.kubernetes.io/part-of"] == "sneakers"
+
+# Off is the rc.7 render: no cert-manager object at all.
+assert not [d for d in off if d["kind"] in CM], "global.internalTLS.enabled=false renders cert-manager objects"
+
+# A cluster's own issuer: no bootstrap, no root, no CA Issuer, and the leaves use it.
+assert "sneakers-mtls-ca" not in by(ref, "Certificate") and not by(ref, "Issuer"), "issuerRef still creates the CA"
+rl = by(ref, "Certificate")
+assert sorted(rl) == sorted(f"sneakers-{s}" for s in services if s != "mcp"), sorted(rl)
+assert all(c["spec"]["issuerRef"]["name"] == "corp-ca" and c["spec"]["issuerRef"]["kind"] == "ClusterIssuer" for c in rl.values())
+print(f"ok: mTLS renders the CA chain and {len(leaf)} service certificates, and none when off")
+PY
+must_fail "an issuerRef kind cert-manager doesn't have" helm template ci charts/sneakers "${mtls_args[@]}" --set global.internalTLS.issuerRef.name=x --set global.internalTLS.issuerRef.kind=Secret
+must_fail "internalTLS.enabled that isn't a boolean" helm template ci charts/sneakers "${mtls_args[@]}" --set global.internalTLS.enabled=maybe
+
 step "guards and schema refusals"
 must_fail "the umbrella without a vault root key" helm template ci charts/sneakers -n sneakers
 must_fail "a service without its database DSN" helm template ci charts/vault -n sneakers
@@ -605,7 +664,8 @@ print("ok: the import Job runs as the migrate caller")
 PY
 
 step "kubeconform (Kubernetes ${KUBE_VERSION})"
-kubeconform -strict -summary -kubernetes-version "${KUBE_VERSION}" "$out"/*.yaml
+# cert-manager's Certificate and Issuer have no schema here; the mTLS step above checks them.
+kubeconform -strict -summary -skip Certificate,Issuer -kubernetes-version "${KUBE_VERSION}" "$out"/*.yaml
 
 step "production-safe defaults"
 python3 scripts/check-defaults.py <"$out/sneakers.yaml"
