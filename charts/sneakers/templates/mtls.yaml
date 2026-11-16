@@ -1,0 +1,61 @@
+{{- /*
+Internal mTLS between the services (global.internalTLS). With it on, cert-manager
+issues one certificate per service from a CA the chart creates here, unless
+global.internalTLS.issuerRef points at the cluster's own issuer. The chain is the
+self-signed bootstrap Issuer, the root Certificate sneakers-mtls-ca, and the CA
+Issuer sneakers-mtls that signs every service Certificate. Needs cert-manager's CRDs.
+*/ -}}
+{{- $tls := .Values.global.internalTLS | default dict }}
+{{- if $tls.enabled }}
+{{- if include "sneakers.mtls.createsCA" . }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: sneakers-mtls-bootstrap
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: sneakers
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: sneakers-mtls-ca
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: sneakers
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  isCA: true
+  commonName: sneakers-mtls-ca
+  secretName: sneakers-mtls-ca
+  duration: 87600h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: sneakers-mtls-bootstrap
+    kind: Issuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: sneakers-mtls
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: sneakers
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  ca:
+    secretName: sneakers-mtls-ca
+{{- end }}
+{{- range $svc := list "identity" "vault" "workflow" "audit" "notify" "connector" "sshbroker" "gateway" "mcp" }}
+{{- if (index $.Values $svc).enabled }}
+---
+{{ include "sneakers.mtls.certificate" (dict "root" $ "service" $svc) }}
+{{- end }}
+{{- end }}
+{{- end }}

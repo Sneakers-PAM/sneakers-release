@@ -51,6 +51,18 @@ global:
   # with that on) to the same kubernetes.io/arch,
   # or the chart refuses to render. docs/install.md has the block to copy.
   arch: ""
+  # Mutual TLS between the Sneakers services. With it on, cert-manager (its CRDs
+  # must be installed) issues one certificate per service and the chart creates the
+  # CA they come from: the self-signed Issuer sneakers-mtls-bootstrap, the root
+  # Certificate sneakers-mtls-ca and the CA Issuer sneakers-mtls. Off is the rc.7
+  # behaviour. issuerRef points the service certificates at an issuer of the
+  # cluster's own instead (name set: the chart creates no CA).
+  internalTLS:
+    enabled: true
+    issuerRef:
+      name: ""
+      kind: Issuer
+      group: cert-manager.io
 
 # Rehearsal mode, for a migration rehearsal (docs/migrate.md). Every pod in
 # the namespace may reach only the other pods and the cluster DNS, and the chart
