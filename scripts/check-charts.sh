@@ -288,6 +288,49 @@ PY
 must_fail "an issuerRef kind cert-manager doesn't have" helm template ci charts/sneakers "${mtls_args[@]}" --set global.internalTLS.issuerRef.name=x --set global.internalTLS.issuerRef.kind=Secret
 must_fail "internalTLS.enabled that isn't a boolean" helm template ci charts/sneakers "${mtls_args[@]}" --set global.internalTLS.enabled=maybe
 
+step "mTLS certificate for the migrate Job"
+# The migrate Job dials the vault and the audit service, so under mTLS it needs a certificate of its
+# own, and only where the migrate callers layer admits it.
+helm template ci charts/sneakers "${mtls_args[@]}" -f migrate/deploy/migrate-callers-values.yaml >"$out/mtls-migrate-on.yaml"
+helm template ci charts/sneakers "${mtls_args[@]}" -f migrate/deploy/migrate-callers-values.yaml --set global.internalTLS.enabled=false >"$out/mtls-migrate-off.yaml"
+python3 - "$out/mtls-on.yaml" "$out/mtls-migrate-on.yaml" "$out/mtls-migrate-off.yaml" <<'PY'
+import sys, yaml
+
+def certs(path):
+    return {d["metadata"]["name"]: d for d in yaml.safe_load_all(open(path)) if d and d["kind"] == "Certificate"}
+
+plain, layered, off = (certs(p) for p in sys.argv[1:4])
+assert "sneakers-migrate" not in plain, "the default install issues a migrate certificate"
+assert not off, "the migrate layer with mTLS off still renders certificates"
+c = layered["sneakers-migrate"]["spec"]
+assert c["secretName"] == "sneakers-migrate-tls", c["secretName"]
+assert c["usages"] == ["server auth", "client auth"], c["usages"]
+assert c["uris"] == ["spiffe://sneakers/ns/sneakers/sa/sneakers-migrate"], c["uris"]
+assert c["issuerRef"]["name"] == "sneakers-mtls", c["issuerRef"]
+print("ok: the migrate Job gets a certificate only with the migrate callers layer and mTLS on")
+PY
+# The Job reads the three paths from variables that are empty unless the install has mTLS on.
+python3 - <<'PY'
+import os, subprocess, yaml
+for vals, want in (({}, {"MTLS_CERT_FILE": "", "MTLS_KEY_FILE": "", "MTLS_CA_FILE": ""}),
+                   ({"MTLS_CERT_FILE": "/var/run/sneakers/tls/tls.crt", "MTLS_KEY_FILE": "/var/run/sneakers/tls/tls.key", "MTLS_CA_FILE": "/var/run/sneakers/tls/ca.crt"}, None)):
+    env = {**os.environ, "NAMESPACE": "sneakers", "JOB_NAME": "j", "MIGRATE_IMAGE": "m@sha256:" + "0" * 64, "COMMAND_ARGS": "[verify]", **vals}
+    for k in ("MTLS_CERT_FILE", "MTLS_KEY_FILE", "MTLS_CA_FILE"):
+        if k not in vals:
+            env.pop(k, None)
+    out = subprocess.run(["envsubst"], input=open("migrate/deploy/import-job.yaml").read(), env=env, text=True, capture_output=True, check=True).stdout
+    job = next(d for d in yaml.safe_load_all(out) if d and d["kind"] == "Job")
+    spec = job["spec"]["template"]["spec"]
+    got = {e["name"]: e.get("value") for e in spec["containers"][0]["env"] if e["name"].startswith("MTLS_")}
+    assert got == (want if want is not None else vals), got
+    vol = next(v for v in spec["volumes"] if v["name"] == "mtls")
+    assert vol["secret"] == {"secretName": "sneakers-migrate-tls", "optional": True, "defaultMode": 0o440}, vol
+    mount = next(m for m in spec["containers"][0]["volumeMounts"] if m["name"] == "mtls")
+    assert mount == {"name": "mtls", "mountPath": "/var/run/sneakers/tls", "readOnly": True}, mount
+print("ok: the migrate Job mounts its certificate and takes the MTLS_* paths from its environment")
+PY
+grep -q 'MTLS_CERT_FILE' test/migrate/rehearsal.sh || fail "test/migrate/rehearsal.sh does not pass the MTLS_* variables to envsubst"
+
 step "mTLS pod wiring (global.internalTLS)"
 helm template ci charts/sneakers "${mtls_args[@]}" >"$out/mtls-pods-on.yaml"
 helm template ci charts/sneakers "${mtls_args[@]}" --set global.internalTLS.enabled=false >"$out/mtls-pods-off.yaml"
@@ -305,9 +348,9 @@ def pod(docs, svc):
 
 on, off = load(sys.argv[1]), load(sys.argv[2])
 # The services that read the three files, and the plain health port each one answers on.
-health = {"identity": 9091, "audit": 9091, "notify": 9091, "vault": 9092, "sshbroker": 9098, "connector": 9099}
+health = {"identity": 9091, "audit": 9091, "notify": 9091, "vault": 9092, "sshbroker": 9098, "connector": 9099, "workflow": 9092}
 no_health_port = ["gateway", "mcp"]   # their probes stay on the plain HTTP port
-not_yet = ["workflow"]   # no mTLS in the service yet
+not_yet = []   # a service with no mTLS in its image yet: none now
 D = "/var/run/sneakers/tls"
 for svc in list(health) + no_health_port:
     spec, c, data = pod(on, svc)

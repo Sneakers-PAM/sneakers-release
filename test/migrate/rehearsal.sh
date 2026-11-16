@@ -166,8 +166,10 @@ kubectl -n "$ns" create secret generic sneakers-migrate-bundle "${bundle_files[@
 run_job() {
   local name="$1" want="$2" args="$3" code=""
   kubectl -n "$ns" delete job "$name" --ignore-not-found --wait >/dev/null
+  # The MTLS_* paths stay empty here: the kind rehearsal runs with global.internalTLS off.
   NAMESPACE="$ns" JOB_NAME="$name" MIGRATE_IMAGE="$image" COMMAND_ARGS="[$args]" \
-    envsubst '${NAMESPACE} ${JOB_NAME} ${MIGRATE_IMAGE} ${COMMAND_ARGS}' <migrate/deploy/import-job.yaml |
+    MTLS_CERT_FILE="${MTLS_CERT_FILE:-}" MTLS_KEY_FILE="${MTLS_KEY_FILE:-}" MTLS_CA_FILE="${MTLS_CA_FILE:-}" \
+    envsubst '${NAMESPACE} ${JOB_NAME} ${MIGRATE_IMAGE} ${COMMAND_ARGS} ${MTLS_CERT_FILE} ${MTLS_KEY_FILE} ${MTLS_CA_FILE}' <migrate/deploy/import-job.yaml |
     sed 's/imagePullPolicy: IfNotPresent/imagePullPolicy: Never/' | kubectl apply -f - >/dev/null
   for _ in $(seq 300); do
     code="$(kubectl -n "$ns" get pods -l "job-name=$name" -o jsonpath='{.items[0].status.containerStatuses[0].state.terminated.exitCode}' 2>/dev/null || true)"
