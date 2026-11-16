@@ -405,7 +405,11 @@ to_mtls = [r for r in rules if "mtls" in ports(r)]
 assert len(to_mtls) == 1, to_mtls
 assert [f["podSelector"]["matchLabels"]["app.kubernetes.io/component"] for f in to_mtls[0]["from"]] == ["mcp"], to_mtls
 assert all("mtls" not in ports(r) for r in policy(off, "gateway")["spec"]["ingress"]), "off opens the mTLS port"
-print("ok: the gateway opens 9443 to mcp only, and no policy admits a pod to a health port")
+# mcp calls the gateway on 9443 under mTLS, so its egress must admit the gateway on the mtls port too.
+eg = [r for r in policy(on, "mcp")["spec"]["egress"]
+      if any((t.get("podSelector") or {}).get("matchLabels", {}).get("app.kubernetes.io/component") == "gateway" for t in r.get("to", []))]
+assert len(eg) == 1 and sorted(ports(eg[0])) == ["http", "mtls"], f"mcp's egress to the gateway admits {[ports(r) for r in eg]}, want http and mtls"
+print("ok: the gateway opens 9443 to mcp only, mcp may reach it, and no policy admits a pod to a health port")
 print("ok: with mTLS on, the pods mount their certificate, read it by variable and probe the health port; off is the rc.7 pod")
 PY
 
