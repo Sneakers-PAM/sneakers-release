@@ -1,0 +1,1033 @@
+{
+  "schema": 1,
+  "release": {
+    "ref": "v0.1.0-rc.7",
+    "version": "0.1.0"
+  },
+  "libraries": {
+    "go-otel": "v1.6.0",
+    "otelgrpc": "v0.70.0",
+    "otelhttp": "v0.70.0"
+  },
+  "export": {
+    "endpoint_env": "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "protocol": "otlp/grpc",
+    "signals": [
+      "traces",
+      "metrics",
+      "logs"
+    ],
+    "logs_enabled_env": "OTLP_LOGS_ENABLED"
+  },
+  "span_placeholder": "[span]",
+  "metrics": [
+    {
+      "name": "rpc.server.call.duration",
+      "type": "histogram",
+      "unit": "s",
+      "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc",
+      "library": "otelgrpc",
+      "standard": true,
+      "boundaries": [
+        0.005,
+        0.01,
+        0.025,
+        0.05,
+        0.075,
+        0.1,
+        0.25,
+        0.5,
+        0.75,
+        1,
+        2.5,
+        5,
+        7.5,
+        10
+      ],
+      "description": "Duration of gRPC calls served.",
+      "services": {
+        "identity": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ],
+        "vault": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ],
+        "workflow": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ],
+        "audit": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ],
+        "notify": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ],
+        "connector": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ],
+        "sshbroker": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ]
+      }
+    },
+    {
+      "name": "rpc.client.call.duration",
+      "type": "histogram",
+      "unit": "s",
+      "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc",
+      "library": "otelgrpc",
+      "standard": true,
+      "boundaries": [
+        0.005,
+        0.01,
+        0.025,
+        0.05,
+        0.075,
+        0.1,
+        0.25,
+        0.5,
+        0.75,
+        1,
+        2.5,
+        5,
+        7.5,
+        10
+      ],
+      "description": "Duration of gRPC calls made.",
+      "services": {
+        "identity": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ],
+        "vault": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ],
+        "workflow": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ],
+        "notify": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ],
+        "connector": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ],
+        "sshbroker": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ],
+        "gateway": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ]
+      }
+    },
+    {
+      "name": "http.server.request.duration",
+      "type": "histogram",
+      "unit": "s",
+      "scope": "github.com/Bugs5382/go-otel",
+      "library": "go-otel",
+      "standard": true,
+      "boundaries": "sdk-default",
+      "description": "Duration of inbound HTTP requests (go-otel Metrics).",
+      "services": {
+        "gateway": [
+          "http.request.method",
+          "http.route",
+          "http.response.status_code"
+        ],
+        "mcp": [
+          "http.request.method",
+          "http.route",
+          "http.response.status_code"
+        ]
+      }
+    },
+    {
+      "name": "http.server.request.count",
+      "type": "counter",
+      "unit": "",
+      "scope": "github.com/Bugs5382/go-otel",
+      "library": "go-otel",
+      "standard": false,
+      "boundaries": null,
+      "description": "Count of inbound HTTP requests (go-otel Metrics); monotonic.",
+      "services": {
+        "gateway": [
+          "http.request.method",
+          "http.route",
+          "http.response.status_code"
+        ],
+        "mcp": [
+          "http.request.method",
+          "http.route",
+          "http.response.status_code"
+        ]
+      }
+    },
+    {
+      "name": "http.server.request.duration",
+      "type": "histogram",
+      "unit": "s",
+      "scope": "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+      "library": "otelhttp",
+      "standard": true,
+      "boundaries": [
+        0.005,
+        0.01,
+        0.025,
+        0.05,
+        0.075,
+        0.1,
+        0.25,
+        0.5,
+        0.75,
+        1,
+        2.5,
+        5,
+        7.5,
+        10
+      ],
+      "description": "Duration of inbound HTTP requests (otelhttp).",
+      "services": {
+        "gateway": [
+          "http.request.method",
+          "http.route",
+          "http.response.status_code"
+        ]
+      }
+    },
+    {
+      "name": "http.server.request.body.size",
+      "type": "histogram",
+      "unit": "By",
+      "scope": "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+      "library": "otelhttp",
+      "standard": true,
+      "boundaries": "sdk-default",
+      "description": "Size of inbound HTTP request bodies.",
+      "services": {
+        "gateway": [
+          "http.request.method",
+          "http.route",
+          "http.response.status_code"
+        ]
+      }
+    },
+    {
+      "name": "http.server.response.body.size",
+      "type": "histogram",
+      "unit": "By",
+      "scope": "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+      "library": "otelhttp",
+      "standard": true,
+      "boundaries": "sdk-default",
+      "description": "Size of HTTP response bodies.",
+      "services": {
+        "gateway": [
+          "http.request.method",
+          "http.route",
+          "http.response.status_code"
+        ]
+      }
+    }
+  ],
+  "services": {
+    "identity": {
+      "service_name": "identity",
+      "source": {
+        "repository": "Sneakers-PAM/sneakers-identity",
+        "commit": "d0617c688ebd916ca5bf39d2b63423b4e5601450",
+        "file": "internal/telemetry/telemetry.go"
+      },
+      "resource": [
+        "service.name"
+      ],
+      "resource_filtered": true,
+      "spans": {
+        "placeholder": "[span]",
+        "names": [
+          {
+            "pattern": "^sneakers\\.[a-z]+\\.v1\\.[A-Za-z]+/[A-Za-z]+$",
+            "kind": "SERVER",
+            "source": "otelgrpc"
+          },
+          {
+            "pattern": "^sneakers\\.[a-z]+\\.v1\\.[A-Za-z]+/[A-Za-z]+$",
+            "kind": "CLIENT",
+            "source": "otelgrpc"
+          },
+          {
+            "pattern": "^query [A-Z]+$",
+            "kind": "CLIENT",
+            "source": "otelpgx"
+          }
+        ],
+        "attributes": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ]
+      },
+      "metrics": [
+        {
+          "name": "rpc.server.call.duration",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        },
+        {
+          "name": "rpc.client.call.duration",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        }
+      ],
+      "metric_attributes": [
+        "rpc.method",
+        "rpc.response.status_code"
+      ],
+      "database_spans": true,
+      "class_only_log_fields": [],
+      "log_fields": [
+        "access",
+        "acting_admin",
+        "acting_user_id",
+        "action",
+        "attempt",
+        "attempts",
+        "auth",
+        "code",
+        "component",
+        "custom_ca",
+        "dependencies",
+        "dependency",
+        "disabled",
+        "duration_ms",
+        "error_class",
+        "force",
+        "from",
+        "granted",
+        "groups",
+        "kept_keys",
+        "keys",
+        "method",
+        "orphans",
+        "port",
+        "required",
+        "retry_in",
+        "retry_in_ms",
+        "revoked",
+        "service_account_id",
+        "tls_mode",
+        "to",
+        "token_id",
+        "user_id",
+        "verify"
+      ]
+    },
+    "vault": {
+      "service_name": "vault",
+      "source": {
+        "repository": "Sneakers-PAM/sneakers-vault",
+        "commit": "d68f3e0e9375206fecad2a278241db90d2e6272a",
+        "file": "internal/telemetry/telemetry.go"
+      },
+      "resource": [
+        "service.name"
+      ],
+      "resource_filtered": true,
+      "spans": {
+        "placeholder": "[span]",
+        "names": [
+          {
+            "pattern": "^sneakers\\.[a-z]+\\.v1\\.[A-Za-z]+/[A-Za-z]+$",
+            "kind": "SERVER",
+            "source": "otelgrpc"
+          },
+          {
+            "pattern": "^sneakers\\.[a-z]+\\.v1\\.[A-Za-z]+/[A-Za-z]+$",
+            "kind": "CLIENT",
+            "source": "otelgrpc"
+          },
+          {
+            "pattern": "^query [A-Z]+$",
+            "kind": "CLIENT",
+            "source": "otelpgx"
+          }
+        ],
+        "attributes": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ]
+      },
+      "metrics": [
+        {
+          "name": "rpc.server.call.duration",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        },
+        {
+          "name": "rpc.client.call.duration",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        }
+      ],
+      "metric_attributes": [
+        "rpc.method",
+        "rpc.response.status_code"
+      ],
+      "database_spans": true,
+      "class_only_log_fields": [],
+      "log_fields": [
+        "action",
+        "active_ref",
+        "actor",
+        "actor_user_id",
+        "allowed",
+        "attempt",
+        "caller",
+        "clamped",
+        "confirm",
+        "count",
+        "cutoff",
+        "decided_by",
+        "dependencies",
+        "dependency",
+        "dev_static_kek_loaded",
+        "end_reason",
+        "error_class",
+        "expires_at",
+        "folder_id",
+        "folders",
+        "found",
+        "from_target_id",
+        "from_type_id",
+        "heartbeat_opt_out",
+        "item",
+        "items",
+        "lease_id",
+        "method",
+        "mode",
+        "new_version_no",
+        "parent_id",
+        "port",
+        "principal_id",
+        "principal_kind",
+        "request_id",
+        "requested",
+        "result",
+        "retention_days",
+        "retry_in",
+        "reveals",
+        "rewrapped_records",
+        "rewrapped_versions",
+        "rotated_by",
+        "rotation_opt_out",
+        "rpc",
+        "run_id",
+        "secret_id",
+        "secrets",
+        "session_id",
+        "state",
+        "target_id",
+        "to_type_id",
+        "token_id",
+        "type_id",
+        "use_id",
+        "user_id",
+        "value_version",
+        "verb",
+        "version_no",
+        "worker_id"
+      ]
+    },
+    "workflow": {
+      "service_name": "workflow",
+      "source": {
+        "repository": "Sneakers-PAM/sneakers-vault",
+        "commit": "d68f3e0e9375206fecad2a278241db90d2e6272a",
+        "file": "internal/telemetry/telemetry.go"
+      },
+      "resource": [
+        "service.name"
+      ],
+      "resource_filtered": true,
+      "spans": {
+        "placeholder": "[span]",
+        "names": [
+          {
+            "pattern": "^sneakers\\.[a-z]+\\.v1\\.[A-Za-z]+/[A-Za-z]+$",
+            "kind": "SERVER",
+            "source": "otelgrpc"
+          },
+          {
+            "pattern": "^sneakers\\.[a-z]+\\.v1\\.[A-Za-z]+/[A-Za-z]+$",
+            "kind": "CLIENT",
+            "source": "otelgrpc"
+          },
+          {
+            "pattern": "^query [A-Z]+$",
+            "kind": "CLIENT",
+            "source": "otelpgx"
+          }
+        ],
+        "attributes": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ]
+      },
+      "metrics": [
+        {
+          "name": "rpc.server.call.duration",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        },
+        {
+          "name": "rpc.client.call.duration",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        }
+      ],
+      "metric_attributes": [
+        "rpc.method",
+        "rpc.response.status_code"
+      ],
+      "database_spans": true,
+      "class_only_log_fields": [],
+      "log_fields": [
+        "action",
+        "active_ref",
+        "actor",
+        "actor_user_id",
+        "allowed",
+        "attempt",
+        "caller",
+        "clamped",
+        "confirm",
+        "count",
+        "cutoff",
+        "decided_by",
+        "dependencies",
+        "dependency",
+        "dev_static_kek_loaded",
+        "end_reason",
+        "error_class",
+        "expires_at",
+        "folder_id",
+        "folders",
+        "found",
+        "from_target_id",
+        "from_type_id",
+        "heartbeat_opt_out",
+        "item",
+        "items",
+        "lease_id",
+        "method",
+        "mode",
+        "new_version_no",
+        "parent_id",
+        "port",
+        "principal_id",
+        "principal_kind",
+        "request_id",
+        "requested",
+        "result",
+        "retention_days",
+        "retry_in",
+        "reveals",
+        "rewrapped_records",
+        "rewrapped_versions",
+        "rotated_by",
+        "rotation_opt_out",
+        "rpc",
+        "run_id",
+        "secret_id",
+        "secrets",
+        "session_id",
+        "state",
+        "target_id",
+        "to_type_id",
+        "token_id",
+        "type_id",
+        "use_id",
+        "user_id",
+        "value_version",
+        "verb",
+        "version_no",
+        "worker_id"
+      ]
+    },
+    "audit": {
+      "service_name": "audit",
+      "source": {
+        "repository": "Sneakers-PAM/sneakers-audit",
+        "commit": "2db54060db2a3647c25c55ad00f72f97e12af9ba",
+        "file": "internal/telemetry/telemetry.go"
+      },
+      "resource": [
+        "service.name"
+      ],
+      "resource_filtered": true,
+      "spans": {
+        "placeholder": "[span]",
+        "names": [
+          {
+            "pattern": "^sneakers\\.[a-z]+\\.v1\\.[A-Za-z]+/[A-Za-z]+$",
+            "kind": "SERVER",
+            "source": "otelgrpc"
+          },
+          {
+            "pattern": "^query [A-Z]+$",
+            "kind": "CLIENT",
+            "source": "otelpgx"
+          }
+        ],
+        "attributes": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ]
+      },
+      "metrics": [
+        {
+          "name": "rpc.server.call.duration",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        }
+      ],
+      "metric_attributes": [
+        "rpc.method",
+        "rpc.response.status_code"
+      ],
+      "database_spans": true,
+      "class_only_log_fields": [],
+      "log_fields": [
+        "attempt",
+        "attempts",
+        "bearer_file",
+        "ca_file",
+        "code",
+        "dependencies",
+        "dependency",
+        "duration_ms",
+        "error_class",
+        "from",
+        "jwks_override",
+        "kept_keys",
+        "keys",
+        "method",
+        "port",
+        "required",
+        "retry_in",
+        "to"
+      ]
+    },
+    "notify": {
+      "service_name": "notify",
+      "source": {
+        "repository": "Sneakers-PAM/sneakers-notify",
+        "commit": "4ef7d2aee989f53fa9f3a351c4ef2aeac6865eb7",
+        "file": "internal/telemetry/telemetry.go"
+      },
+      "resource": [
+        "service.name"
+      ],
+      "resource_filtered": true,
+      "spans": {
+        "placeholder": "[span]",
+        "names": [
+          {
+            "pattern": "^sneakers\\.[a-z]+\\.v1\\.[A-Za-z]+/[A-Za-z]+$",
+            "kind": "SERVER",
+            "source": "otelgrpc"
+          },
+          {
+            "pattern": "^sneakers\\.[a-z]+\\.v1\\.[A-Za-z]+/[A-Za-z]+$",
+            "kind": "CLIENT",
+            "source": "otelgrpc"
+          }
+        ],
+        "attributes": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ]
+      },
+      "metrics": [
+        {
+          "name": "rpc.server.call.duration",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        },
+        {
+          "name": "rpc.client.call.duration",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        }
+      ],
+      "metric_attributes": [
+        "rpc.method",
+        "rpc.response.status_code"
+      ],
+      "database_spans": false,
+      "class_only_log_fields": [],
+      "log_fields": [
+        "attempt",
+        "attempts",
+        "bearer_file",
+        "ca_file",
+        "code",
+        "component",
+        "dependencies",
+        "dependency",
+        "duration_ms",
+        "env",
+        "error_class",
+        "from",
+        "jwks_override",
+        "kept_keys",
+        "keys",
+        "method",
+        "otlp_insecure_skip_verify",
+        "otlp_logs",
+        "port",
+        "required",
+        "retry_in",
+        "retry_in_ms",
+        "to"
+      ]
+    },
+    "connector": {
+      "service_name": "connector",
+      "source": {
+        "repository": "Sneakers-PAM/sneakers-connector",
+        "commit": "641581e27e467563fe4b129bd451790aa2f5ec39",
+        "file": "internal/telemetry/telemetry.go"
+      },
+      "resource": [
+        "service.name"
+      ],
+      "resource_filtered": true,
+      "spans": {
+        "placeholder": "[span]",
+        "names": [
+          {
+            "pattern": "^sneakers\\.[a-z]+\\.v1\\.[A-Za-z]+/[A-Za-z]+$",
+            "kind": "SERVER",
+            "source": "otelgrpc"
+          },
+          {
+            "pattern": "^sneakers\\.[a-z]+\\.v1\\.[A-Za-z]+/[A-Za-z]+$",
+            "kind": "CLIENT",
+            "source": "otelgrpc"
+          },
+          {
+            "pattern": "^grpc\\.health\\.v1\\.Health/(Check|Watch)$",
+            "kind": "SERVER",
+            "source": "otelgrpc"
+          },
+          {
+            "pattern": "^grpc\\.health\\.v1\\.Health/(Check|Watch)$",
+            "kind": "CLIENT",
+            "source": "otelgrpc"
+          }
+        ],
+        "attributes": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ]
+      },
+      "metrics": [
+        {
+          "name": "rpc.server.call.duration",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        },
+        {
+          "name": "rpc.client.call.duration",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        }
+      ],
+      "metric_attributes": [
+        "rpc.method",
+        "rpc.response.status_code"
+      ],
+      "database_spans": false,
+      "class_only_log_fields": [
+        "error",
+        "detail",
+        "reason"
+      ],
+      "log_fields": [
+        "admin_count",
+        "backoff",
+        "builtin_administrator",
+        "dependency",
+        "detail",
+        "error",
+        "error_class",
+        "error_code",
+        "from",
+        "pinned_certificates",
+        "pinned_keys",
+        "port",
+        "reason",
+        "required",
+        "result",
+        "secret_id",
+        "to"
+      ]
+    },
+    "sshbroker": {
+      "service_name": "sshbroker",
+      "source": {
+        "repository": "Sneakers-PAM/sneakers-sshbroker",
+        "commit": "8c86b9e05391d6bf525a67d013d7e7edbc43014c",
+        "file": "internal/telemetry/telemetry.go"
+      },
+      "resource": [
+        "service.name"
+      ],
+      "resource_filtered": true,
+      "spans": {
+        "placeholder": "[span]",
+        "names": [
+          {
+            "pattern": "^sneakers\\.[a-z]+\\.v1\\.[A-Za-z]+/[A-Za-z]+$",
+            "kind": "SERVER",
+            "source": "otelgrpc"
+          },
+          {
+            "pattern": "^sneakers\\.[a-z]+\\.v1\\.[A-Za-z]+/[A-Za-z]+$",
+            "kind": "CLIENT",
+            "source": "otelgrpc"
+          }
+        ],
+        "attributes": [
+          "rpc.method",
+          "rpc.response.status_code"
+        ]
+      },
+      "metrics": [
+        {
+          "name": "rpc.server.call.duration",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        },
+        {
+          "name": "rpc.client.call.duration",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        }
+      ],
+      "metric_attributes": [
+        "rpc.method",
+        "rpc.response.status_code"
+      ],
+      "database_spans": false,
+      "class_only_log_fields": [
+        "error",
+        "reason"
+      ],
+      "log_fields": [
+        "action",
+        "actor_user_id",
+        "attempt",
+        "attempts",
+        "caller",
+        "code",
+        "dependency",
+        "duration",
+        "duration_ms",
+        "elapsed",
+        "elapsed_ms",
+        "error",
+        "error_class",
+        "from",
+        "kept_keys",
+        "keys",
+        "method",
+        "pinned_keys",
+        "principal_kind",
+        "reason",
+        "reference",
+        "required",
+        "retry_in",
+        "secret_id",
+        "span_id",
+        "step",
+        "step_ms",
+        "target_id",
+        "to",
+        "took",
+        "trace_id"
+      ]
+    },
+    "gateway": {
+      "service_name": "gateway",
+      "source": {
+        "repository": "Sneakers-PAM/sneakers-gateway",
+        "commit": "07f50f5d0dbb61164075bc3ba94c8cab98378838",
+        "file": "internal/telemetry/telemetry.go"
+      },
+      "resource": [
+        "service.name"
+      ],
+      "resource_filtered": true,
+      "spans": {
+        "placeholder": "[span]",
+        "names": [
+          {
+            "pattern": "^(GET|POST|OPTIONS) /",
+            "kind": "SERVER",
+            "source": "otelhttp"
+          },
+          {
+            "pattern": "^sneakers\\.[a-z]+\\.v1\\.[A-Za-z]+/[A-Za-z]+$",
+            "kind": "CLIENT",
+            "source": "otelgrpc"
+          }
+        ],
+        "attributes": [
+          "http.request.method",
+          "http.response.status_code",
+          "rpc.method",
+          "rpc.response.status_code"
+        ]
+      },
+      "metrics": [
+        {
+          "name": "rpc.client.call.duration",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        },
+        {
+          "name": "http.server.request.duration",
+          "scope": "github.com/Bugs5382/go-otel"
+        },
+        {
+          "name": "http.server.request.count",
+          "scope": "github.com/Bugs5382/go-otel"
+        },
+        {
+          "name": "http.server.request.duration",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+        },
+        {
+          "name": "http.server.request.body.size",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+        },
+        {
+          "name": "http.server.response.body.size",
+          "scope": "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+        }
+      ],
+      "metric_attributes": [
+        "http.request.method",
+        "http.response.status_code",
+        "http.route",
+        "rpc.method",
+        "rpc.response.status_code"
+      ],
+      "database_spans": false,
+      "class_only_log_fields": [],
+      "log_fields": [
+        "action",
+        "actor",
+        "actor_user_id",
+        "age_ms",
+        "appliance_configmap",
+        "approval_run_links",
+        "auth_mode",
+        "caller",
+        "check",
+        "class",
+        "client_id",
+        "client_kind",
+        "code",
+        "confirmed",
+        "connection_id",
+        "cookie_secure",
+        "count",
+        "current",
+        "decided",
+        "decision",
+        "dependency",
+        "dur",
+        "duration",
+        "duration_ms",
+        "error_class",
+        "fallback",
+        "folders",
+        "from",
+        "host_keys",
+        "hydra_enabled",
+        "machine_api_enabled",
+        "maintenance_readonly",
+        "mcp_clients",
+        "mcp_enabled",
+        "ms",
+        "ok",
+        "refused",
+        "required",
+        "route",
+        "rule",
+        "run_id",
+        "secret_id",
+        "secrets",
+        "session_id",
+        "session_ttl",
+        "sso_reason",
+        "state",
+        "status",
+        "step",
+        "target_id",
+        "to",
+        "token_id",
+        "use_id",
+        "user_id",
+        "workload"
+      ]
+    },
+    "mcp": {
+      "service_name": "mcp",
+      "source": {
+        "repository": "Sneakers-PAM/sneakers-mcp",
+        "commit": "f431e377b82473b940c54accaa4de621856b944b",
+        "file": "internal/telemetry/telemetry.go"
+      },
+      "resource": [
+        "service.name"
+      ],
+      "resource_filtered": true,
+      "spans": {
+        "placeholder": "[span]",
+        "names": [],
+        "attributes": []
+      },
+      "metrics": [
+        {
+          "name": "http.server.request.duration",
+          "scope": "github.com/Bugs5382/go-otel"
+        },
+        {
+          "name": "http.server.request.count",
+          "scope": "github.com/Bugs5382/go-otel"
+        }
+      ],
+      "metric_attributes": [
+        "http.request.method",
+        "http.route",
+        "http.response.status_code"
+      ],
+      "database_spans": false,
+      "class_only_log_fields": [],
+      "log_fields": [
+        "api_tokens",
+        "dependency",
+        "dur",
+        "error_class",
+        "from",
+        "hydra",
+        "required",
+        "status",
+        "to",
+        "tool",
+        "tool_status"
+      ]
+    }
+  }
+}

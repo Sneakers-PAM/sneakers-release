@@ -1,0 +1,36 @@
+name: Image Platforms
+# Every image the release manifest pins by digest is an index holding
+# linux/amd64 and linux/arm64 (scripts/check-manifest.py --platforms). It reads
+# each index from its registry, so it is its own workflow and not a step of
+# Build & Test: a registry outage or rate limit fails this check alone and
+# never blocks the required ones. Pull requests that touch the manifest or
+# the script, and by hand; a draft runs nothing.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'manifest/**'
+      - 'scripts/check-manifest.py'
+      - '.github/workflows/image-platforms.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: image-platforms-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  platforms:
+    name: 🏗️ Image platforms
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      - name: Check amd64 and arm64 for every pinned image
+        run: |
+          pip install pyyaml==6.0.2
+          python3 scripts/check-manifest.py --platforms
