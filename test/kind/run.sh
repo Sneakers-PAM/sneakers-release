@@ -205,7 +205,24 @@ expect tok-wrong-vault 16 yes "the vault took a token from sneakers-mcp"
 expect tok-wrong-broker 16 yes "the broker took a token from sneakers-mcp"
 expect tok-connector-vault 7 yes "the vault let the connector call a user-facing method"
 expect tok-none-vault 16 yes "the vault took a call with no token"
-expect tok-right-vault '16|7|' no "the vault refused the gateway's token"
+# The gateway's token must get past the token check and the allow-list. An empty reveal then stops at the vault's
+# rule that a person's reveal needs their own signed-in session (PermissionDenied with that message): proof the token
+# passed, unlike the allow-list's PermissionDenied (tok-connector-vault) or Unauthenticated.
+expect_token_accepted() { # <pod> <what>
+  local out code
+  out="$(wait_logs "$1")"
+  code="$(awk -F': *' 'tolower($1) == "grpc-status" {gsub(/\r/, "", $2); print $2; exit}' <<<"$out")"
+  echo "$1: grpc-status ${code:-none}"
+  case "$code" in
+    16 | "") ;;
+    7) if grep -qF "needs their own signed-in session" <<<"$out"; then return 0; fi ;;
+    *) return 0 ;;
+  esac
+  echo "$2" >&2
+  echo "$out" >&2
+  failed=1
+}
+expect_token_accepted tok-right-vault "the vault refused the gateway's token"
 [ "$failed" = 0 ] || exit 1
 
 echo "== web apps render"
