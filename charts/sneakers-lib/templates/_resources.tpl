@@ -103,6 +103,10 @@ spec:
               app.kubernetes.io/instance: {{ $.Release.Name }}
       ports:
         - port: {{ $.Values.service.portName }}
+        {{- /* The mTLS-only port is for the callers alone, never the edge peers below. */}}
+        {{- if include "sneakers.mtls.port" $ }}
+        - port: mtls
+        {{- end }}
     {{- end }}
     {{- with .Values.networkPolicy.ingressFrom }}
     - from:

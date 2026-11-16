@@ -48,9 +48,12 @@ service:
 
 # Under global.internalTLS the pod mounts its certificate and reads it by MTLS_CERT_FILE, MTLS_KEY_FILE
 # and MTLS_CA_FILE. The probes stay on the plain HTTP port, so there is no health port.
+# Under mTLS the gateway also serves /machine/graphql and /readyz on port, which needs a client
+# certificate and which only the callers (mcp) may reach.
 mtls:
   enabled: true
   healthPort: 0
+  port: 9443
 
 probes:
   type: http

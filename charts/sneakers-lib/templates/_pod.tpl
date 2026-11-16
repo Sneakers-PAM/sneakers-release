@@ -109,6 +109,10 @@ readinessProbe:
 - name: health
   containerPort: {{ . }}
 {{- end }}
+{{- with include "sneakers.mtls.port" . }}
+- name: mtls
+  containerPort: {{ . }}
+{{- end }}
 {{- end -}}
 
 {{/* The pod template shared by the Deployment. */}}

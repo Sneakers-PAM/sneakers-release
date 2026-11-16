@@ -16,6 +16,10 @@ MTLS_KEY_FILE: {{ printf "%s/tls.key" (include "sneakers.mtls.dir" .) | quote }}
 MTLS_CA_FILE: {{ printf "%s/ca.crt" (include "sneakers.mtls.dir" .) | quote }}
 {{- with include "sneakers.mtls.healthPort" . }}
 HEALTH_PORT: {{ . | quote }}
+MTLS_HEALTH_PORT: {{ . | quote }}
+{{- end }}
+{{- with (.Values.mtls | default dict).port }}
+MTLS_PORT: {{ . | quote }}
 {{- end }}
 {{- end }}
 {{- range $k, $v := .Values.env }}
