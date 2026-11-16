@@ -80,7 +80,7 @@ edit it by hand. `docs/telemetry.json` holds the same data for tools.
 
 <!-- telemetry-list:begin -->
 
-Release ref: `v0.1.0-rc.7` (`docs/telemetry.ref`). Read from the service sources at the commits `manifest/release.yaml` pins, with go-otel v1.6.0, otelgrpc v0.70.0 and otelhttp v0.70.0. The same data is in `docs/telemetry.json`.
+Release ref: `v0.1.0-rc.7` (`docs/telemetry.ref`). Read from the service sources at the commits `manifest/release.yaml` pins, with go-otel v1.6.0, otelgrpc v0.70.0, otelhttp v0.70.0 and otelpgx v0.11.1. The same data is in `docs/telemetry.json`.
 
 ### Metric instruments
 
@@ -93,19 +93,22 @@ Release ref: `v0.1.0-rc.7` (`docs/telemetry.ref`). Read from the service sources
 | `http.server.request.duration` | histogram | s | otelhttp | gateway (`http.request.method`, `http.route`, `http.response.status_code`) |
 | `http.server.request.body.size` | histogram | By | otelhttp | gateway (`http.request.method`, `http.route`, `http.response.status_code`) |
 | `http.server.response.body.size` | histogram | By | otelhttp | gateway (`http.request.method`, `http.route`, `http.response.status_code`) |
+| `db.client.operation.duration` | histogram | s | otelpgx | identity (no labels); vault (no labels); workflow (no labels); audit (no labels) |
+| `db.client.operation.errors` | counter | none | otelpgx | identity (no labels); vault (no labels); workflow (no labels); audit (no labels) |
 
 A service keeps a label only when its metric allow-list names it; the table shows the labels that can survive that filter.
 
 - `http.server.request.count` is a go-otel counter (monotonic, no unit), not a standard OpenTelemetry name: the standard way to count requests is the count of the duration histogram.
+- `db.client.operation.errors` is a go-otel counter (monotonic, no unit), not a standard OpenTelemetry name: the standard way to count requests is the count of the duration histogram.
 - The gateway records `http.server.request.duration` twice, once from go-otel's `Metrics` and once from otelhttp, under two instrumentation scopes; read them by scope.
 - The go-otel histogram uses the SDK's default bucket boundaries, which are sized for milliseconds although its unit is seconds.
 
 ### identity
 
-Source: `Sneakers-PAM/sneakers-identity` at `d0617c688ebd`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-identity` at `574276214447`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `identity`; attributes that leave: `service.name`.
-- Metrics: `rpc.server.call.duration`, `rpc.client.call.duration`.
+- Metrics: `rpc.server.call.duration`, `rpc.client.call.duration`, `db.client.operation.duration`, `db.client.operation.errors`.
 - Metric attributes allowed: `rpc.method`, `rpc.response.status_code`.
 - Span names kept (any other name is exported as `[span]`): `^sneakers\.[a-z]+\.v1\.[A-Za-z]+/[A-Za-z]+$` (server, otelgrpc); `^sneakers\.[a-z]+\.v1\.[A-Za-z]+/[A-Za-z]+$` (client, otelgrpc); `^query [A-Z]+$` (client, otelpgx).
 - Trace attributes allowed: `rpc.method`, `rpc.response.status_code`.
@@ -114,10 +117,10 @@ Source: `Sneakers-PAM/sneakers-identity` at `d0617c688ebd`, `internal/telemetry/
 
 ### vault
 
-Source: `Sneakers-PAM/sneakers-vault` at `d68f3e0e9375`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-vault` at `57255803af15`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `vault`; attributes that leave: `service.name`.
-- Metrics: `rpc.server.call.duration`, `rpc.client.call.duration`.
+- Metrics: `rpc.server.call.duration`, `rpc.client.call.duration`, `db.client.operation.duration`, `db.client.operation.errors`.
 - Metric attributes allowed: `rpc.method`, `rpc.response.status_code`.
 - Span names kept (any other name is exported as `[span]`): `^sneakers\.[a-z]+\.v1\.[A-Za-z]+/[A-Za-z]+$` (server, otelgrpc); `^sneakers\.[a-z]+\.v1\.[A-Za-z]+/[A-Za-z]+$` (client, otelgrpc); `^query [A-Z]+$` (client, otelpgx).
 - Trace attributes allowed: `rpc.method`, `rpc.response.status_code`.
@@ -126,10 +129,10 @@ Source: `Sneakers-PAM/sneakers-vault` at `d68f3e0e9375`, `internal/telemetry/tel
 
 ### workflow
 
-Source: `Sneakers-PAM/sneakers-vault` at `d68f3e0e9375`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-vault` at `57255803af15`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `workflow`; attributes that leave: `service.name`.
-- Metrics: `rpc.server.call.duration`, `rpc.client.call.duration`.
+- Metrics: `rpc.server.call.duration`, `rpc.client.call.duration`, `db.client.operation.duration`, `db.client.operation.errors`.
 - Metric attributes allowed: `rpc.method`, `rpc.response.status_code`.
 - Span names kept (any other name is exported as `[span]`): `^sneakers\.[a-z]+\.v1\.[A-Za-z]+/[A-Za-z]+$` (server, otelgrpc); `^sneakers\.[a-z]+\.v1\.[A-Za-z]+/[A-Za-z]+$` (client, otelgrpc); `^query [A-Z]+$` (client, otelpgx).
 - Trace attributes allowed: `rpc.method`, `rpc.response.status_code`.
@@ -138,10 +141,10 @@ Source: `Sneakers-PAM/sneakers-vault` at `d68f3e0e9375`, `internal/telemetry/tel
 
 ### audit
 
-Source: `Sneakers-PAM/sneakers-audit` at `2db54060db2a`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-audit` at `bca59c038358`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `audit`; attributes that leave: `service.name`.
-- Metrics: `rpc.server.call.duration`.
+- Metrics: `rpc.server.call.duration`, `db.client.operation.duration`, `db.client.operation.errors`.
 - Metric attributes allowed: `rpc.method`, `rpc.response.status_code`.
 - Span names kept (any other name is exported as `[span]`): `^sneakers\.[a-z]+\.v1\.[A-Za-z]+/[A-Za-z]+$` (server, otelgrpc); `^query [A-Z]+$` (client, otelpgx).
 - Trace attributes allowed: `rpc.method`, `rpc.response.status_code`.
@@ -150,7 +153,7 @@ Source: `Sneakers-PAM/sneakers-audit` at `2db54060db2a`, `internal/telemetry/tel
 
 ### notify
 
-Source: `Sneakers-PAM/sneakers-notify` at `4ef7d2aee989`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-notify` at `06638da4cb8b`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `notify`; attributes that leave: `service.name`.
 - Metrics: `rpc.server.call.duration`, `rpc.client.call.duration`.
@@ -162,7 +165,7 @@ Source: `Sneakers-PAM/sneakers-notify` at `4ef7d2aee989`, `internal/telemetry/te
 
 ### connector
 
-Source: `Sneakers-PAM/sneakers-connector` at `641581e27e46`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-connector` at `4c1df9583d1d`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `connector`; attributes that leave: `service.name`.
 - Metrics: `rpc.server.call.duration`, `rpc.client.call.duration`.
@@ -175,7 +178,7 @@ Source: `Sneakers-PAM/sneakers-connector` at `641581e27e46`, `internal/telemetry
 
 ### sshbroker
 
-Source: `Sneakers-PAM/sneakers-sshbroker` at `8c86b9e05391`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-sshbroker` at `de68e5156d22`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `sshbroker`; attributes that leave: `service.name`.
 - Metrics: `rpc.server.call.duration`, `rpc.client.call.duration`.
@@ -188,7 +191,7 @@ Source: `Sneakers-PAM/sneakers-sshbroker` at `8c86b9e05391`, `internal/telemetry
 
 ### gateway
 
-Source: `Sneakers-PAM/sneakers-gateway` at `07f50f5d0dbb`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-gateway` at `13cd05d8cbe6`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `gateway`; attributes that leave: `service.name`.
 - Metrics: `rpc.client.call.duration`, `http.server.request.duration`, `http.server.request.count`, `http.server.request.duration`, `http.server.request.body.size`, `http.server.response.body.size`.
@@ -200,7 +203,7 @@ Source: `Sneakers-PAM/sneakers-gateway` at `07f50f5d0dbb`, `internal/telemetry/t
 
 ### mcp
 
-Source: `Sneakers-PAM/sneakers-mcp` at `f431e377b824`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-mcp` at `528f52f483cb`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `mcp`; attributes that leave: `service.name`.
 - Metrics: `http.server.request.duration`, `http.server.request.count`.

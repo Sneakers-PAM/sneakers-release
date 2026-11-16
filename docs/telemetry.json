@@ -7,7 +7,8 @@
   "libraries": {
     "go-otel": "v1.6.0",
     "otelgrpc": "v0.70.0",
-    "otelhttp": "v0.70.0"
+    "otelhttp": "v0.70.0",
+    "otelpgx": "v0.11.1"
   },
   "export": {
     "endpoint_env": "OTEL_EXPORTER_OTLP_ENDPOINT",
@@ -240,6 +241,38 @@
           "http.response.status_code"
         ]
       }
+    },
+    {
+      "name": "db.client.operation.duration",
+      "type": "histogram",
+      "unit": "s",
+      "scope": "github.com/exaring/otelpgx",
+      "library": "otelpgx",
+      "standard": true,
+      "boundaries": "sdk-default",
+      "description": "Duration of database client operations (otelpgx).",
+      "services": {
+        "identity": [],
+        "vault": [],
+        "workflow": [],
+        "audit": []
+      }
+    },
+    {
+      "name": "db.client.operation.errors",
+      "type": "counter",
+      "unit": "",
+      "scope": "github.com/exaring/otelpgx",
+      "library": "otelpgx",
+      "standard": false,
+      "boundaries": null,
+      "description": "Count of failed database client operations (otelpgx); monotonic.",
+      "services": {
+        "identity": [],
+        "vault": [],
+        "workflow": [],
+        "audit": []
+      }
     }
   ],
   "services": {
@@ -247,7 +280,7 @@
       "service_name": "identity",
       "source": {
         "repository": "Sneakers-PAM/sneakers-identity",
-        "commit": "d0617c688ebd916ca5bf39d2b63423b4e5601450",
+        "commit": "57427621444784da5291a55ec80b82f340a58c12",
         "file": "internal/telemetry/telemetry.go"
       },
       "resource": [
@@ -286,6 +319,14 @@
         {
           "name": "rpc.client.call.duration",
           "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        },
+        {
+          "name": "db.client.operation.duration",
+          "scope": "github.com/exaring/otelpgx"
+        },
+        {
+          "name": "db.client.operation.errors",
+          "scope": "github.com/exaring/otelpgx"
         }
       ],
       "metric_attributes": [
@@ -335,7 +376,7 @@
       "service_name": "vault",
       "source": {
         "repository": "Sneakers-PAM/sneakers-vault",
-        "commit": "d68f3e0e9375206fecad2a278241db90d2e6272a",
+        "commit": "57255803af1570ed2e9735fd5770103e7d5e987a",
         "file": "internal/telemetry/telemetry.go"
       },
       "resource": [
@@ -374,6 +415,14 @@
         {
           "name": "rpc.client.call.duration",
           "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        },
+        {
+          "name": "db.client.operation.duration",
+          "scope": "github.com/exaring/otelpgx"
+        },
+        {
+          "name": "db.client.operation.errors",
+          "scope": "github.com/exaring/otelpgx"
         }
       ],
       "metric_attributes": [
@@ -449,7 +498,7 @@
       "service_name": "workflow",
       "source": {
         "repository": "Sneakers-PAM/sneakers-vault",
-        "commit": "d68f3e0e9375206fecad2a278241db90d2e6272a",
+        "commit": "57255803af1570ed2e9735fd5770103e7d5e987a",
         "file": "internal/telemetry/telemetry.go"
       },
       "resource": [
@@ -488,6 +537,14 @@
         {
           "name": "rpc.client.call.duration",
           "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        },
+        {
+          "name": "db.client.operation.duration",
+          "scope": "github.com/exaring/otelpgx"
+        },
+        {
+          "name": "db.client.operation.errors",
+          "scope": "github.com/exaring/otelpgx"
         }
       ],
       "metric_attributes": [
@@ -563,7 +620,7 @@
       "service_name": "audit",
       "source": {
         "repository": "Sneakers-PAM/sneakers-audit",
-        "commit": "2db54060db2a3647c25c55ad00f72f97e12af9ba",
+        "commit": "bca59c03835883dd846847e7ee63b75be68d0254",
         "file": "internal/telemetry/telemetry.go"
       },
       "resource": [
@@ -593,6 +650,14 @@
         {
           "name": "rpc.server.call.duration",
           "scope": "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+        },
+        {
+          "name": "db.client.operation.duration",
+          "scope": "github.com/exaring/otelpgx"
+        },
+        {
+          "name": "db.client.operation.errors",
+          "scope": "github.com/exaring/otelpgx"
         }
       ],
       "metric_attributes": [
@@ -626,7 +691,7 @@
       "service_name": "notify",
       "source": {
         "repository": "Sneakers-PAM/sneakers-notify",
-        "commit": "4ef7d2aee989f53fa9f3a351c4ef2aeac6865eb7",
+        "commit": "06638da4cb8b8f18ff37e93b2e6f91e06d90e517",
         "file": "internal/telemetry/telemetry.go"
       },
       "resource": [
@@ -698,7 +763,7 @@
       "service_name": "connector",
       "source": {
         "repository": "Sneakers-PAM/sneakers-connector",
-        "commit": "641581e27e467563fe4b129bd451790aa2f5ec39",
+        "commit": "4c1df9583d1dd2c49962dc09b2b957b44b4296b5",
         "file": "internal/telemetry/telemetry.go"
       },
       "resource": [
@@ -778,7 +843,7 @@
       "service_name": "sshbroker",
       "source": {
         "repository": "Sneakers-PAM/sneakers-sshbroker",
-        "commit": "8c86b9e05391d6bf525a67d013d7e7edbc43014c",
+        "commit": "de68e5156d223620d0ba13f2b6271e95ffabde7e",
         "file": "internal/telemetry/telemetry.go"
       },
       "resource": [
@@ -861,7 +926,7 @@
       "service_name": "gateway",
       "source": {
         "repository": "Sneakers-PAM/sneakers-gateway",
-        "commit": "07f50f5d0dbb61164075bc3ba94c8cab98378838",
+        "commit": "13cd05d8cbe6281dc2c394a08789d590cd58b298",
         "file": "internal/telemetry/telemetry.go"
       },
       "resource": [
@@ -986,7 +1051,7 @@
       "service_name": "mcp",
       "source": {
         "repository": "Sneakers-PAM/sneakers-mcp",
-        "commit": "f431e377b82473b940c54accaa4de621856b944b",
+        "commit": "528f52f483cb39d644eb869fdba9ceb52e145c28",
         "file": "internal/telemetry/telemetry.go"
       },
       "resource": [

@@ -9,7 +9,7 @@ network) and takes from it the service.name, the resource attributes, the span
 names and attributes its filter lets through, the metric attributes, the log
 field allow-list, and whether it wires the gRPC server and client handlers,
 the HTTP middleware, otelhttp and database spans. The instruments themselves
-come from three libraries (go-otel, otelgrpc, otelhttp), read from their
+come from four libraries (go-otel, otelgrpc, otelhttp, otelpgx), read from their
 sources at the versions in INSTRUMENTS; the script fails when a service's
 go.mod names another version, so the table is read again before it is trusted.
 
@@ -54,10 +54,13 @@ LIBRARIES = {
     "go-otel": ("github.com/Bugs5382/go-otel", "v1.6.0"),
     "otelgrpc": ("go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc", "v0.70.0"),
     "otelhttp": ("go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp", "v0.70.0"),
+    "otelpgx": ("github.com/exaring/otelpgx", "v0.11.1"),
 }
 SCOPE_GO_OTEL = "github.com/Bugs5382/go-otel"
 SCOPE_OTELGRPC = LIBRARIES["otelgrpc"][0]
 SCOPE_OTELHTTP = LIBRARIES["otelhttp"][0]
+SCOPE_OTELPGX = LIBRARIES["otelpgx"][0]
+PGX_ATTRS = ["db.system.name", "pgx.operation.type"]
 RPC_ATTRS = ["rpc.method", "rpc.response.status_code"]
 HTTP_ATTRS = ["http.request.method", "http.route", "http.response.status_code"]
 SECONDS_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]
@@ -71,6 +74,11 @@ SECONDS_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5
 #     rpc.server.duration and rpc.client.duration (unit "ms"); no chart sets it.
 #   otelhttp internal/semconv/server.go: httpconv.NewServerRequestDuration,
 #     NewServerRequestBodySize, NewServerResponseBodySize.
+#   otelpgx tracer.go (v0.11.1) createMetrics: dbconv.NewClientOperationDuration (semconv v1.40.0,
+#     unit "s", no bucket advice, so the SDK default boundaries) and the Int64Counter
+#     db.client.operation.errors; both made by NewTracer on the "github.com/exaring/otelpgx" meter,
+#     so a service that wires the tracer (database spans) emits them. Attributes: db.system.name
+#     and pgx.operation.type (query, copy, batch, connect, prepare, acquire).
 #   go-otel metrics.go: Metrics() makes Histogram("http.server.request.duration",
 #     unit "s") and Counter("http.server.request.count"), no unit.
 INSTRUMENTS = [
@@ -95,6 +103,12 @@ INSTRUMENTS = [
     {"name": "http.server.response.body.size", "type": "histogram", "unit": "By", "scope": SCOPE_OTELHTTP,
      "library": "otelhttp", "standard": True, "when": "otelhttp", "attributes": HTTP_ATTRS,
      "boundaries": "sdk-default", "description": "Size of HTTP response bodies."},
+    {"name": "db.client.operation.duration", "type": "histogram", "unit": "s", "scope": SCOPE_OTELPGX,
+     "library": "otelpgx", "standard": True, "when": "db", "attributes": PGX_ATTRS,
+     "boundaries": "sdk-default", "description": "Duration of database client operations (otelpgx)."},
+    {"name": "db.client.operation.errors", "type": "counter", "unit": "", "scope": SCOPE_OTELPGX,
+     "library": "otelpgx", "standard": False, "when": "db", "attributes": PGX_ATTRS,
+     "boundaries": None, "description": "Count of failed database client operations (otelpgx); monotonic."},
 ]
 
 
@@ -236,6 +250,7 @@ def build_data(services, pins, sources, ref, version=None):
         cmd = svc
         info = parse(files["internal/telemetry/telemetry.go"])
         found = scan(files, cmd)
+        found["db"] = info["db"]
         found_by[svc], info_by[svc] = found, info
         names = []
         for pattern in info["span_names"]:
@@ -284,8 +299,8 @@ def render_block(data):
     lib = data["libraries"]
     lines = [BEGIN, "",
              f"Release ref: `{data['release']['ref']}` (`docs/telemetry.ref`). Read from the service sources at the "
-             f"commits `manifest/release.yaml` pins, with go-otel {lib['go-otel']}, otelgrpc {lib['otelgrpc']} and "
-             f"otelhttp {lib['otelhttp']}. The same data is in `docs/telemetry.json`.", "",
+             f"commits `manifest/release.yaml` pins, with go-otel {lib['go-otel']}, otelgrpc {lib['otelgrpc']}, "
+             f"otelhttp {lib['otelhttp']} and otelpgx {lib['otelpgx']}. The same data is in `docs/telemetry.json`.", "",
              "### Metric instruments", "",
              "| Metric | Type | Unit | Scope | Emitted by (labels kept) |", "|---|---|---|---|---|"]
     for m in data["metrics"]:
