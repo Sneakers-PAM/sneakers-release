@@ -53,6 +53,12 @@ spec:
       port: {{ .port }}
       targetPort: {{ .name }}
     {{- end }}
+    {{- /* The mTLS-only port (the gateway's 9443, which mcp dials by the Service name). */}}
+    {{- with include "sneakers.mtls.port" . }}
+    - name: mtls
+      port: {{ . }}
+      targetPort: mtls
+    {{- end }}
 {{- end -}}
 
 {{- define "sneakers.serviceAccount" -}}

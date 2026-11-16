@@ -409,6 +409,12 @@ assert all("mtls" not in ports(r) for r in policy(off, "gateway")["spec"]["ingre
 eg = [r for r in policy(on, "mcp")["spec"]["egress"]
       if any((t.get("podSelector") or {}).get("matchLabels", {}).get("app.kubernetes.io/component") == "gateway" for t in r.get("to", []))]
 assert len(eg) == 1 and sorted(ports(eg[0])) == ["http", "mtls"], f"mcp's egress to the gateway admits {[ports(r) for r in eg]}, want http and mtls"
+# mcp dials https://sneakers-gateway:9443, so the Service has to carry that port too, and only with mTLS on.
+def service_ports(docs, svc):
+    d = next(d for d in docs if d["kind"] == "Service" and d["metadata"]["name"] == f"sneakers-{svc}")
+    return {p["name"]: (p["port"], p["targetPort"]) for p in d["spec"]["ports"]}
+assert service_ports(on, "gateway").get("mtls") == (9443, "mtls"), service_ports(on, "gateway")
+assert "mtls" not in service_ports(off, "gateway"), "off still exposes 9443"
 print("ok: the gateway opens 9443 to mcp only, mcp may reach it, and no policy admits a pod to a health port")
 print("ok: with mTLS on, the pods mount their certificate, read it by variable and probe the health port; off is the rc.7 pod")
 PY
