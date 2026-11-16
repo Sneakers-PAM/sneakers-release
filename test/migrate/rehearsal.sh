@@ -128,7 +128,6 @@ api_port="$(kubectl get endpoints kubernetes -n default -o jsonpath='{.subsets[0
 helm install "$release" charts/sneakers -n "$ns" --create-namespace \
   -f test/kind/values.yaml -f migrate/deploy/migrate-callers-values.yaml -f test/migrate/rehearsal-values.yaml \
   --set "rehearsal.apiServer.addresses={${api_ips%,}}" --set "rehearsal.apiServer.port=${api_port}" \
-  --set global.internalTLS.enabled=false \
   --wait --timeout "$timeout"
 kubectl -n "$ns" get pods
 
@@ -166,9 +165,10 @@ kubectl -n "$ns" create secret generic sneakers-migrate-bundle "${bundle_files[@
 run_job() {
   local name="$1" want="$2" args="$3" code=""
   kubectl -n "$ns" delete job "$name" --ignore-not-found --wait >/dev/null
-  # The MTLS_* paths stay empty here: the kind rehearsal runs with global.internalTLS off.
+  # The install runs with global.internalTLS on, so the Job presents the sneakers-migrate certificate
+  # the chart issued (the migrate callers layer is on) and checks the vault and audit against the cluster CA.
   NAMESPACE="$ns" JOB_NAME="$name" MIGRATE_IMAGE="$image" COMMAND_ARGS="[$args]" \
-    MTLS_CERT_FILE="${MTLS_CERT_FILE:-}" MTLS_KEY_FILE="${MTLS_KEY_FILE:-}" MTLS_CA_FILE="${MTLS_CA_FILE:-}" \
+    MTLS_CERT_FILE=/var/run/sneakers/tls/tls.crt MTLS_KEY_FILE=/var/run/sneakers/tls/tls.key MTLS_CA_FILE=/var/run/sneakers/tls/ca.crt \
     envsubst '${NAMESPACE} ${JOB_NAME} ${MIGRATE_IMAGE} ${COMMAND_ARGS} ${MTLS_CERT_FILE} ${MTLS_KEY_FILE} ${MTLS_CA_FILE}' <migrate/deploy/import-job.yaml |
     sed 's/imagePullPolicy: IfNotPresent/imagePullPolicy: Never/' | kubectl apply -f - >/dev/null
   for _ in $(seq 300); do

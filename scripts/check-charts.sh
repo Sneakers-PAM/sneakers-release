@@ -859,8 +859,14 @@ assert flow.count("test/kind/install-cert-manager.sh") == 2, "both install jobs 
 for f in ("test/kind/values.yaml",):
     v = yaml.safe_load(open(f))
     assert "internalTLS" not in (v.get("global") or {}), f"{f} turns internalTLS off: the install test runs with it on"
-assert "global.internalTLS.enabled=false" in open("test/migrate/rehearsal.sh").read(), "the migrate rehearsal has no cert-manager and must keep internalTLS off"
-print("ok: the install test installs cert-manager at the pinned version and runs with mTLS on; the rehearsal keeps it off")
+# The migration rehearsal runs the real sneakers-migrate Jobs against the mTLS vault and audit, so it installs
+# cert-manager too, leaves mTLS on, and gives the Jobs the three certificate paths.
+reh = open("test/migrate/rehearsal.sh").read()
+assert "global.internalTLS.enabled=false" not in reh, "the migrate rehearsal turns mTLS off: its Jobs would never meet an mTLS vault"
+for path in ("/var/run/sneakers/tls/tls.crt", "/var/run/sneakers/tls/tls.key", "/var/run/sneakers/tls/ca.crt"):
+    assert path in reh, f"the rehearsal does not give the Jobs {path}"
+assert open(".github/workflows/migrate-rehearsal.yml").read().count("test/kind/install-cert-manager.sh") == 1, "the rehearsal job must install cert-manager"
+print("ok: the install test and the migration rehearsal install cert-manager at the pinned version and run with mTLS on")
 PY
 
 step "install docs"

@@ -54,6 +54,9 @@ jobs:
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Create the cluster
         run: kind create cluster --name "$KIND_CLUSTER" --image "$KIND_NODE_IMAGE" --wait 180s
+      # The chart issues the services' and the migrate Job's mTLS certificates through cert-manager.
+      - name: Install cert-manager
+        run: test/kind/install-cert-manager.sh
       - name: Build the service images
         env:
           SERVICES_FROM_MAIN: ${{ inputs.services-from-main || false }}
