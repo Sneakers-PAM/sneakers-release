@@ -109,6 +109,14 @@
         }
       }
     },
+    "mtls": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "healthPort": { "type": "integer", "minimum": 0, "maximum": 65535 }
+      }
+    },
     "probes": {
       "type": "object",
       "additionalProperties": false,

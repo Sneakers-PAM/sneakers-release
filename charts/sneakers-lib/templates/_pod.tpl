@@ -12,6 +12,9 @@
 {{- if .Values.caBundle.configMap }}
 {{- $mounts = append $mounts (dict "name" "ca-bundle" "mountPath" .Values.caBundle.mountPath "readOnly" true) }}
 {{- end }}
+{{- if include "sneakers.mtls.pod" . }}
+{{- $mounts = append $mounts (dict "name" "mtls" "mountPath" (include "sneakers.mtls.dir" .) "readOnly" true) }}
+{{- end }}
 {{- toYaml (concat $mounts .Values.extraVolumeMounts) }}
 {{- end -}}
 
@@ -45,6 +48,9 @@
 {{- $volumes = append $volumes (dict "name" "ca-bundle" "configMap" (dict "name" .configMap "items" (list (dict "key" .key "path" .key)))) }}
 {{- end }}
 {{- end }}
+{{- if include "sneakers.mtls.pod" . }}
+{{- $volumes = append $volumes (dict "name" "mtls" "secret" (dict "secretName" (printf "%s-tls" (include "sneakers.fullname" .)) "defaultMode" 288)) }}
+{{- end }}
 {{- toYaml (concat $volumes .Values.extraVolumes) }}
 {{- end -}}
 
@@ -63,10 +69,12 @@ small box under boot load. The startup window is 5 s x startupFailureThreshold.
 {{- $live := dict }}
 {{- $ready := dict }}
 {{- if eq .type "grpc" }}
-{{- $ready = dict "grpc" (dict "port" (int .port)) }}
+{{- /* Under mTLS the kubelet can't present a client certificate, so it asks the plain health-only port. */ -}}
+{{- $port := include "sneakers.mtls.healthPort" $ | default .port }}
+{{- $ready = dict "grpc" (dict "port" (int $port)) }}
 {{- $live = $ready }}
 {{- with .livenessService }}
-{{- $live = dict "grpc" (dict "port" (int $.Values.probes.port) "service" .) }}
+{{- $live = dict "grpc" (dict "port" (int $port) "service" .) }}
 {{- end }}
 {{- else }}
 {{- $ready = dict "httpGet" (dict "path" (.readinessPath | default .path) "port" (int .port)) }}
@@ -96,6 +104,10 @@ readinessProbe:
 {{- range .Values.service.extraPorts }}
 - name: {{ .name }}
   containerPort: {{ .targetPort | default .port }}
+{{- end }}
+{{- with include "sneakers.mtls.healthPort" . }}
+- name: health
+  containerPort: {{ . }}
 {{- end }}
 {{- end -}}
 

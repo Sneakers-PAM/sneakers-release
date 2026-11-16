@@ -46,6 +46,12 @@ service:
   portName: http
   extraPorts: []
 
+# Under global.internalTLS the pod mounts its certificate and reads it by MTLS_CERT_FILE, MTLS_KEY_FILE
+# and MTLS_CA_FILE. The probes stay on the plain HTTP port, so there is no health port.
+mtls:
+  enabled: true
+  healthPort: 0
+
 probes:
   type: http
   port: 9100

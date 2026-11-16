@@ -10,6 +10,14 @@ LOG_FORMAT: {{ include "sneakers.logFormat" . | quote }}
 POLIS_PUBLIC_URL: {{ tpl .publicURL $ | quote }}
 {{- end }}
 {{- end }}
+{{- if include "sneakers.mtls.pod" . }}
+MTLS_CERT_FILE: {{ printf "%s/tls.crt" (include "sneakers.mtls.dir" .) | quote }}
+MTLS_KEY_FILE: {{ printf "%s/tls.key" (include "sneakers.mtls.dir" .) | quote }}
+MTLS_CA_FILE: {{ printf "%s/ca.crt" (include "sneakers.mtls.dir" .) | quote }}
+{{- with include "sneakers.mtls.healthPort" . }}
+HEALTH_PORT: {{ . | quote }}
+{{- end }}
+{{- end }}
 {{- range $k, $v := .Values.env }}
 {{- if not (kindIs "invalid" $v) }}
 {{- $value := tpl (toString $v) $ }}
