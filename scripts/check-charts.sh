@@ -348,9 +348,9 @@ def pod(docs, svc):
 
 on, off = load(sys.argv[1]), load(sys.argv[2])
 # The services that read the three files, and the plain health port each one answers on.
-health = {"identity": 9091, "audit": 9091, "notify": 9091, "vault": 9092, "sshbroker": 9098, "connector": 9099}
+health = {"identity": 9091, "audit": 9091, "notify": 9091, "vault": 9092, "sshbroker": 9098, "connector": 9099, "workflow": 9092}
 no_health_port = ["gateway", "mcp"]   # their probes stay on the plain HTTP port
-not_yet = ["workflow"]   # no mTLS in the service yet
+not_yet = []   # a service with no mTLS in its image yet: none now
 D = "/var/run/sneakers/tls"
 for svc in list(health) + no_health_port:
     spec, c, data = pod(on, svc)
