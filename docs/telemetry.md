@@ -141,7 +141,7 @@ Source: `Sneakers-PAM/sneakers-vault` at `5de3d1a79c58`, `internal/telemetry/tel
 
 ### audit
 
-Source: `Sneakers-PAM/sneakers-audit` at `bca59c038358`, `internal/telemetry/telemetry.go`.
+Source: `Sneakers-PAM/sneakers-audit` at `214d3f8951ff`, `internal/telemetry/telemetry.go`.
 
 - Resource: `service.name` = `audit`; attributes that leave: `service.name`.
 - Metrics: `rpc.server.call.duration`, `db.client.operation.duration`, `db.client.operation.errors`.
