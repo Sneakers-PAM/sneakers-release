@@ -229,9 +229,20 @@ below; any other pod, including the other pods of the release, can't connect.
 | gateway (HTTP) | the edge (any pod in the cluster, which takes in the web apps) and mcp |
 | mcp (HTTP) | the edge |
 
-The MCP server's own egress allows only DNS, the gateway's HTTP port and the bundled Hydra's
-public port. With an external Hydra or an OTLP collector, add a rule to
-`mcp.networkPolicy.egress`.
+The MCP server's own egress allows only DNS, the gateway's HTTP port and its mutual TLS port
+(`mtls`, 9443), and the bundled Hydra's public port. With an external Hydra or an OTLP collector,
+add a rule to `mcp.networkPolicy.egress`.
+
+Setting `mcp.networkPolicy.egress` replaces the whole default list, it does not add to it. With
+`global.internalTLS` on (the default), the MCP server calls the gateway on port 9443, so your list
+must keep the gateway rule with both `http` and `mtls` ports. A list written for an earlier
+release that allows only the gateway's port 9100 blocks the MCP server: it never becomes Ready, and
+its readiness check reports `gateway: down, timeout`. The same goes for the egress list of any
+service that now calls another over a mutual TLS port.
+
+On the first start with `global.internalTLS` on, a pod can log `MountVolume.SetUp failed ... secret
+sneakers-<service>-tls not found` for about a minute. That is expected: the pod waits for
+cert-manager to issue its certificate, then starts by itself.
 
 The bundled pieces take only the services that use them:
 
