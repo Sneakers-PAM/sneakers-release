@@ -60,7 +60,7 @@ spec:
       digest: sha256:TBD-at-release
       build:
         repository: Sneakers-PAM/sneakers-audit
-        commit: bca59c03835883dd846847e7ee63b75be68d0254
+        commit: 214d3f8951ff470b381fd82569444f4654918c2c
         dockerfile: Dockerfile
         context: .
     notify:
